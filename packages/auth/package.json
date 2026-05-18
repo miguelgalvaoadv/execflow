@@ -1,0 +1,32 @@
+{
+  "name": "@execflow/auth",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": {
+      "import": "./src/index.ts",
+      "types": "./src/index.ts"
+    },
+    "./config": {
+      "import": "./src/config.ts",
+      "types": "./src/config.ts"
+    },
+    "./types": {
+      "import": "./src/types.ts",
+      "types": "./src/types.ts"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@execflow/db": "workspace:*",
+    "better-auth": "^1.6.11",
+    "drizzle-orm": "^0.45.2"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "zod": "^4.4.3"
+  }
+}

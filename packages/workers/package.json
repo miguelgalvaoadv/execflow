@@ -1,0 +1,24 @@
+{
+  "name": "@execflow/workers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@execflow/db": "workspace:*",
+    "@execflow/engine": "workspace:*",
+    "@neondatabase/serverless": "^0.10.4",
+    "@types/ws": "^8.18.1",
+    "pg-boss": "^12.18.2",
+    "ws": "^8.20.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}

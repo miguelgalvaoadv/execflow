@@ -1,7 +1,9 @@
+import { DashboardLayout, DashboardWorkspace } from "@/components/dashboard";
+
 export default function HomePage() {
   return (
-    <main>
-      <h1>EXECFLOW</h1>
-    </main>
+    <DashboardLayout activeItemId="dashboard">
+      <DashboardWorkspace />
+    </DashboardLayout>
   );
 }

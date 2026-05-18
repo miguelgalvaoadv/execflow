@@ -1,0 +1,32 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "src",
+    "baseUrl": ".",
+    /**
+     * Bundler moduleResolution: this package is consumed by Next.js and Hono
+     * via pnpm workspaces, not by a raw Node.js require(). Bundler resolution
+     * handles .ts extension imports correctly and is required by Drizzle ORM.
+     */
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
+    /**
+     * allowImportingTsExtensions: required because we import sibling files
+     * with .ts extensions (e.g., './organization.ts'). This is the correct
+     * pattern for monorepo source packages that don't emit compiled output.
+     * Must be paired with noEmit or emitDeclarationOnly.
+     */
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    /**
+     * Strict settings inherited from base. Explicitly listed here so that
+     * any future change to tsconfig.base.json does not silently relax these
+     * for the database layer.
+     */
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true
+  },
+  "include": ["src/**/*.ts"],
+  "exclude": ["node_modules", "dist", "migrations"]
+}

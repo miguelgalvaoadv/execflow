@@ -1,0 +1,26 @@
+{
+  "name": "@execflow/api",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "start": "node dist/index.js",
+    "build": "tsc --noEmit && tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@execflow/auth": "workspace:*",
+    "@execflow/db": "workspace:*",
+    "@execflow/engine": "workspace:*",
+    "@hono/node-server": "^2.0.2",
+    "better-auth": "^1.6.11",
+    "drizzle-orm": "0.45.2",
+    "hono": "^4.12.19",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.4",
+    "typescript": "^5.8.3"
+  }
+}
