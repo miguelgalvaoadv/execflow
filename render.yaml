@@ -2,7 +2,7 @@ services:
   - type: web
     name: execflow-api
     env: node
-    buildCommand: pnpm install && pnpm -F @execflow/api run build
+    buildCommand: pnpm install --prod=false
     startCommand: cd apps/api && pnpm run start
     envVars:
       - key: DATABASE_URL
@@ -10,7 +10,7 @@ services:
   - type: worker
     name: execflow-workers
     env: node
-    buildCommand: pnpm install && npx playwright install chromium
+    buildCommand: pnpm install --prod=false && npx playwright install chromium
     startCommand: cd packages/workers && pnpm start
     envVars:
       - key: DATABASE_URL
