@@ -10,7 +10,7 @@ services:
   - type: worker
     name: execflow-workers
     env: node
-    buildCommand: pnpm install --prod=false && npx playwright install chromium
+    buildCommand: pnpm install --prod=false && pnpm -F @execflow/workers exec playwright install chromium
     startCommand: cd packages/workers && pnpm start
     envVars:
       - key: DATABASE_URL
