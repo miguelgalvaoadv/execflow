@@ -10,7 +10,7 @@ services:
   - type: worker
     name: execflow-workers
     env: node
-    buildCommand: pnpm install && pnpm run build
+    buildCommand: pnpm install && npx playwright install chromium
     startCommand: cd packages/workers && pnpm start
     envVars:
       - key: DATABASE_URL
