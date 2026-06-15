@@ -1,4 +1,12 @@
 services:
+  - type: web
+    name: execflow-api
+    env: node
+    buildCommand: pnpm install && pnpm -F @execflow/api run build
+    startCommand: cd apps/api && pnpm run start
+    envVars:
+      - key: DATABASE_URL
+        sync: false
   - type: worker
     name: execflow-workers
     env: node
