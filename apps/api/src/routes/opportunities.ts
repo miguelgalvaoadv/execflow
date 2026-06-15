@@ -32,6 +32,8 @@ import {
   reviewOpportunity,
   deferOpportunity,
 } from '../services/opportunity.ts'
+import { findOpportunityById } from '../repositories/opportunity.ts'
+import { queryOpportunityReviews } from '../repositories/opportunity-review.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 const router = new Hono<{ Variables: HonoVariables }>()
@@ -208,6 +210,35 @@ router.post(
     const result = await deferOpportunity(ctx, opportunityId, parsed.data)
 
     if (!result.success) return serviceErrorToResponse(c, result.error)
+    return c.json({ data: result.data })
+  }
+)
+
+// -------------------------------------------------------------------------
+// GET /api/v1/opportunities/:id/reviews — List review history
+// -------------------------------------------------------------------------
+router.get(
+  '/:id/reviews',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const opportunityId = c.req.param('id')
+    if (!opportunityId?.match(/^[0-9a-f-]{36}$/i)) {
+      return unprocessable(c, 'Invalid opportunity ID format.')
+    }
+
+    const ctx = buildWriteContext(c, db)
+    const oppResult = await findOpportunityById(db, ctx.organizationId, opportunityId)
+    if (!oppResult.success) {
+      return c.json({ error: 'Opportunity not found.' }, 404)
+    }
+
+    const result = await queryOpportunityReviews(db, opportunityId)
+    if (!result.success) {
+      return c.json({ error: 'Failed to fetch reviews.' }, 500)
+    }
+
     return c.json({ data: result.data })
   }
 )

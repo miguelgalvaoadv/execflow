@@ -46,6 +46,11 @@ export type RunEvaluationInput = {
   isReplay?: boolean | undefined
 }
 
+export type RunEvaluationOutput = {
+  result: EngineRunResult
+  ctx: EvaluationContext
+}
+
 /**
  * Runs the full legal computation evaluation for a case.
  *
@@ -57,7 +62,7 @@ export type RunEvaluationInput = {
 export async function runEvaluation(
   db: AnyDbClient,
   input: RunEvaluationInput
-): Promise<EngineRunResult> {
+): Promise<RunEvaluationOutput> {
   const runId = input.runId ?? randomUUID()
   const { organizationId, executionCaseId, evaluatedAt, jurisdictionScope } = input
 
@@ -132,7 +137,7 @@ export async function runEvaluation(
   // Step 10: Build dependencies for staleness tracking
   const dependencies = buildDependencies(facts, playbook)
 
-  return {
+  const result: EngineRunResult = {
     runId,
     organizationId,
     executionCaseId,
@@ -147,6 +152,8 @@ export async function runEvaluation(
     warnings: evaluation.warnings,
     dependencies,
   }
+
+  return { result, ctx }
 }
 
 /**
@@ -160,7 +167,7 @@ export async function runRecalculation(
     parentRecalculationRunId: string | null
     chainDepth: number
   }
-): Promise<EngineRunResult> {
+): Promise<RunEvaluationOutput> {
   return runEvaluation(db, {
     ...input,
     trigger: 'recalculation',

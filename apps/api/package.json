@@ -4,22 +4,38 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "validate:http-engine": "tsx scripts/http-engine-flow-validation.ts",
+    "test:snapshots": "node --import tsx --test src/__tests__/snapshot-lifecycle.test.ts",
+    "test:uploads": "node --import tsx --test src/__tests__/upload-storage.test.ts",
+    "test:review": "node --import tsx --test src/__tests__/review-confirmation.test.ts",
+    "test:case-read": "node --import tsx --test src/__tests__/case-workspace-read.test.ts",
+    "test:case-list": "node --import tsx --test src/__tests__/case-list.test.ts",
+    "test:client-list": "node --import tsx --test src/__tests__/client-list.test.ts",
+    "test:document-list": "node --import tsx --test src/__tests__/document-list.test.ts",
+    "test:deadline-list": "node --import tsx --test src/__tests__/deadline-list.test.ts",
+    "dev": "tsx watch --env-file=.env.local src/index.ts",
     "start": "node dist/index.js",
     "build": "tsc --noEmit && tsx src/index.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@execflow/auth": "workspace:*",
     "@execflow/db": "workspace:*",
     "@execflow/engine": "workspace:*",
+    "@execflow/extraction": "workspace:*",
+    "@execflow/storage": "workspace:*",
     "@hono/node-server": "^2.0.2",
     "better-auth": "^1.6.11",
+    "docx": "^9.7.1",
     "drizzle-orm": "0.45.2",
     "hono": "^4.12.19",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
+    "postgres": "^3.4.9",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }

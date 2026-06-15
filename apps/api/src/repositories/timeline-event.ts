@@ -19,7 +19,7 @@
  * For replay queries, use the compound (recorded_at, occurred_at) index.
  */
 
-import { eq, and, asc, lt } from 'drizzle-orm'
+import { eq, and, asc, lt, inArray } from 'drizzle-orm'
 import { timelineEvents } from '@execflow/db/schema'
 import type { TimelineEvent, NewTimelineEvent } from '@execflow/db/schema'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
@@ -40,19 +40,24 @@ export async function queryTimelineEvents(
   db: AnyTx,
   organizationId: string,
   executionCaseId: string,
-  params: PaginationParams & { includeAmended?: boolean }
+  params: PaginationParams & { visibilityFilter?: Array<'legal' | 'internal' | 'both'> }
 ): Promise<RepositoryResult<PaginatedResult<TimelineEvent>>> {
   try {
     const limit = Math.min(params.limit ?? 50, 200)
+
+    const visibilityCondition =
+      params.visibilityFilter !== undefined && params.visibilityFilter.length > 0
+        ? inArray(timelineEvents.visibility, params.visibilityFilter)
+        : undefined
 
     const rows = await db.query.timelineEvents.findMany({
       where: and(
         eq(timelineEvents.organizationId, organizationId),
         eq(timelineEvents.executionCaseId, executionCaseId),
-        // Cursor-based pagination on occurred_at
         params.cursor
           ? lt(timelineEvents.occurredAt, new Date(params.cursor))
-          : undefined
+          : undefined,
+        visibilityCondition
       ),
       orderBy: [asc(timelineEvents.occurredAt)],
       limit: limit + 1, // fetch one extra to determine if there's a next page

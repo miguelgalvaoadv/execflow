@@ -27,17 +27,30 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
-    "db:push": "drizzle-kit push",
-    "db:studio": "drizzle-kit studio"
+    "db:generate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs generate",
+    "db:migrate": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs migrate",
+    "db:push": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs push",
+    "db:studio": "node --env-file=.env.local node_modules/drizzle-kit/bin.cjs studio",
+    "db:seed": "node --env-file=.env.local --import tsx src/seed.ts",
+    "db:seed:demo": "node --env-file=.env.local --import tsx src/seed-demo.ts",
+    "db:seed:demo:phase2": "node --env-file=.env.local --import tsx src/seed-demo-phase2.ts",
+    "db:seed:demo:phase3a": "node --env-file=.env.local --import tsx src/seed-demo-phase3a.ts",
+    "db:seed:demo:phase3bc": "node --env-file=.env.local --import tsx src/seed-demo-phase3bc.ts",
+    "db:snapshot:http-engine": "node --env-file=.env.local --import tsx src/seed-http-engine-snapshots.ts",
+    "db:detect-is-replay": "node --env-file=.env.local --import tsx scripts/detect-is-replay-state.ts",
+    "test:migrations": "node --import tsx --test src/migrations/__tests__/*.test.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
-    "drizzle-orm": "^0.45.2"
+    "drizzle-orm": "^0.45.2",
+    "pg": "^8.13.1",
+    "postgres": "^3.4.9"
   },
   "devDependencies": {
+    "better-auth": "1.6.11",
+    "@types/pg": "^8.11.10",
     "drizzle-kit": "^0.31.10",
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }

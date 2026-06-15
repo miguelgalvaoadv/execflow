@@ -129,6 +129,7 @@ export const snapshotStatusEnum = pgEnum('snapshot_status', [
   'proposed',
   'confirmed',
   'superseded',
+  'rejected',
 ])
 
 /**
@@ -213,6 +214,7 @@ export const documentStatusEnum = pgEnum('document_status', [
   'confirmed',
   'archived',
   'superseded',
+  'rejected',
 ])
 
 /**

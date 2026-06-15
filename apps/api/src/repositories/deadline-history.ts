@@ -9,11 +9,12 @@
  * previousValue / newValue diff; this repository only persists it.
  */
 
-import { eq, asc } from 'drizzle-orm'
+import { eq, and, asc } from 'drizzle-orm'
 import { deadlineHistory } from '@execflow/db/schema'
 import type { DeadlineHistoryRecord, NewDeadlineHistoryRecord } from '@execflow/db/schema'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
 import type { RepositoryResult } from '@execflow/db/repositories'
+import { assertDeadlineHistoryActorAttribution } from '@execflow/db/types'
 
 /**
  * Append a deadline change record.
@@ -24,6 +25,8 @@ export async function appendDeadlineHistory(
   data: NewDeadlineHistoryRecord
 ): Promise<RepositoryResult<DeadlineHistoryRecord>> {
   try {
+    assertDeadlineHistoryActorAttribution(data)
+
     const [row] = await tx.insert(deadlineHistory).values(data).returning()
 
     if (!row) {
@@ -53,7 +56,10 @@ export async function queryDeadlineHistory(
 ): Promise<RepositoryResult<DeadlineHistoryRecord[]>> {
   try {
     const rows = await db.query.deadlineHistory.findMany({
-      where: eq(deadlineHistory.deadlineId, deadlineId),
+      where: and(
+        eq(deadlineHistory.organizationId, organizationId),
+        eq(deadlineHistory.deadlineId, deadlineId)
+      ),
       orderBy: [asc(deadlineHistory.changedAt)],
     })
 

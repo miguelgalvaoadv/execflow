@@ -1,4 +1,4 @@
-import { borders, surfaces, text } from "./surfaces";
+import { text } from "./surfaces";
 
 type SidebarBrandProps = {
   compact?: boolean;
@@ -7,17 +7,37 @@ type SidebarBrandProps = {
 export function SidebarBrand({ compact = false }: SidebarBrandProps) {
   return (
     <div className={`flex items-center gap-3 ${compact ? "" : "px-1"}`}>
-      <span
-        className={`flex shrink-0 items-center justify-center rounded-[10px] border ${borders.default} ${surfaces.panel} text-[11px] font-semibold tracking-[0.08em] text-zinc-100 ${compact ? "h-8 w-8" : "h-9 w-9"}`}
+      {/* Wordmark mark — "E" geométrico estilo Linear/Raycast */}
+      <svg
+        width={compact ? 28 : 32}
+        height={compact ? 28 : 32}
+        viewBox="0 0 32 32"
+        fill="none"
+        aria-hidden="true"
+        className="shrink-0"
       >
-        EF
-      </span>
-      <div className="min-w-0">
-        <p className="truncate text-[13px] font-semibold tracking-[-0.01em] text-zinc-100">
-          EXECFLOW
-        </p>
-        <p className={`truncate text-[11px] ${text.muted}`}>Execução penal</p>
-      </div>
+        {/* Barra vertical */}
+        <rect x="7" y="7" width="3" height="18" rx="1.5" fill="#0f172a" />
+        {/* Barra superior */}
+        <rect x="7" y="7" width="14" height="3" rx="1.5" fill="#0f172a" />
+        {/* Barra central */}
+        <rect x="7" y="14.5" width="11" height="3" rx="1.5" fill="#0f172a" />
+        {/* Barra inferior */}
+        <rect x="7" y="22" width="14" height="3" rx="1.5" fill="#0f172a" />
+        {/* Ponto de acento — detalhe premium */}
+        <rect x="22" y="7" width="3" height="3" rx="1.5" fill="#4f46e5" />
+      </svg>
+
+      {!compact && (
+        <div className="min-w-0">
+          <p className="truncate text-[13px] font-bold tracking-[-0.02em] text-slate-900">
+            EXECFLOW
+          </p>
+          <p className={`truncate text-[11px] ${text.faint}`}>
+            Execução penal
+          </p>
+        </div>
+      )}
     </div>
   );
 }

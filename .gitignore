@@ -1,1 +1,9 @@
 node_modules
+.turbo
+.storage
+dist
+build
+.next
+.env.local
+.env.*.local
+.DS_Store

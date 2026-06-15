@@ -6,18 +6,32 @@
   "main": "./src/index.ts",
   "scripts": {
     "start": "tsx src/index.ts",
-    "dev": "tsx watch src/index.ts",
+    "dev": "tsx watch --env-file=.env.local src/index.ts",
+    "smoke:runtime": "tsx scripts/smoke-runtime-validation.ts",
+    "test:orchestration": "node --import tsx --test src/__tests__/recalculation-orchestration.test.ts",
+    "test:document-events": "node --import tsx --test src/__tests__/document-event-wiring.test.ts",
+    "test:ocr": "node --import tsx --test src/__tests__/ocr-pipeline.test.ts",
+    "test:extraction": "node --import tsx --test src/__tests__/extraction-pipeline.test.ts",
+    "test:e2e": "node --import tsx --test src/__tests__/manual-e2e.test.ts",
+    "test:snapshot-promotion": "node --import tsx --test src/__tests__/snapshot-promotion-pipeline.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.100.1",
     "@execflow/db": "workspace:*",
     "@execflow/engine": "workspace:*",
+    "@execflow/extraction": "workspace:*",
+    "@execflow/ocr": "workspace:*",
     "@neondatabase/serverless": "^0.10.4",
     "@types/ws": "^8.18.1",
+    "drizzle-orm": "^0.45.2",
     "pg-boss": "^12.18.2",
+    "playwright": "^1.60.0",
     "ws": "^8.20.1"
   },
   "devDependencies": {
+    "@types/pg": "^8.11.10",
+    "pg": "^8.13.1",
     "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }

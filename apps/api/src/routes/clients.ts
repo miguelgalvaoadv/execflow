@@ -1,5 +1,5 @@
 /**
- * Client routes — POST /api/v1/clients
+ * Client routes — GET /api/v1/clients, GET /api/v1/clients/:id, POST /api/v1/clients
  *
  * Route principles:
  * - Thin handler: parse body → validate → call service → map result.
@@ -20,10 +20,86 @@ import { buildWriteContext } from '../lib/write-context.ts'
 import { parseBody } from '../lib/zod-helpers.ts'
 import { serviceErrorToResponse, safeJsonBody } from '../lib/route-helpers.ts'
 import { createClient } from '../services/client.ts'
+import { getClientDetail, listClients } from '../services/client-read.ts'
+import { toReadContext } from '../lib/read-context.ts'
+import { PaginationQuerySchema } from '../lib/pagination-schemas.ts'
 import { unprocessable } from '../lib/respond.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 const router = new Hono<{ Variables: HonoVariables }>()
+
+const ClientIdParamSchema = z.object({
+  id: z.string().uuid('Invalid client ID.'),
+})
+
+const ListClientsQuerySchema = PaginationQuerySchema.extend({
+  status: z.enum(['active', 'inactive', 'merged', 'archived']).optional(),
+  q: z.string().max(200).optional(),
+})
+
+// -------------------------------------------------------------------------
+// GET /api/v1/clients — Paginated client list
+// -------------------------------------------------------------------------
+
+router.get(
+  '/',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = ListClientsQuerySchema.safeParse(c.req.query())
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid query parameters.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const q = parsed.data
+
+    const result = await listClients(
+      ctx,
+      {
+        ...(q.status !== undefined ? { status: q.status } : {}),
+        ...(q.q !== undefined ? { q: q.q } : {}),
+      },
+      {
+        limit: q.limit,
+        ...(q.cursor !== undefined ? { cursor: q.cursor } : {}),
+      }
+    )
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data.items, nextCursor: result.data.nextCursor }, 200)
+  }
+)
+
+// -------------------------------------------------------------------------
+// GET /api/v1/clients/:id — Client profile
+// -------------------------------------------------------------------------
+
+router.get(
+  '/:id',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = ClientIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid client ID.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const result = await getClientDetail(ctx, parsed.data.id)
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data }, 200)
+  }
+)
 
 // -------------------------------------------------------------------------
 // POST /api/v1/clients — Create a new client

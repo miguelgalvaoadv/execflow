@@ -46,7 +46,7 @@ const router = new Hono<{ Variables: HonoVariables }>()
 // -------------------------------------------------------------------------
 
 const QUEUE_TYPES = [
-  'intake_review', 'extraction_review', 'missing_data', 'progression_opportunities',
+  'intake_review', 'extraction_review', 'snapshot_review', 'missing_data', 'progression_opportunities',
   'pad_defense', 'overdue_deadlines', 'pending_filings', 'recalculation_conflicts',
   'ai_review', 'urgent_liberty_risks', 'opportunity_review', 'workflow_tasks',
 ] as const

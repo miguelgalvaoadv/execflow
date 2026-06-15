@@ -30,11 +30,13 @@ export function WorkspacePanel({
       ].join(" ")}
     >
       <header className={`border-b ${borders.subtle} px-5 py-4`}>
-        <h2 className={`text-[13px] font-medium tracking-tight ${text.primary}`}>
+        <h2
+          className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${text.muted}`}
+        >
           {title}
         </h2>
         {description ? (
-          <p className={`mt-1 text-[12px] leading-relaxed ${text.muted}`}>
+          <p className={`mt-1 text-[12px] leading-relaxed ${text.faint}`}>
             {description}
           </p>
         ) : null}

@@ -40,6 +40,12 @@ import type { WriteContext } from '../lib/write-context.ts'
 import type { ServiceResult } from './result.ts'
 import type { Document } from '@execflow/db/schema'
 import type { IntakeSourceChannel, SensitivityLevel } from '@execflow/db/types'
+import {
+  DOCUMENT_REGISTERED,
+  DOCUMENT_ASSOCIATED,
+  DOCUMENT_ARCHIVED,
+  buildDocumentAssociatedPayload,
+} from '@execflow/db/types'
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -252,7 +258,7 @@ export async function registerDocument(
             sensitivityLevel: input.sensitivityLevel ?? 'standard',
           },
         },
-        eventType: 'document.registered',
+        eventType: DOCUMENT_REGISTERED,
         aggregateType: 'Document',
         aggregateId: docResult.id,
         occurredAt: uploadedAt,
@@ -361,20 +367,19 @@ export async function associateDocumentToCase(
           previous: doc.status,
           next: 'pending_extraction',
         },
-        eventType: 'document.associated',
+        eventType: DOCUMENT_ASSOCIATED,
         aggregateType: 'Document',
         aggregateId: documentId,
         occurredAt: now,
-        eventPayload: {
+        eventPayload: buildDocumentAssociatedPayload({
           documentId,
           organizationId: ctx.organizationId,
           clientId: input.clientId ?? null,
           executionCaseId: input.executionCaseId ?? null,
-          documentClass:
-            input.documentClass ?? doc.documentClass ?? null,
+          documentClass: input.documentClass ?? doc.documentClass ?? null,
           previousStatus: doc.status,
           status: 'pending_extraction',
-        },
+        }),
       })
 
       return updateResult
@@ -436,7 +441,7 @@ export async function archiveDocument(
           previous: doc.status,
           next: 'archived',
         },
-        eventType: 'document.archived',
+        eventType: DOCUMENT_ARCHIVED,
         aggregateType: 'Document',
         aggregateId: documentId,
         occurredAt: now,

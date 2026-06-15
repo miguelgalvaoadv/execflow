@@ -6,12 +6,20 @@
  * - document.associated    → create/update queue projection in extraction_review
  * - document.confirmed     → resolve queue projections for document
  *
+ * Payload contracts: @execflow/db/types (document-layer-events.ts)
+ *
  * Architecture ref: office-operating-system.md §2.1 (queue catalog),
  *                   event-state-architecture.md §3.3 (document state machine).
  */
 
 import type { Job } from 'pg-boss'
 import type { WorkersDb } from '../lib/db.ts'
+import {
+  isDocumentExtractionQueueStatus,
+  parseDocumentAssociatedPayload,
+  parseDocumentConfirmedPayload,
+  parseIntakeRegisteredPayload,
+} from '@execflow/db/types'
 import {
   upsertQueueProjection,
   resolveQueueProjection,
@@ -43,7 +51,6 @@ function intakeSlaDeadline(): Date {
  * Per office-operating-system.md §2.1 (intake_review queue):
  * Entry condition: IntakeBundle with association_state = 'unassigned'
  * SLA: 24h business hours from uploaded_at
- * Escalation: 48h → notify assistant lead; 72h → responsible lawyer if known
  */
 export async function handleIntakeRegistered(
   db: WorkersDb,
@@ -53,11 +60,8 @@ export async function handleIntakeRegistered(
 
   if (!organizationId) return
 
-  const intakeBundleId = payload['intakeBundleId'] as string | undefined
-  const intakeBundleRef = (payload['ref'] as string | undefined) ?? 'entrada'
-  const receivedAt = payload['receivedAt'] as string | undefined
-
-  if (!intakeBundleId) return
+  const parsed = parseIntakeRegisteredPayload(payload)
+  if (parsed === null) return
 
   const slaDeadlineAt = intakeSlaDeadline()
 
@@ -65,20 +69,20 @@ export async function handleIntakeRegistered(
     organizationId,
     queueType: 'intake_review',
     entityType: 'IntakeBundle',
-    entityId: intakeBundleId,
+    entityId: parsed.intakeBundleId,
     priority: 2,
-    displayTitle: `Entrada: ${intakeBundleRef}`,
+    displayTitle: `Entrada: ${parsed.ref}`,
     displayLabel: 'intake_review',
-    ...(receivedAt !== undefined ? { keyDate: new Date(receivedAt) } : {}),
+    keyDate: new Date(parsed.receivedAt),
     slaDeadlineAt,
     sourceCausingEventId: eventId,
-    metadata: { intakeBundleRef },
+    metadata: { intakeBundleRef: parsed.ref },
   })
 
   await createIntakeTriageTask(db, {
     organizationId,
-    intakeBundleId,
-    intakeBundleRef,
+    intakeBundleId: parsed.intakeBundleId,
+    intakeBundleRef: parsed.ref,
     causingEventId: eventId,
   })
 }
@@ -86,12 +90,9 @@ export async function handleIntakeRegistered(
 /**
  * Handles document.associated events.
  *
- * When a document is associated with a case and enters extraction_review status,
- * it enters the extraction_review queue.
- *
- * Per office-operating-system.md §2.1 (extraction_review queue):
- * Entry: Document status = extraction_review
- * SLA: 48h from extraction complete
+ * extraction_review queue entry (pre-OCR hardening):
+ * Document status is pending_extraction (associated, OCR not run) OR
+ * extraction_review (OCR complete — Phase 5+).
  */
 export async function handleDocumentAssociated(
   db: WorkersDb,
@@ -101,37 +102,35 @@ export async function handleDocumentAssociated(
 
   if (!organizationId) return
 
-  const documentId = payload['documentId'] as string | undefined
-  const documentStatus = payload['newStatus'] as string | undefined
-  const executionCaseId = payload['executionCaseId'] as string | undefined
-  const documentClass = (payload['documentClass'] as string | undefined) ?? 'document'
+  const parsed = parseDocumentAssociatedPayload(payload)
+  if (parsed === null) return
 
-  if (!documentId) return
+  const documentClass = parsed.documentClass ?? 'document'
 
-  if (documentStatus === 'extraction_review') {
+  if (isDocumentExtractionQueueStatus(parsed.status)) {
     const slaDeadlineAt = new Date(Date.now() + 48 * 60 * 60 * 1000)
 
     await upsertQueueProjection(db, {
       organizationId,
       queueType: 'extraction_review',
       entityType: 'Document',
-      entityId: documentId,
-      ...(executionCaseId !== undefined ? { executionCaseId } : {}),
+      entityId: parsed.documentId,
+      ...(parsed.executionCaseId !== null ? { executionCaseId: parsed.executionCaseId } : {}),
       priority: 2,
       displayTitle: `Extração para revisar: ${documentClass}`,
       displayLabel: documentClass,
       slaDeadlineAt,
       sourceCausingEventId: eventId,
-      metadata: { documentClass },
+      metadata: { documentClass, documentStatus: parsed.status },
     })
   }
 
-  if (documentStatus === 'association_review' || documentStatus === 'pending_association') {
+  if (parsed.status === 'association_review' || parsed.status === 'pending_association') {
     await resolveQueueProjection(db, {
       organizationId,
       queueType: 'intake_review',
       entityType: 'Document',
-      entityId: documentId,
+      entityId: parsed.documentId,
     })
   }
 
@@ -150,15 +149,15 @@ export async function handleDocumentConfirmed(
 
   if (!organizationId) return
 
-  const documentId = payload['documentId'] as string | undefined
-  if (!documentId) return
+  const parsed = parseDocumentConfirmedPayload(payload)
+  if (parsed === null) return
 
   for (const queueType of ['extraction_review', 'intake_review'] as const) {
     await resolveQueueProjection(db, {
       organizationId,
       queueType,
       entityType: 'Document',
-      entityId: documentId,
+      entityId: parsed.documentId,
     })
   }
 }

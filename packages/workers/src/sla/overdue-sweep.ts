@@ -31,8 +31,10 @@ import type { WorkersDb } from '../lib/db.ts'
 import {
   upsertQueueProjection,
 } from '../projections/queue-projection.ts'
-
-const SYSTEM_ACTOR = 'sla-monitor.overdue-sweep'
+import {
+  DEADLINE_HISTORY_SYSTEM_ACTOR_OVERDUE_SWEEP,
+  deadlineHistorySystemActor,
+} from '@execflow/db/types'
 const BATCH_SIZE = 100
 
 /**
@@ -125,18 +127,6 @@ async function transitionDeadlineToOverdue(
       return
     }
 
-    await tx.insert(deadlineHistory).values({
-      organizationId: deadline.organizationId,
-      deadlineId: deadline.id,
-      changeType: 'status_changed',
-      previousValue: { status: 'open' },
-      newValue: { status: 'overdue' },
-      reason: 'SLA monitor: due_at passed without completion',
-      changedByUserId: null,
-      changedAt: now,
-      correlationId,
-    })
-
     await tx.insert(domainEvents).values({
       id: eventId,
       eventType: 'deadline.overdue',
@@ -144,7 +134,7 @@ async function transitionDeadlineToOverdue(
       aggregateId: deadline.id,
       organizationId: deadline.organizationId,
       actorType: 'system',
-      actorId: SYSTEM_ACTOR,
+      actorId: DEADLINE_HISTORY_SYSTEM_ACTOR_OVERDUE_SWEEP,
       occurredAt: now,
       recordedAt: now,
       correlationId,
@@ -158,6 +148,19 @@ async function transitionDeadlineToOverdue(
         ...(deadline.assigneeUserId ? { assigneeUserId: deadline.assigneeUserId } : {}),
       },
       processingStatus: 'pending',
+    })
+
+    await tx.insert(deadlineHistory).values({
+      organizationId: deadline.organizationId,
+      deadlineId: deadline.id,
+      changeType: 'status_changed',
+      previousValue: { status: 'open' },
+      newValue: { status: 'overdue' },
+      reason: 'SLA monitor: due_at passed without completion',
+      ...deadlineHistorySystemActor(DEADLINE_HISTORY_SYSTEM_ACTOR_OVERDUE_SWEEP),
+      changedAt: now,
+      causingEventId: eventId,
+      correlationId,
     })
   })
 

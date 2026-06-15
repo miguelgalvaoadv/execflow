@@ -97,15 +97,29 @@ export const deadlineHistory = pgTable(
     reason: text('reason'),
 
     // -------------------------------------------------------------------------
-    // Attribution
+    // Attribution — canonical actor model (matches opportunity_status_history)
     // -------------------------------------------------------------------------
 
     /**
-     * The user who made this change.
-     * NULL for system-generated transitions (SLA sweeps, automated escalation).
+     * Actor type who caused this change.
+     * 'user': human action via API.
+     * 'system': SLA sweep, engine-driven transition.
+     * 'agent_*': AI-initiated (future).
      */
-    changedByUserId: uuid('changed_by_user_id')
-      .references(() => users.id),
+    changedByActorType: text('changed_by_actor_type').notNull(),
+
+    /**
+     * Actor identifier. Matches domain_events actor_id semantics.
+     * For 'user': users.id UUID as text.
+     * For 'system': worker name (e.g. sla-monitor.overdue-sweep).
+     */
+    changedByActorId: text('changed_by_actor_id').notNull(),
+
+    /**
+     * Denormalized users.id when changed_by_actor_type = 'user'.
+     * NULL for system/agent transitions — never a fake system user UUID.
+     */
+    changedByUserId: uuid('changed_by_user_id').references(() => users.id),
 
     /**
      * System clock at the moment of change.
@@ -120,7 +134,8 @@ export const deadlineHistory = pgTable(
 
     /**
      * The domain_event.id that caused this change.
-     * Null for direct human edits. Set for engine/rule-triggered changes.
+     * Set when the transition is emitted alongside a domain event (e.g. overdue sweep).
+     * Null for direct human API edits that initiate (not receive) causality chains.
      */
     causingEventId: uuid('causing_event_id'),
 

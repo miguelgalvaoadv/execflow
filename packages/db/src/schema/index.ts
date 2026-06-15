@@ -66,6 +66,12 @@ export { executionCases } from './execution-case.ts'
 export { custodySnapshots } from './custody-snapshot.ts'
 export { intakeBundles } from './intake-bundle.ts'
 export { documents } from './document.ts'
+export { ocrRuns } from './ocr-run.ts'
+export { documentOcrResults } from './document-ocr-result.ts'
+export { extractionRuns } from './extraction-run.ts'
+export { documentExtractionResults } from './document-extraction-result.ts'
+export { snapshotPromotions } from './snapshot-promotion.ts'
+export { reviewDecisions } from './review-decision.ts'
 export { timelineEvents } from './timeline-event.ts'
 export { sentenceSnapshots } from './sentence-snapshot.ts'
 
@@ -102,6 +108,8 @@ export { queueProjections } from './queue-projection.ts'
 export { workflowTasks } from './workflow-task.ts'
 export { queueAssignments } from './queue-assignment.ts'
 export { queueEscalations } from './queue-escalation.ts'
+export { pieceDrafts, pieceDraftStatusEnum } from './piece-draft.ts'
+export { crawlerSyncLogs, crawlerSyncStatusEnum } from './crawler-sync-log.ts'
 
 // Re-export inferred types — Phase 1
 export type { Organization, NewOrganization } from './organization.ts'
@@ -121,6 +129,12 @@ export type { ExecutionCase, NewExecutionCase } from './execution-case.ts'
 export type { CustodySnapshot, NewCustodySnapshot } from './custody-snapshot.ts'
 export type { IntakeBundle, NewIntakeBundle } from './intake-bundle.ts'
 export type { Document, NewDocument } from './document.ts'
+export type { OcrRun, NewOcrRun } from './ocr-run.ts'
+export type { DocumentOcrResult, NewDocumentOcrResult } from './document-ocr-result.ts'
+export type { ExtractionRun, NewExtractionRun } from './extraction-run.ts'
+export type { DocumentExtractionResult, NewDocumentExtractionResult } from './document-extraction-result.ts'
+export type { SnapshotPromotion, NewSnapshotPromotion } from './snapshot-promotion.ts'
+export type { ReviewDecisionRecord, NewReviewDecisionRecord } from './review-decision.ts'
 export type { TimelineEvent, NewTimelineEvent } from './timeline-event.ts'
 export type { SentenceSnapshot, NewSentenceSnapshot } from './sentence-snapshot.ts'
 
@@ -139,6 +153,7 @@ export type { QueueProjection, NewQueueProjection } from './queue-projection.ts'
 export type { WorkflowTask, NewWorkflowTask } from './workflow-task.ts'
 export type { QueueAssignment, NewQueueAssignment } from './queue-assignment.ts'
 export type { QueueEscalation, NewQueueEscalation } from './queue-escalation.ts'
+export type { PieceDraft, NewPieceDraft } from './piece-draft.ts'
 
 // Enums — engine and playbook (Phase 7)
 export {
@@ -150,6 +165,7 @@ export {
   uncertaintyLevelEnum,
   snapshotDependencyTypeEnum,
   recalculationRunStatusEnum,
+  legalFractionEnum,
 } from './_enums-engine.ts'
 
 // Playbook governance entities (Phase 7)

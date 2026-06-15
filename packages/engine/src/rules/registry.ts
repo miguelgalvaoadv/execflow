@@ -22,6 +22,10 @@
  */
 
 import type { RuleEvaluatorInput, RuleEvaluatorOutput } from '../types/index.ts'
+import { lepProgressionFractionEvaluator } from '../evaluation/evaluators/lep-progression-evaluator.ts'
+import { lepParoleFractionEvaluator } from '../evaluation/evaluators/lep-parole-evaluator.ts'
+import { lepRemissionEvaluator } from '../evaluation/evaluators/lep-remission-evaluator.ts'
+import { lepDetractionEvaluator } from '../evaluation/evaluators/lep-detraction-evaluator.ts'
 
 export type RuleEvaluatorFn = (input: RuleEvaluatorInput) => RuleEvaluatorOutput
 
@@ -375,3 +379,34 @@ registerEvaluator('snapshotStalenessCheck', (input): RuleEvaluatorOutput => {
     calculations: [],
   }
 })
+
+// ---------------------------------------------------------------------------
+// Built-in evaluator: lepProgressionFraction (LEP Art. 112)
+// ---------------------------------------------------------------------------
+// Evaluates regime progression eligibility per crime using LEP fraction table.
+// Fractions (16%-70%) come from playbook parameters, never hardcoded.
+
+registerEvaluator('lepProgressionFraction', lepProgressionFractionEvaluator)
+
+// ---------------------------------------------------------------------------
+// Built-in evaluator: lepParoleFraction (CP Art. 83)
+// ---------------------------------------------------------------------------
+// Evaluates conditional parole eligibility (1/3, 1/2, 2/3 or prohibited).
+// Includes minimum sentence check (2 years) and subjective requirements.
+
+registerEvaluator('lepParoleFraction', lepParoleFractionEvaluator)
+
+// ---------------------------------------------------------------------------
+// Built-in evaluator: lepRemission (LEP Art. 126-130)
+// ---------------------------------------------------------------------------
+// Evaluates remission impact (work 3:1, study 12h:1, reading 4d/book).
+// Generates informational opportunity when remission affects eligibility dates.
+
+registerEvaluator('lepRemission', lepRemissionEvaluator)
+
+// ---------------------------------------------------------------------------
+// Built-in evaluator: lepDetraction (CP Art. 42)
+// ---------------------------------------------------------------------------
+// Evaluates pre-trial detention time credit against the sentence.
+
+registerEvaluator('lepDetraction', lepDetractionEvaluator)

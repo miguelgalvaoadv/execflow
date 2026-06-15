@@ -8,11 +8,11 @@
  * Duplicate process numbers within an org are a conflict — triggers merge workflow.
  */
 
-import { eq, and, isNull } from 'drizzle-orm'
-import { executionCases } from '@execflow/db/schema'
+import { eq, and, isNull, or, lt, desc, ilike } from 'drizzle-orm'
+import { executionCases, clients } from '@execflow/db/schema'
 import type { ExecutionCase, NewExecutionCase } from '@execflow/db/schema'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
-import type { RepositoryResult } from '@execflow/db/repositories'
+import type { RepositoryResult, PaginationParams } from '@execflow/db/repositories'
 
 // ---------------------------------------------------------------------------
 // Read operations
@@ -45,6 +45,212 @@ export async function findCaseById(
     return {
       success: false,
       error: { code: 'UNKNOWN', message: 'Failed to query execution case.', cause: err },
+    }
+  }
+}
+
+export type CaseClientSummary = {
+  id: string
+  fullName: string
+  displayName: string | null
+}
+
+export type ExecutionCaseDetail = ExecutionCase & {
+  clientSummary: CaseClientSummary
+}
+
+export type ExecutionCaseListItem = {
+  id: string
+  internalRef: string
+  executionProcessNumber: string | null
+  status: string
+  courtName: string | null
+  courtJurisdiction: string | null
+  updatedAt: Date
+  clientSummary: CaseClientSummary
+}
+
+export type ListExecutionCasesFilters = {
+  status?: string
+  courtJurisdiction?: string
+  q?: string
+}
+
+function parseListCursor(cursor: string): { updatedAt: Date; id: string } | null {
+  const separator = cursor.lastIndexOf(':')
+  if (separator <= 0) return null
+  const updatedAtRaw = cursor.slice(0, separator)
+  const id = cursor.slice(separator + 1)
+  const updatedAt = new Date(updatedAtRaw)
+  if (Number.isNaN(updatedAt.getTime()) || id === '') return null
+  return { updatedAt, id }
+}
+
+function encodeListCursor(updatedAt: Date, id: string): string {
+  return `${updatedAt.toISOString()}:${id}`
+}
+
+/**
+ * Paginated org-scoped case list — updatedAt DESC, id DESC.
+ * Single JOIN with clients (no N+1).
+ */
+export async function listExecutionCases(
+  db: AnyTx,
+  organizationId: string,
+  filters: ListExecutionCasesFilters,
+  params: PaginationParams
+): Promise<RepositoryResult<{ items: ExecutionCaseListItem[]; nextCursor: string | null }>> {
+  try {
+    const limit = Math.min(params.limit ?? 50, 200)
+    const conditions = [
+      eq(executionCases.organizationId, organizationId),
+      isNull(executionCases.deletedAt),
+      eq(clients.organizationId, organizationId),
+      isNull(clients.deletedAt),
+    ]
+
+    if (filters.status !== undefined) {
+      conditions.push(eq(executionCases.status, filters.status as ExecutionCase['status']))
+    }
+
+    if (filters.courtJurisdiction !== undefined) {
+      conditions.push(eq(executionCases.courtJurisdiction, filters.courtJurisdiction))
+    }
+
+    const q = filters.q?.trim()
+    if (q !== undefined && q.length > 0) {
+      const pattern = `%${q}%`
+      conditions.push(
+        or(
+          ilike(clients.fullName, pattern),
+          ilike(clients.displayName, pattern),
+          ilike(executionCases.internalRef, pattern),
+          ilike(executionCases.executionProcessNumber, pattern),
+          ilike(executionCases.courtName, pattern)
+        )!
+      )
+    }
+
+    if (params.cursor !== undefined) {
+      const parsed = parseListCursor(params.cursor)
+      if (parsed === null) {
+        return {
+          success: false,
+          error: { code: 'CONSTRAINT', message: 'Invalid pagination cursor.' },
+        }
+      }
+      conditions.push(
+        or(
+          lt(executionCases.updatedAt, parsed.updatedAt),
+          and(
+            eq(executionCases.updatedAt, parsed.updatedAt),
+            lt(executionCases.id, parsed.id)
+          )
+        )!
+      )
+    }
+
+    const rows = await db
+      .select({
+        id: executionCases.id,
+        internalRef: executionCases.internalRef,
+        executionProcessNumber: executionCases.executionProcessNumber,
+        status: executionCases.status,
+        courtName: executionCases.courtName,
+        courtJurisdiction: executionCases.courtJurisdiction,
+        updatedAt: executionCases.updatedAt,
+        clientId: clients.id,
+        clientFullName: clients.fullName,
+        clientDisplayName: clients.displayName,
+      })
+      .from(executionCases)
+      .innerJoin(clients, eq(executionCases.clientId, clients.id))
+      .where(and(...conditions))
+      .orderBy(desc(executionCases.updatedAt), desc(executionCases.id))
+      .limit(limit + 1)
+
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+
+    const items: ExecutionCaseListItem[] = page.map((row: any) => ({
+      id: row.id,
+      internalRef: row.internalRef,
+      executionProcessNumber: row.executionProcessNumber,
+      status: row.status,
+      courtName: row.courtName,
+      courtJurisdiction: row.courtJurisdiction,
+      updatedAt: row.updatedAt,
+      clientSummary: {
+        id: row.clientId,
+        fullName: row.clientFullName,
+        displayName: row.clientDisplayName,
+      },
+    }))
+
+    const last = page[page.length - 1]
+    const nextCursor =
+      hasMore && last !== undefined ? encodeListCursor(last.updatedAt, last.id) : null
+
+    return { success: true, data: { items, nextCursor } }
+  } catch (err) {
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to list execution cases.', cause: err },
+    }
+  }
+}
+
+/**
+ * Case detail with embedded client summary (single query — no N+1).
+ */
+export async function findCaseDetailById(
+  db: AnyTx,
+  organizationId: string,
+  id: string
+): Promise<RepositoryResult<ExecutionCaseDetail>> {
+  try {
+    const { clients } = await import('@execflow/db/schema')
+
+    const rows = await db
+      .select({
+        case: executionCases,
+        clientId: clients.id,
+        clientFullName: clients.fullName,
+        clientDisplayName: clients.displayName,
+      })
+      .from(executionCases)
+      .innerJoin(clients, eq(executionCases.clientId, clients.id))
+      .where(
+        and(
+          eq(executionCases.id, id),
+          eq(executionCases.organizationId, organizationId),
+          eq(clients.organizationId, organizationId),
+          isNull(executionCases.deletedAt),
+          isNull(clients.deletedAt)
+        )
+      )
+      .limit(1)
+
+    const row = rows[0]
+    if (row === undefined) {
+      return { success: false, error: { code: 'NOT_FOUND', message: 'Execution case not found.' } }
+    }
+
+    return {
+      success: true,
+      data: {
+        ...row.case,
+        clientSummary: {
+          id: row.clientId,
+          fullName: row.clientFullName,
+          displayName: row.clientDisplayName,
+        },
+      },
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to query execution case detail.', cause: err },
     }
   }
 }

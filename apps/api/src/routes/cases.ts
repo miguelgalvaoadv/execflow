@@ -1,5 +1,5 @@
 /**
- * ExecutionCase routes — POST /api/v1/cases
+ * ExecutionCase routes — GET /api/v1/cases, GET /api/v1/cases/:id, POST /api/v1/cases
  *
  * Opening a case is a high-consequence action that:
  * - Creates the case with legal temporal metadata
@@ -19,10 +19,89 @@ import { buildWriteContext } from '../lib/write-context.ts'
 import { parseBody } from '../lib/zod-helpers.ts'
 import { serviceErrorToResponse, safeJsonBody } from '../lib/route-helpers.ts'
 import { createCase } from '../services/case.ts'
+import { getExecutionCaseDetail, listExecutionCasesForOrg } from '../services/case-read.ts'
+import { toReadContext } from '../lib/read-context.ts'
+import { PaginationQuerySchema } from '../lib/pagination-schemas.ts'
 import { unprocessable } from '../lib/respond.ts'
 import type { HonoVariables } from '../context/types.ts'
+import { eq, and } from 'drizzle-orm'
 
 const router = new Hono<{ Variables: HonoVariables }>()
+
+const CaseIdParamSchema = z.object({
+  id: z.string().uuid('Invalid case ID.'),
+})
+
+const ListExecutionCasesQuerySchema = PaginationQuerySchema.extend({
+  status: z.enum(['intake', 'active', 'suspended', 'closed', 'archived']).optional(),
+  courtJurisdiction: z.string().max(200).optional(),
+  q: z.string().max(200).optional(),
+})
+
+// -------------------------------------------------------------------------
+// GET /api/v1/cases — Paginated execution case list
+// -------------------------------------------------------------------------
+
+router.get(
+  '/',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = ListExecutionCasesQuerySchema.safeParse(c.req.query())
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid query parameters.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const q = parsed.data
+
+    const result = await listExecutionCasesForOrg(
+      ctx,
+      {
+        ...(q.status !== undefined ? { status: q.status } : {}),
+        ...(q.courtJurisdiction !== undefined ? { courtJurisdiction: q.courtJurisdiction } : {}),
+        ...(q.q !== undefined ? { q: q.q } : {}),
+      },
+      {
+        limit: q.limit,
+        ...(q.cursor !== undefined ? { cursor: q.cursor } : {}),
+      }
+    )
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data.items, nextCursor: result.data.nextCursor }, 200)
+  }
+)
+
+// -------------------------------------------------------------------------
+// GET /api/v1/cases/:id — Execution case profile
+// -------------------------------------------------------------------------
+
+router.get(
+  '/:id',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = CaseIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid case ID.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const result = await getExecutionCaseDetail(ctx, parsed.data.id)
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data }, 200)
+  }
+)
 
 // -------------------------------------------------------------------------
 // POST /api/v1/cases — Create a new execution case
@@ -73,6 +152,63 @@ router.post(
     }
 
     return c.json({ data: result.data }, 201)
+  }
+)
+
+// -------------------------------------------------------------------------
+// POST /api/v1/cases/:id/force-scraping — Dispara o robô navegador para o caso
+// -------------------------------------------------------------------------
+
+router.post(
+  '/:id/force-scraping',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('lawyer'),
+  async (c) => {
+    const parsed = CaseIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid case ID.', { issues: parsed.error.issues })
+    }
+
+    const ctx = buildWriteContext(c, db)
+
+    const { executionCases } = await import('@execflow/db/schema')
+    const [execCase] = await db
+      .select()
+      .from(executionCases)
+      .where(
+        and(
+          eq(executionCases.id, parsed.data.id),
+          eq(executionCases.organizationId, ctx.organizationId)
+        )
+      )
+    
+    if (!execCase) {
+      return unprocessable(c, 'Case not found')
+    }
+    
+    // Dispara o job via outbox relay inserindo um domainEvent
+    const { domainEvents } = await import('@execflow/db/schema')
+    const crypto = await import('crypto')
+    
+    await db.insert(domainEvents).values({
+      id: crypto.randomUUID(),
+      organizationId: ctx.organizationId,
+      eventType: 'court.scraper.requested',
+      aggregateId: execCase.id,
+      aggregateType: 'execution_case',
+      correlationId: crypto.randomUUID(),
+      actorType: 'user',
+      actorId: ctx.userId,
+      occurredAt: new Date(),
+      payload: {
+        executionCaseId: execCase.id,
+        organizationId: ctx.organizationId,
+        url: 'https://esaj.tjsp.jus.br/esaj/portal.do?servico=190090'
+      }
+    })
+
+    return c.json({ success: true, message: 'Scraping request queued' }, 202)
   }
 )
 

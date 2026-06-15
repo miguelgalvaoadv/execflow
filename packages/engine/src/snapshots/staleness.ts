@@ -13,7 +13,7 @@
  *                   Phase 7 snapshot_dependencies.is_stale.
  */
 
-import { eq, and, inArray } from '@execflow/db/client'
+import { eq, and, inArray, narrowDbForDrizzleReturning } from '@execflow/db/client'
 import type { AnyDbClient } from '@execflow/db/client'
 import { snapshotDependencies, engineRuns } from '@execflow/db/schema'
 
@@ -40,10 +40,11 @@ export async function invalidateDependencies(
   db: AnyDbClient,
   change: DependencyChangeEvent
 ): Promise<string[]> {
+  const client = narrowDbForDrizzleReturning(db)
   const { dependencyType, dependencyEntityId, changeReason } = change
 
   // Find all non-stale dependencies pointing to this entity
-  const affectedDeps = await db
+  const affectedDeps = await client
     .select({
       id: snapshotDependencies.id,
       engineRunId: snapshotDependencies.engineRunId,
@@ -62,7 +63,7 @@ export async function invalidateDependencies(
   // Mark each dependency as stale
   const now = new Date()
   for (const dep of affectedDeps) {
-    await db
+    await client
       .update(snapshotDependencies)
       .set({
         isStale: true,
@@ -72,19 +73,19 @@ export async function invalidateDependencies(
       .where(eq(snapshotDependencies.id, dep.id))
   }
 
-  const affectedRunIds = [...new Set(affectedDeps.map((d) => d.engineRunId))]
+  const affectedRunIds = [...new Set(affectedDeps.map((d: any) => d.engineRunId as string))]
   if (affectedRunIds.length === 0) return []
 
-  const affectedCases = await db
+  const affectedCases = await client
     .select({
       executionCaseId: engineRuns.executionCaseId,
     })
     .from(engineRuns)
-    .where(inArray(engineRuns.id, affectedRunIds))
+    .where(inArray(engineRuns.id, affectedRunIds as string[]))
 
-  const caseIds = [...new Set(affectedCases.map((r) => r.executionCaseId))]
+  const caseIds = [...new Set(affectedCases.map((r: any) => r.executionCaseId))]
 
-  return caseIds
+  return caseIds as string[]
 }
 
 /**
@@ -95,7 +96,8 @@ export async function hasStaleDependencies(
   db: AnyDbClient,
   executionCaseId: string
 ): Promise<boolean> {
-  const [staleRun] = await db
+  const client = narrowDbForDrizzleReturning(db)
+  const [staleRun] = await client
     .select({ id: snapshotDependencies.id })
     .from(snapshotDependencies)
     .innerJoin(engineRuns, eq(snapshotDependencies.engineRunId, engineRuns.id))

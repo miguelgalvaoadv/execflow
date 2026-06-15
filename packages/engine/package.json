@@ -8,12 +8,14 @@
     "./types": "./src/types/index.ts"
   },
   "scripts": {
+    "test": "node --import tsx --test src/**/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@execflow/db": "workspace:*"
   },
   "devDependencies": {
+    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }

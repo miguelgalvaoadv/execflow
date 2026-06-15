@@ -177,6 +177,9 @@ export const custodySnapshots = pgTable(
      */
     confirmedAt: timestamp('confirmed_at', { withTimezone: true }),
 
+    rejectedAt: timestamp('rejected_at', { withTimezone: true }),
+    rejectedByUserId: uuid('rejected_by_user_id').references(() => users.id),
+
     // -------------------------------------------------------------------------
     // Amendment chain (corrections via new rows, never in-place)
     // -------------------------------------------------------------------------

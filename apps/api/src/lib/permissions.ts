@@ -43,6 +43,14 @@ export function hasMinRole(
   return ROLE_HIERARCHY[actorRole] >= ROLE_HIERARCHY[required]
 }
 
+/** Narrows session actor role to org membership role, or null if absent/invalid. */
+export function resolveMembershipRole(actorRole: string | null): MembershipRole | null {
+  if (actorRole === 'admin' || actorRole === 'lawyer' || actorRole === 'assistant') {
+    return actorRole
+  }
+  return null
+}
+
 /**
  * Returns true if the actor holds exactly the specified role.
  * Use hasMinRole() for most permission checks (it handles role hierarchy).

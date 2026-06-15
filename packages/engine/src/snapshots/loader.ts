@@ -40,11 +40,12 @@ export async function loadCaseFacts(
 ): Promise<CaseFacts> {
   const { organizationId, executionCaseId, evaluatedAt } = input
 
-  const [sentence, custody, interruptions, events] = await Promise.all([
+  const [sentence, custody, interruptions, events, caseRecord] = await Promise.all([
     loadConfirmedSentenceSnapshot(db, executionCaseId, evaluatedAt),
     loadConfirmedCustodySnapshot(db, executionCaseId, evaluatedAt),
     loadActiveInterruptions(db, executionCaseId, evaluatedAt),
     loadRecentEvents(db, executionCaseId, evaluatedAt),
+    loadExecutionCaseInfo(db, executionCaseId),
   ])
 
   // Determine staleness: snapshot is "recent" if within SNAPSHOT_STALENESS_DAYS
@@ -61,8 +62,25 @@ export async function loadCaseFacts(
     custody,
     activeInterruptions: interruptions,
     recentEvents: events,
-    hasConfirmedProcessNumber: true, // simplified: assume confirmed for Phase 7 foundation
+    hasConfirmedProcessNumber: caseRecord.hasConfirmedProcessNumber,
     hasRecentConfirmedSnapshot,
+  }
+}
+
+async function loadExecutionCaseInfo(
+  db: AnyDbClient,
+  executionCaseId: string
+): Promise<{ hasConfirmedProcessNumber: boolean }> {
+  // Use dynamic import to avoid circular dependency via db schema
+  const { executionCases } = await import('@execflow/db/schema')
+  const [row] = await db
+    .select({ executionProcessNumber: executionCases.executionProcessNumber })
+    .from(executionCases)
+    .where(eq(executionCases.id, executionCaseId))
+    .limit(1)
+
+  return {
+    hasConfirmedProcessNumber: row?.executionProcessNumber !== null && row?.executionProcessNumber !== undefined,
   }
 }
 
@@ -167,7 +185,7 @@ async function loadActiveInterruptions(
     if (eventType === 'prison.escape' || eventType === 'custody.escape') {
       // Check if recapture event exists after this escape
       const hasRecapture = rows.some(
-        (r) =>
+        (r: any) =>
           (r.eventType === 'prison.recapture' || r.eventType === 'custody.recapture') &&
           r.occurredAt > event.occurredAt
       )
@@ -222,7 +240,7 @@ async function loadRecentEvents(
     .orderBy(desc(timelineEvents.occurredAt))
     .limit(20)
 
-  return rows.map((r) => ({
+  return rows.map((r: any) => ({
     eventId: r.id,
     eventType: r.eventType as string,
     occurredAt: r.occurredAt,

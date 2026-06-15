@@ -485,5 +485,10 @@ export type RecalculationRequest = {
   triggerReason: string
   parentRecalculationRunId: string | null
   chainDepth: number
+  /** Shared across the logical operation chain (propagated from upstream events). */
   correlationId: string | null
+  /** domain_events.id of the upstream event that triggered this recalculation. */
+  causationId: string | null
+  /** Jurisdiction scope for playbook resolution (defaults to BR-FED). */
+  jurisdictionScope?: string
 }

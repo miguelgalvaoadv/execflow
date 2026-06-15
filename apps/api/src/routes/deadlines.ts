@@ -1,10 +1,13 @@
 /**
  * Deadline routes
  *
- * POST   /api/v1/deadlines              — create deadline (assistant+)
- * POST   /api/v1/deadlines/:id/acknowledge — acknowledge deadline (assistant+)
- * POST   /api/v1/deadlines/:id/complete  — complete deadline (assistant+)
- * POST   /api/v1/deadlines/:id/dismiss   — dismiss deadline (lawyer+; overdue requires reason code)
+ * GET    /api/v1/deadlines                    — Paginated org deadline list
+ * GET    /api/v1/deadlines/:id/history         — Deadline change history
+ * GET    /api/v1/deadlines/:id                 — Deadline detail
+ * POST   /api/v1/deadlines                    — create deadline (assistant+)
+ * POST   /api/v1/deadlines/:id/acknowledge    — acknowledge deadline (assistant+)
+ * POST   /api/v1/deadlines/:id/complete        — complete deadline (assistant+)
+ * POST   /api/v1/deadlines/:id/dismiss        — dismiss deadline (lawyer+)
  *
  * Route principles:
  * - Thin handlers: parse → validate → service → map result.
@@ -31,9 +34,121 @@ import {
   completeDeadline,
   dismissDeadline,
 } from '../services/deadline.ts'
+import {
+  getDeadlineDetail,
+  listDeadlineHistory,
+  listDeadlinesForOrg,
+} from '../services/deadline-read.ts'
+import { toReadContext } from '../lib/read-context.ts'
+import { PaginationQuerySchema } from '../lib/pagination-schemas.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 const router = new Hono<{ Variables: HonoVariables }>()
+
+const DeadlineIdParamSchema = z.object({
+  id: z.string().uuid('Invalid deadline ID.'),
+})
+
+const ListDeadlinesQuerySchema = PaginationQuerySchema.extend({
+  status: z.enum(['open', 'acknowledged', 'overdue', 'completed', 'dismissed']).optional(),
+  deadlineClass: z
+    .enum(['legal', 'benefit', 'disciplinary', 'calculation', 'internal', 'recurring', 'sla'])
+    .optional(),
+  priority: z.enum(['critical', 'high', 'normal', 'low']).optional(),
+  q: z.string().max(200).optional(),
+})
+
+// -------------------------------------------------------------------------
+// GET /api/v1/deadlines — Paginated org deadline list
+// -------------------------------------------------------------------------
+
+router.get(
+  '/',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = ListDeadlinesQuerySchema.safeParse(c.req.query())
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid query parameters.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const q = parsed.data
+
+    const result = await listDeadlinesForOrg(
+      ctx,
+      {
+        ...(q.status !== undefined ? { status: q.status } : {}),
+        ...(q.deadlineClass !== undefined ? { deadlineClass: q.deadlineClass } : {}),
+        ...(q.priority !== undefined ? { priority: q.priority } : {}),
+        ...(q.q !== undefined ? { q: q.q } : {}),
+      },
+      {
+        limit: q.limit,
+        ...(q.cursor !== undefined ? { cursor: q.cursor } : {}),
+      }
+    )
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data.items, nextCursor: result.data.nextCursor }, 200)
+  }
+)
+
+// -------------------------------------------------------------------------
+// GET /api/v1/deadlines/:id/history — Deadline change history
+// -------------------------------------------------------------------------
+
+router.get(
+  '/:id/history',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = DeadlineIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid deadline ID.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const result = await listDeadlineHistory(ctx, parsed.data.id)
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data }, 200)
+  }
+)
+
+// -------------------------------------------------------------------------
+// GET /api/v1/deadlines/:id — Deadline detail
+// -------------------------------------------------------------------------
+
+router.get(
+  '/:id',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = DeadlineIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid deadline ID.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const result = await getDeadlineDetail(ctx, parsed.data.id)
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data }, 200)
+  }
+)
 
 // -------------------------------------------------------------------------
 // Validation schemas
@@ -73,9 +188,10 @@ const CreateDeadlineSchema = z.object({
 
 const CompleteDeadlineSchema = z.object({
   completionEvidenceType: z.enum([
-    'timeline_event', 'document', 'manual', 'filing',
+    'document', 'filing', 'court_event', 'note', 'other', 'timeline_event', 'manual',
   ]).optional(),
   completionEvidenceId: z.string().uuid().optional(),
+  reason: z.string().max(2000).optional(),
 })
 
 const DismissDeadlineSchema = z.object({

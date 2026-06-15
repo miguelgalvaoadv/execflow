@@ -23,6 +23,7 @@
  */
 
 import { Hono } from 'hono'
+import { cors } from 'hono/cors'
 import { healthRouter } from './routes/health.ts'
 import { authRouter } from './routes/auth.ts'
 import { clientsRouter } from './routes/clients.ts'
@@ -34,10 +35,32 @@ import { deadlinesRouter } from './routes/deadlines.ts'
 import { opportunitiesRouter } from './routes/opportunities.ts'
 import { queueRouter } from './routes/queue.ts'
 import { engineRouter } from './routes/engine.ts'
+import { caseSnapshotsRouter } from './routes/case-snapshots.ts'
+import { caseWorkspaceReadRouter } from './routes/case-workspace-read.ts'
+import { sentenceSnapshotsRouter } from './routes/sentence-snapshots.ts'
+import { custodySnapshotsRouter } from './routes/custody-snapshots.ts'
+import { crawlersRouter } from './routes/crawlers.ts'
+import { uploadsRouter } from './routes/uploads.ts'
+import { extractionsRouter } from './routes/extractions.ts'
+import { snapshotsRouter } from './routes/snapshots.ts'
+import { pieceDraftsRouter } from './routes/piece-drafts.ts'
+import { webhooksRouter } from './routes/webhooks.ts'
 import type { HonoVariables } from './context/types.ts'
 import { internalError } from './lib/respond.ts'
 
 const app = new Hono<{ Variables: HonoVariables }>()
+
+app.use(
+  '*',
+  cors({
+    origin: process.env['BETTER_AUTH_TRUSTED_ORIGINS'] ?? 'http://localhost:3000',
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
+    allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE'],
+    exposeHeaders: ['Content-Length', 'X-Request-Id'],
+    maxAge: 600,
+    credentials: true,
+  })
+)
 
 // -------------------------------------------------------------------------
 // Global: request ID injection
@@ -101,6 +124,9 @@ app.route('/api/v1/cases', casesRouter)
 app.route('/api/v1/intake', intakeRouter)
 app.route('/api/v1/documents', documentsRouter)
 app.route('/api/v1/cases', timelineRouter) // timeline: /api/v1/cases/:caseId/timeline
+app.route('/api/v1/cases', crawlersRouter) // crawlers: /api/v1/cases/:caseId/sync-tribunal
+app.route('/api/v1/cases', caseSnapshotsRouter) // snapshots: /api/v1/cases/:caseId/*-snapshots
+app.route('/api/v1/cases', caseWorkspaceReadRouter) // read lists: documents, opportunities, deadlines
 
 // -------------------------------------------------------------------------
 // Domain routes (Phase 5) — deadline and opportunity foundation
@@ -113,6 +139,19 @@ app.route('/api/v1/opportunities', opportunitiesRouter)
 // Domain routes (Phase 6) — queue engine and workflow orchestration
 // -------------------------------------------------------------------------
 
+app.route('/api/v1/queue', queueRouter)
+app.route('/api/v1/engine', engineRouter)
+app.route('/api/v1/extractions', extractionsRouter)
+app.route('/api/v1/sentence-snapshots', sentenceSnapshotsRouter)
+app.route('/api/v1/custody-snapshots', custodySnapshotsRouter)
+app.route('/api/v1/snapshots', snapshotsRouter)
+app.route('/api/v1/piece-drafts', pieceDraftsRouter)
+
+// -------------------------------------------------------------------------
+// Phase 9 - Webhooks (JusBrasil, etc)
+// -------------------------------------------------------------------------
+app.route('/api/v1/webhooks', webhooksRouter)
+
 app.route('/api/v1/queue-projections', queueRouter)
 // workflow-tasks/:id/claim|release|complete are sub-routes on the queue router
 
@@ -121,6 +160,27 @@ app.route('/api/v1/queue-projections', queueRouter)
 // -------------------------------------------------------------------------
 
 app.route('/api/v1/engine', engineRouter)
+
+// -------------------------------------------------------------------------
+// Domain routes (Phase 7+) — snapshot lifecycle (propose → confirm → supersede)
+// -------------------------------------------------------------------------
+
+app.route('/api/v1/sentence-snapshots', sentenceSnapshotsRouter)
+app.route('/api/v1/custody-snapshots', custodySnapshotsRouter)
+
+// -------------------------------------------------------------------------
+// Domain routes — upload + storage (presigned blob upload)
+// -------------------------------------------------------------------------
+
+app.route('/api/v1/uploads', uploadsRouter)
+
+// -------------------------------------------------------------------------
+// Domain routes — human review & confirmation
+// -------------------------------------------------------------------------
+
+app.route('/api/v1/extractions', extractionsRouter)
+app.route('/api/v1/snapshots', snapshotsRouter)
+app.route('/api/v1/piece-drafts', pieceDraftsRouter)
 
 // -------------------------------------------------------------------------
 // 404 handler — catches unmatched routes

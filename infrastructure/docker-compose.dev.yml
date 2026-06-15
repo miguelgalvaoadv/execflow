@@ -1,0 +1,37 @@
+# =============================================================================
+# EXECFLOW — Local development PostgreSQL
+# =============================================================================
+# Usage:
+#   docker compose -f infrastructure/docker-compose.dev.yml up -d
+#   docker compose -f infrastructure/docker-compose.dev.yml down
+#   docker compose -f infrastructure/docker-compose.dev.yml down -v  (destroy data)
+#
+# After starting, run migrations:
+#   pnpm --filter @execflow/db db:migrate
+#
+# Connection string (use in .env.local):
+#   DATABASE_URL=postgresql://execflow:execflow@localhost:5432/execflow
+# =============================================================================
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: execflow-postgres-dev
+    environment:
+      POSTGRES_USER: execflow
+      POSTGRES_PASSWORD: execflow
+      POSTGRES_DB: execflow
+    ports:
+      - "5432:5432"
+    volumes:
+      - execflow_postgres_dev:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U execflow -d execflow"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+volumes:
+  execflow_postgres_dev:
+    name: execflow_postgres_dev

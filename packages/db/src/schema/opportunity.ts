@@ -42,6 +42,7 @@ import {
 import { organizations } from './organization.ts'
 import { executionCases } from './execution-case.ts'
 import { users } from './user.ts'
+import { explanationBundles } from './explanation-bundle.ts'
 import {
   opportunityTypeEnum,
   opportunityStatusEnum,
@@ -223,7 +224,14 @@ export const opportunities = pgTable(
      */
     playbookVersionId: uuid('playbook_version_id'),
 
+    /**
+     * Reusable structured JSON explanation produced by the engine.
+     * Replaces direct JSONB attachment to allow polymorphic use by deadlines/projections.
+     */
+    explanationBundleId: uuid('explanation_bundle_id').references(() => explanationBundles.id),
+
     // -------------------------------------------------------------------------
+
     // Legal basis
     // -------------------------------------------------------------------------
 

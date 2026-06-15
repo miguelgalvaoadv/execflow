@@ -1,5 +1,5 @@
 /**
- * Timeline routes — POST /api/v1/cases/:caseId/timeline
+ * Timeline routes — POST/GET /api/v1/cases/:caseId/timeline
  *
  * The timeline is append-only. No edit or delete endpoints exist.
  * Corrections are new events with amendsEventId pointing to the error.
@@ -20,10 +20,51 @@ import { buildWriteContext } from '../lib/write-context.ts'
 import { parseBody } from '../lib/zod-helpers.ts'
 import { serviceErrorToResponse, safeJsonBody } from '../lib/route-helpers.ts'
 import { appendTimelineEntry } from '../services/timeline.ts'
+import { listCaseTimeline } from '../services/case-workspace-read.ts'
+import { toReadContext } from '../lib/read-context.ts'
+import { PaginationQuerySchema } from '../lib/pagination-schemas.ts'
 import { unprocessable } from '../lib/respond.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 const router = new Hono<{ Variables: HonoVariables }>()
+
+const CaseIdParamSchema = z.object({
+  caseId: z.string().uuid('Invalid case ID.'),
+})
+
+// -------------------------------------------------------------------------
+// GET /api/v1/cases/:caseId/timeline — List timeline events (chronological)
+// -------------------------------------------------------------------------
+
+router.get(
+  '/:caseId/timeline',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = CaseIdParamSchema.safeParse({ caseId: c.req.param('caseId') })
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid case ID.', { issues: parsed.error.issues })
+    }
+
+    const queryParsed = PaginationQuerySchema.safeParse(c.req.query())
+    if (!queryParsed.success) {
+      return unprocessable(c, 'Invalid query parameters.', { issues: queryParsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const result = await listCaseTimeline(ctx, parsed.data.caseId, {
+      limit: queryParsed.data.limit,
+      ...(queryParsed.data.cursor !== undefined ? { cursor: queryParsed.data.cursor } : {}),
+    })
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data.items, nextCursor: result.data.nextCursor }, 200)
+  }
+)
 
 // -------------------------------------------------------------------------
 // POST /api/v1/cases/:caseId/timeline — Append a timeline event

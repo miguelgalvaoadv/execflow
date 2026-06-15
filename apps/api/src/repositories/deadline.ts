@@ -14,12 +14,12 @@
  * created_by_user_id. These fields are never included in update methods here.
  */
 
-import { eq, and, isNull } from 'drizzle-orm'
-import { deadlines } from '@execflow/db/schema'
+import { eq, and, asc, lt, gt, or, ilike, isNull, sql } from 'drizzle-orm'
+import { deadlines, executionCases } from '@execflow/db/schema'
 import type { Deadline, NewDeadline } from '@execflow/db/schema'
 import type { DeadlineStatus, DeadlinePriority } from '@execflow/db/types'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
-import type { RepositoryResult } from '@execflow/db/repositories'
+import type { RepositoryResult, PaginationParams, PaginatedResult } from '@execflow/db/repositories'
 
 // ---------------------------------------------------------------------------
 // Read operations
@@ -50,6 +50,180 @@ export async function findDeadlineById(
     return {
       success: false,
       error: { code: 'UNKNOWN', message: 'Failed to query deadline.', cause: err },
+    }
+  }
+}
+
+/**
+ * List deadlines for an execution case ordered by due date (soonest first).
+ */
+export async function listDeadlinesByCase(
+  db: AnyTx,
+  organizationId: string,
+  executionCaseId: string,
+  params: PaginationParams
+): Promise<RepositoryResult<PaginatedResult<Deadline>>> {
+  try {
+    const limit = Math.min(params.limit ?? 50, 200)
+
+    const rows = await db.query.deadlines.findMany({
+      where: and(
+        eq(deadlines.organizationId, organizationId),
+        eq(deadlines.executionCaseId, executionCaseId),
+        params.cursor !== undefined ? lt(deadlines.dueAt, new Date(params.cursor)) : undefined
+      ),
+      orderBy: [asc(deadlines.dueAt), asc(deadlines.id)],
+      limit: limit + 1,
+    })
+
+    const hasMore = rows.length > limit
+    const items = hasMore ? rows.slice(0, limit) : rows
+    const last = items[items.length - 1]
+    const nextCursor =
+      hasMore && last !== undefined ? last.dueAt.toISOString() : null
+
+    return {
+      success: true,
+      data: { items, nextCursor, totalCount: items.length },
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to list deadlines for case.', cause: err },
+    }
+  }
+}
+
+export type DeadlineOrgListItem = {
+  id: string
+  title: string
+  deadlineClass: string
+  status: string
+  priority: string
+  dueAt: Date
+  executionCaseId: string
+  caseInternalRef: string | null
+}
+
+export type ListDeadlinesForOrgFilters = {
+  status?: string
+  deadlineClass?: string
+  priority?: string
+  q?: string
+}
+
+function parseOrgListCursor(cursor: string): { id: string } | null {
+  const separator = cursor.indexOf('|')
+  const id = separator > 0 ? cursor.slice(separator + 1) : cursor
+  if (id === '' || !/^[0-9a-f-]{36}$/i.test(id)) return null
+  return { id }
+}
+
+function encodeOrgListCursor(dueAt: Date, id: string): string {
+  return `${dueAt.toISOString()}|${id}`
+}
+
+/**
+ * Paginated org-scoped deadline list — dueAt ASC, id ASC (soonest first).
+ */
+export async function listDeadlinesForOrg(
+  db: AnyTx,
+  organizationId: string,
+  filters: ListDeadlinesForOrgFilters,
+  params: PaginationParams
+): Promise<RepositoryResult<{ items: DeadlineOrgListItem[]; nextCursor: string | null }>> {
+  try {
+    const limit = Math.min(params.limit ?? 50, 200)
+    const conditions = [eq(deadlines.organizationId, organizationId)]
+
+    if (filters.status !== undefined) {
+      conditions.push(eq(deadlines.status, filters.status as Deadline['status']))
+    }
+
+    if (filters.deadlineClass !== undefined) {
+      conditions.push(eq(deadlines.deadlineClass, filters.deadlineClass as Deadline['deadlineClass']))
+    }
+
+    if (filters.priority !== undefined) {
+      conditions.push(eq(deadlines.priority, filters.priority as Deadline['priority']))
+    }
+
+    const q = filters.q?.trim()
+    if (q !== undefined && q.length > 0) {
+      const pattern = `%${q}%`
+      conditions.push(
+        or(
+          ilike(deadlines.title, pattern),
+          ilike(deadlines.description, pattern),
+          ilike(executionCases.internalRef, pattern)
+        )!
+      )
+    }
+
+    if (params.cursor !== undefined) {
+      const parsed = parseOrgListCursor(params.cursor)
+      if (parsed === null) {
+        return {
+          success: false,
+          error: { code: 'CONSTRAINT', message: 'Invalid pagination cursor.' },
+        }
+      }
+      conditions.push(
+        sql`(${deadlines.dueAt}, ${deadlines.id}) > (
+          SELECT due_at, id FROM deadlines
+          WHERE id = ${parsed.id}::uuid AND organization_id = ${organizationId}
+        )`
+      )
+    }
+
+    const rows = await db
+      .select({
+        id: deadlines.id,
+        title: deadlines.title,
+        deadlineClass: deadlines.deadlineClass,
+        status: deadlines.status,
+        priority: deadlines.priority,
+        dueAt: deadlines.dueAt,
+        executionCaseId: deadlines.executionCaseId,
+        caseInternalRef: executionCases.internalRef,
+      })
+      .from(deadlines)
+      .innerJoin(
+        executionCases,
+        and(
+          eq(deadlines.executionCaseId, executionCases.id),
+          eq(executionCases.organizationId, organizationId),
+          isNull(executionCases.deletedAt)
+        )
+      )
+      .where(and(...conditions))
+      .orderBy(asc(deadlines.dueAt), asc(deadlines.id))
+      .limit(limit + 1)
+
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+
+    const items: DeadlineOrgListItem[] = page.map((row: any) => ({
+      id: row.id,
+      title: row.title,
+      deadlineClass: row.deadlineClass,
+      status: row.status,
+      priority: row.priority,
+      dueAt: row.dueAt,
+      executionCaseId: row.executionCaseId,
+      caseInternalRef: row.caseInternalRef,
+    }))
+
+    const nextCursor =
+      hasMore && page.length > 0
+        ? encodeOrgListCursor(page[page.length - 1]!.dueAt, page[page.length - 1]!.id)
+        : null
+
+    return { success: true, data: { items, nextCursor } }
+  } catch (err) {
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to list deadlines for organization.', cause: err },
     }
   }
 }

@@ -22,7 +22,12 @@
 
 // Orchestration services (primary public API)
 export { runEvaluation, runRecalculation } from './runtime/runner.ts'
+export type { RunEvaluationOutput } from './runtime/runner.ts'
 export { commitEngineRun, failEngineRun } from './runtime/commit.ts'
+export type { CommitOptions, CommitPropagationContext } from './runtime/commit-options.ts'
+
+// MVP E2E engine (Phase 1 — replaces stub evaluators for demo; to be superseded by full evaluators in Phase 2+)
+export { runMvpEngine } from './engine-run-mvp.ts'
 
 // Dependency invalidation
 export { invalidateDependencies, hasStaleDependencies } from './snapshots/staleness.ts'
@@ -47,6 +52,9 @@ export { loadPlaybook } from './playbooks/loader.ts'
 
 // Evaluator registry (for extension by future phases)
 export { registerEvaluator, listRegisteredEvaluators } from './rules/registry.ts'
+
+// Snapshot loading (for tests and admin tooling)
+export { loadCaseFacts } from './snapshots/loader.ts'
 
 // Type exports
 export type {

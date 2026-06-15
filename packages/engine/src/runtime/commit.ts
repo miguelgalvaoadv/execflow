@@ -12,6 +12,7 @@
  * - ExplanationBundle records (one per opportunity proposal + one for run)
  * - SnapshotDependency records (one per input consumed)
  * - Opportunity records (one per proposal, status='suggested')
+ * - DomainEvent outbox rows (opportunity.created per suggestion + engine.run.completed)
  *
  * REPLAY RUNS: commit creates EngineRun + traces but NOT Opportunities.
  * Replay is read-only at the legal level.
@@ -29,16 +30,11 @@ import {
   opportunities,
 } from '@execflow/db/schema'
 import type { EngineRunResult, EvaluationContext } from '../types/index.ts'
+import { emitEngineCommitDomainEvents } from './commit-propagation.ts'
+import type { CommitOptions } from './commit-options.ts'
+import { assertEngineRunIsReplayBoolean } from '@execflow/db/types'
 
-export type CommitOptions = {
-  trigger: typeof engineRuns.$inferInsert['trigger']
-  triggerEntityType?: string | undefined
-  triggerEntityId?: string | undefined
-  requestedByUserId?: string | undefined
-  isReplay: boolean
-  overlayVersionId?: string | undefined
-  caseContextId?: string | undefined
-}
+export type { CommitOptions, CommitPropagationContext } from './commit-options.ts'
 
 /**
  * Persists the evaluation result to the database within a single transaction.
@@ -51,7 +47,9 @@ export async function commitEngineRun(
   result: EngineRunResult,
   opts: CommitOptions
 ): Promise<string> {
-  return db.transaction(async (tx) => {
+  assertEngineRunIsReplayBoolean(opts.isReplay, 'commitEngineRun.opts.isReplay')
+
+  return db.transaction(async (tx: any) => {
     const t = narrowTxForDrizzleReturning(tx)
     // 1. Create EngineRun record (status: running → will update to completed)
     const [runRow] = await t
@@ -95,7 +93,7 @@ export async function commitEngineRun(
           evaluationOrder: trace.evaluationOrder,
           inputsHash: trace.inputsHash,
           outputsHash: trace.outputsHash,
-          inputsSnapshot: trace.outputsSnapshot ?? null,
+          inputsSnapshot: null, // inputs snapshot not captured by evaluator yet (Phase 8+)
           outputsSnapshot: trace.outputsSnapshot ?? null,
           outcome: trace.outcome,
           uncertaintyLevel: trace.uncertaintyLevel,
@@ -123,39 +121,44 @@ export async function commitEngineRun(
       )
     }
 
+    const createdOpportunityIds: string[] = []
+
     // 4. Insert opportunity proposals (only for non-replay runs)
     if (!opts.isReplay && result.opportunityProposals.length > 0) {
       for (const proposal of result.opportunityProposals) {
-        const [oppRow] = await t
-          .insert(opportunities)
+        const [bundleRow] = await t
+          .insert(explanationBundles)
           .values({
             organizationId: result.organizationId,
             executionCaseId: result.executionCaseId,
-            opportunityType: proposal.opportunityType as typeof opportunities.$inferInsert['opportunityType'],
-            status: 'suggested',
-            detectedAt: result.evaluatedAt,
-            summary: proposal.summary,
-            rationale: proposal.rationale,
-            windowStartAt: proposal.windowStartAt,
-            windowEndAt: proposal.windowEndAt,
-            confidenceLevel: proposal.confidenceLevel as typeof opportunities.$inferInsert['confidenceLevel'],
-            requiresReview: proposal.requiresLawyerReview,
-            playbookVersionId: result.playbookVersionId,
-          })
-          .returning({ id: opportunities.id })
-
-        // 5. Insert ExplanationBundle for this opportunity
-        if (oppRow !== undefined) {
-          await t.insert(explanationBundles).values({
-            organizationId: result.organizationId,
             engineRunId: runId,
-            targetEntityType: 'opportunity',
-            targetEntityId: oppRow.id,
-            conclusionType: 'opportunity',
             payload: proposal.explanationBundle,
-            playbookVersionId: result.playbookVersionId,
-            ruleIdsApplied: proposal.explanationBundle.legalRulesApplied.map((r) => r.ruleId),
           })
+          .returning({ id: explanationBundles.id })
+
+        if (bundleRow !== undefined) {
+          const [oppRow] = await t
+            .insert(opportunities)
+            .values({
+              organizationId: result.organizationId,
+              executionCaseId: result.executionCaseId,
+              opportunityType: proposal.opportunityType as typeof opportunities.$inferInsert['opportunityType'],
+              status: 'suggested',
+              detectedAt: result.evaluatedAt,
+              summary: proposal.summary,
+              rationale: proposal.rationale,
+              windowStartAt: proposal.windowStartAt,
+              windowEndAt: proposal.windowEndAt,
+              confidenceLevel: proposal.confidenceLevel as typeof opportunities.$inferInsert['confidenceLevel'],
+              requiresReview: proposal.requiresLawyerReview,
+              playbookVersionId: result.playbookVersionId,
+              explanationBundleId: bundleRow.id,
+            })
+            .returning({ id: opportunities.id })
+
+          if (oppRow !== undefined) {
+            createdOpportunityIds.push(oppRow.id)
+          }
         }
       }
     }
@@ -168,6 +171,16 @@ export async function commitEngineRun(
         completedAt: new Date(),
       })
       .where(eq(engineRuns.id, runId))
+
+    // 7. Domain propagation (transactional outbox) — skipped on replay commits
+    if (!opts.isReplay) {
+      await emitEngineCommitDomainEvents(t, {
+        runId,
+        result,
+        opts,
+        createdOpportunityIds,
+      })
+    }
 
     return runId
   })

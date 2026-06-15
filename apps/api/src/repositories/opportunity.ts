@@ -8,12 +8,12 @@
  *   detected_at, created_at, created_by_user_id. Never included in update methods.
  */
 
-import { eq, and } from 'drizzle-orm'
+import { eq, and, desc, lt } from 'drizzle-orm'
 import { opportunities } from '@execflow/db/schema'
 import type { Opportunity, NewOpportunity } from '@execflow/db/schema'
 import type { OpportunityStatus } from '@execflow/db/types'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
-import type { RepositoryResult } from '@execflow/db/repositories'
+import type { RepositoryResult, PaginationParams, PaginatedResult } from '@execflow/db/repositories'
 
 // ---------------------------------------------------------------------------
 // Read operations
@@ -44,6 +44,46 @@ export async function findOpportunityById(
     return {
       success: false,
       error: { code: 'UNKNOWN', message: 'Failed to query opportunity.', cause: err },
+    }
+  }
+}
+
+/**
+ * List opportunities for an execution case, most recently detected first.
+ */
+export async function listOpportunitiesByCase(
+  db: AnyTx,
+  organizationId: string,
+  executionCaseId: string,
+  params: PaginationParams
+): Promise<RepositoryResult<PaginatedResult<Opportunity>>> {
+  try {
+    const limit = Math.min(params.limit ?? 50, 200)
+
+    const rows = await db.query.opportunities.findMany({
+      where: and(
+        eq(opportunities.organizationId, organizationId),
+        eq(opportunities.executionCaseId, executionCaseId),
+        params.cursor !== undefined ? lt(opportunities.detectedAt, new Date(params.cursor)) : undefined
+      ),
+      orderBy: [desc(opportunities.detectedAt), desc(opportunities.id)],
+      limit: limit + 1,
+    })
+
+    const hasMore = rows.length > limit
+    const items = hasMore ? rows.slice(0, limit) : rows
+    const last = items[items.length - 1]
+    const nextCursor =
+      hasMore && last !== undefined ? last.detectedAt.toISOString() : null
+
+    return {
+      success: true,
+      data: { items, nextCursor, totalCount: items.length },
+    }
+  } catch (err) {
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to list opportunities for case.', cause: err },
     }
   }
 }

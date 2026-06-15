@@ -295,7 +295,7 @@ export async function createOpportunity(
             confidenceLevel: input.confidenceLevel ?? null,
           },
         },
-        eventType: 'opportunity.suggested',
+        eventType: 'opportunity.created',
         aggregateType: 'Opportunity',
         aggregateId: oppResult.id,
         occurredAt: now,

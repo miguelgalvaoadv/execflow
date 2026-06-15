@@ -5,8 +5,8 @@
  * the engine must schedule recalculation for all affected cases. This module:
  *
  * 1. Creates RecalculationRun records for affected cases
- * 2. Enforces maximum chain depth (prevents infinite loops)
- * 3. Detects whether recalculation is necessary (skips if no material change)
+ * 2. Emits engine.evaluation.requested via the transactional outbox
+ * 3. Enforces maximum chain depth (prevents infinite loops)
  *
  * CHAIN DEPTH PROTECTION:
  * A recalculation cascade is capped at MAX_CHAIN_DEPTH. If a recalculation
@@ -17,14 +17,17 @@
  */
 
 import type { AnyDbClient } from '@execflow/db/client'
-import { eq, narrowDbForDrizzleReturning } from '@execflow/db/client'
-import { recalculationRuns } from '@execflow/db/schema'
+import { eq, narrowDbForDrizzleReturning, narrowTxForDrizzleReturning } from '@execflow/db/client'
+import { domainEvents, recalculationRuns } from '@execflow/db/schema'
 import type { RecalculationRequest } from '../types/index.ts'
 
 const MAX_CHAIN_DEPTH = 10
+const DEFAULT_JURISDICTION_SCOPE = 'BR-FED'
 
 /**
- * Schedules a recalculation run for a case.
+ * Schedules a recalculation run for a case and emits engine.evaluation.requested
+ * in the same transaction (transactional outbox).
+ *
  * Returns the created recalculation run ID, or null if depth limit exceeded.
  *
  * Callers: event consumers (workers) after snapshot supersession or event append.
@@ -40,22 +43,57 @@ export async function scheduleRecalculation(
     return null
   }
 
-  const [run] = await narrowDbForDrizzleReturning(db)
-    .insert(recalculationRuns)
-    .values({
-      organizationId: request.organizationId,
-      executionCaseId: request.executionCaseId,
-      triggerEntityType: request.triggerEntityType,
-      triggerEntityId: request.triggerEntityId,
-      triggerReason: request.triggerReason,
-      parentRecalculationRunId: request.parentRecalculationRunId,
-      chainDepth: request.chainDepth,
-      status: 'scheduled',
-      ...(request.correlationId !== null ? { correlationId: request.correlationId } : {}),
-    })
-    .returning({ id: recalculationRuns.id })
+  const jurisdictionScope = request.jurisdictionScope ?? DEFAULT_JURISDICTION_SCOPE
+  const occurredAt = new Date()
 
-  return run?.id ?? null
+  return db.transaction(async (tx: any) => {
+    const t = narrowTxForDrizzleReturning(tx)
+
+    const [run] = await t
+      .insert(recalculationRuns)
+      .values({
+        organizationId: request.organizationId,
+        executionCaseId: request.executionCaseId,
+        triggerEntityType: request.triggerEntityType,
+        triggerEntityId: request.triggerEntityId,
+        triggerReason: request.triggerReason,
+        parentRecalculationRunId: request.parentRecalculationRunId,
+        chainDepth: request.chainDepth,
+        status: 'scheduled',
+        ...(request.correlationId !== null ? { correlationId: request.correlationId } : {}),
+      })
+      .returning({ id: recalculationRuns.id })
+
+    if (run === undefined) return null
+
+    const correlationId = request.correlationId ?? run.id
+
+    await t.insert(domainEvents).values({
+      eventType: 'engine.evaluation.requested',
+      aggregateType: 'RecalculationRun',
+      aggregateId: run.id,
+      causationId: request.causationId,
+      correlationId,
+      organizationId: request.organizationId,
+      actorType: 'system',
+      actorId: 'execflow-engine',
+      occurredAt,
+      payload: {
+        recalculationRunId: run.id,
+        executionCaseId: request.executionCaseId,
+        organizationId: request.organizationId,
+        trigger: 'recalculation',
+        triggerEntityType: request.triggerEntityType,
+        triggerEntityId: request.triggerEntityId,
+        jurisdictionScope,
+      },
+      metadata: { recalculationRunId: run.id },
+      replayable: true,
+      processingStatus: 'pending',
+    })
+
+    return run.id
+  })
 }
 
 /**

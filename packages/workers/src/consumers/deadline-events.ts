@@ -29,6 +29,7 @@ import {
   resolveQueueProjection,
 } from '../projections/queue-projection.ts'
 import { maybeCreateDeadlineActionTask } from '../projections/workflow-task.ts'
+import { sendWhatsappDeadlineReminder } from '../sla/whatsapp.ts'
 
 type DeadlineEventJob = Job<{
   eventId: string
@@ -130,6 +131,18 @@ export async function handleDeadlineCreated(
     correlationId: job.data.correlationId,
     createdBySystemActorId: 'worker.deadline-consumer',
   })
+
+  if (dueAt) {
+    // Simula notificação de WhatsApp para prazo recém criado
+    await sendWhatsappDeadlineReminder(
+      'Advogado Responsável',
+      null, // phone
+      'Cliente do Processo',
+      title,
+      dueAt,
+      'warning'
+    )
+  }
 }
 
 /**
@@ -237,7 +250,7 @@ export async function handleDeadlineOverdue(
   const executionCaseId = payload['executionCaseId'] as string | undefined
   const dueAt = payload['dueAt'] as string | undefined
 
-  if (!deadlineId) return
+  if (!deadlineId || !title) return
 
   await upsertQueueProjection(db, {
     organizationId,
@@ -246,11 +259,23 @@ export async function handleDeadlineOverdue(
     entityId: deadlineId,
     ...(executionCaseId !== undefined ? { executionCaseId } : {}),
     priority: 0,
-    displayTitle: title ?? 'Prazo vencido',
+    displayTitle: title,
     displayLabel: deadlineClass,
     ...(dueAt !== undefined ? { keyDate: new Date(dueAt) } : {}),
     ...(assigneeUserId !== undefined ? { assigneeUserId } : {}),
     sourceCausingEventId: eventId,
     metadata: { deadlineClass, isOverdue: true },
   })
+
+  if (dueAt) {
+    // Simula notificação de WhatsApp para prazo vencido
+    await sendWhatsappDeadlineReminder(
+      'Advogado Responsável',
+      null, // phone
+      'Cliente do Processo',
+      title,
+      dueAt,
+      'overdue'
+    )
+  }
 }

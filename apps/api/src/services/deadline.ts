@@ -26,6 +26,7 @@ import { insertDeadline, findDeadlineById, updateDeadlineStatus } from '../repos
 import { appendDeadlineHistory } from '../repositories/deadline-history.ts'
 import { appendTimelineEvent } from '../repositories/timeline-event.ts'
 import { writeAuditAndEvent } from './write-audit-event.ts'
+import { deadlineHistoryUserActor } from '@execflow/db/types'
 import {
   ok,
   validationError,
@@ -77,6 +78,7 @@ export type CreateDeadlineInput = {
 export type CompleteDeadlineInput = {
   completionEvidenceType?: string | undefined
   completionEvidenceId?: string | undefined
+  reason?: string | undefined
 }
 
 export type DismissDeadlineInput = {
@@ -268,7 +270,7 @@ export async function acknowledgeDeadline(
           changeType: 'acknowledged',
           previousValue: { status: previous },
           newValue: { status: 'acknowledged' },
-          changedByUserId: ctx.userId,
+          ...deadlineHistoryUserActor(ctx.userId),
           correlationId: ctx.correlationId,
         })
       )
@@ -360,7 +362,8 @@ export async function completeDeadline(
             completionEvidenceType: input.completionEvidenceType ?? null,
             completionEvidenceId: input.completionEvidenceId ?? null,
           },
-          changedByUserId: ctx.userId,
+          reason: input.reason?.trim() || null,
+          ...deadlineHistoryUserActor(ctx.userId),
           correlationId: ctx.correlationId,
         })
       )
@@ -489,7 +492,7 @@ export async function dismissDeadline(
             dismissedReasonCode: input.dismissedReasonCode ?? null,
           },
           reason: input.dismissedReason.trim(),
-          changedByUserId: ctx.userId,
+          ...deadlineHistoryUserActor(ctx.userId),
           correlationId: ctx.correlationId,
         })
       )

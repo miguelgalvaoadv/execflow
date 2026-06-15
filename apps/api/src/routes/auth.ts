@@ -27,7 +27,7 @@ import { db } from '../lib/db.ts'
 import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
 import { forbidden, unprocessable, internalError } from '../lib/respond.ts'
-import { memberships, authSessions } from '@execflow/db/schema'
+import { memberships, authSessions, organizations } from '@execflow/db/schema'
 import type { HonoVariables } from '../context/types.ts'
 
 const authRouter = new Hono<{ Variables: HonoVariables }>()
@@ -98,10 +98,61 @@ authRouter.put(
 authRouter.get(
   '/v1/me',
   authMiddleware,
-  orgMiddleware,
-  (c) => {
-    const { sessionUser } = c.get('auth')
-    const { organization, role } = c.get('org')
+  async (c) => {
+    const { sessionUser, session } = c.get('auth')
+
+    // 1. Determine target org (from session or get first active membership)
+    let orgId = session.activeOrganizationId
+
+    let membership
+    let organization
+    try {
+      if (orgId) {
+        const mems = await db
+          .select()
+          .from(memberships)
+          .where(
+            and(
+              eq(memberships.organizationId, orgId),
+              eq(memberships.userId, sessionUser.id),
+              eq(memberships.status, 'active')
+            )
+          )
+          .limit(1)
+        membership = mems[0]
+      }
+
+      if (!membership) {
+        // Fallback to the first active membership
+        const mems = await db
+          .select()
+          .from(memberships)
+          .where(
+            and(
+              eq(memberships.userId, sessionUser.id),
+              eq(memberships.status, 'active')
+            )
+          )
+          .limit(1)
+        membership = mems[0]
+      }
+
+      if (membership) {
+        const orgs = await db
+          .select()
+          .from(organizations)
+          .where(eq(organizations.id, membership.organizationId))
+          .limit(1)
+        organization = orgs[0]
+      }
+    } catch (err) {
+      return internalError(c, err)
+    }
+
+    if (!membership || !organization) {
+      return forbidden(c, 'User has no active organization memberships.')
+    }
+    const role = membership.role
 
     return c.json({
       user: {

@@ -42,6 +42,18 @@ export const QUEUE_OPPORTUNITY_DEFERRED = 'opportunity.deferred'
 export const QUEUE_INTAKE_REGISTERED = 'intake.registered'
 export const QUEUE_DOCUMENT_ASSOCIATED = 'document.associated'
 export const QUEUE_DOCUMENT_CONFIRMED = 'document.confirmed'
+export const QUEUE_DOCUMENT_REGISTERED = 'document.registered'
+
+// OCR pipeline events
+export const QUEUE_OCR_REQUESTED = 'ocr.requested'
+export const QUEUE_OCR_COMPLETED = 'ocr.completed'
+
+// Extraction pipeline events
+export const QUEUE_EXTRACTION_REQUESTED = 'extraction.requested'
+
+// Snapshot promotion events
+export const QUEUE_SNAPSHOT_PROMOTION_REQUESTED = 'snapshot.promotion.requested'
+export const QUEUE_SNAPSHOT_CONFIRMED = 'snapshot.confirmed'
 
 // Timeline events
 export const QUEUE_TIMELINE_EVENT_APPENDED = 'timeline.event.appended'
@@ -54,7 +66,18 @@ export const QUEUE_CUSTODY_SNAPSHOT_CREATED = 'custody.snapshot.created'
 
 // Engine computation events (Phase 7)
 export const QUEUE_ENGINE_EVALUATION_REQUESTED = 'engine.evaluation.requested'
+
+/**
+ * FUTURE: no producer or consumer registered yet.
+ * Recalculation lifecycle is driven via engine.evaluation.requested today.
+ */
 export const QUEUE_ENGINE_RECALCULATION_SCHEDULED = 'engine.recalculation.scheduled'
+
+export const QUEUE_ENGINE_RUN_COMPLETED = 'engine.run.completed'
+
+// Crawler Pipeline
+export const QUEUE_CRAWLER_SYNC_REQUESTED = 'crawler.sync.requested'
+export const QUEUE_COURT_SCRAPER_REQUESTED = 'court.scraper.requested'
 
 // ---------------------------------------------------------------------------
 // SLA and escalation sweep jobs (cron-triggered via pg-boss schedule)
@@ -93,9 +116,18 @@ export const DOMAIN_EVENT_QUEUES = [
   QUEUE_INTAKE_REGISTERED,
   QUEUE_DOCUMENT_ASSOCIATED,
   QUEUE_DOCUMENT_CONFIRMED,
+  QUEUE_DOCUMENT_REGISTERED,
+  QUEUE_OCR_REQUESTED,
+  QUEUE_OCR_COMPLETED,
+  QUEUE_EXTRACTION_REQUESTED,
+  QUEUE_SNAPSHOT_PROMOTION_REQUESTED,
+  QUEUE_SNAPSHOT_CONFIRMED,
   QUEUE_TIMELINE_EVENT_APPENDED,
   QUEUE_SENTENCE_SNAPSHOT_SUPERSEDED,
   QUEUE_CUSTODY_SNAPSHOT_CREATED,
   QUEUE_ENGINE_EVALUATION_REQUESTED,
   QUEUE_ENGINE_RECALCULATION_SCHEDULED,
+  QUEUE_ENGINE_RUN_COMPLETED,
+  QUEUE_CRAWLER_SYNC_REQUESTED,
+  QUEUE_COURT_SCRAPER_REQUESTED,
 ] as const

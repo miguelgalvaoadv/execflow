@@ -41,6 +41,7 @@ export const queueTypeEnum = pgEnum('queue_type', [
   'ai_review',                // AI outputs needing assistant triage
   'urgent_liberty_risks',     // High-severity: liberty-at-stake situations
   'opportunity_review',       // Opportunities awaiting lawyer review (non-progression)
+  'snapshot_review',          // Proposed snapshots awaiting lawyer confirmation
   'workflow_tasks',           // Internal operational tasks assigned to staff
 ])
 

@@ -171,3 +171,27 @@ export const recalculationRunStatusEnum = pgEnum('recalculation_run_status', [
   'failed',
   'skipped',
 ])
+
+// ---------------------------------------------------------------------------
+// Legal evaluation entities
+// ---------------------------------------------------------------------------
+
+/**
+ * Legal fraction entities per Brazilian LEP and jurisprudence.
+ * Preserves the exact legal nature of the fraction (e.g. 1/6 is distinct from 16% due to lex mitior).
+ * Used in ExplanationBundle and Playbook evaluation.
+ */
+export const legalFractionEnum = pgEnum('legal_fraction', [
+  '1/6',
+  '1/4',
+  '2/5',
+  '3/5',
+  '16%',
+  '20%',
+  '25%',
+  '30%',
+  '40%',
+  '50%',
+  '60%',
+  '70%',
+])

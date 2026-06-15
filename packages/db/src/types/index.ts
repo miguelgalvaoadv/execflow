@@ -224,6 +224,22 @@ export type UncertaintyLevel = typeof uncertaintyLevelEnum.enumValues[number]
 export type SnapshotDependencyType = typeof snapshotDependencyTypeEnum.enumValues[number]
 export type RecalculationRunStatus = typeof recalculationRunStatusEnum.enumValues[number]
 
+export {
+  assertEngineRunIsReplayBoolean,
+  assertEngineRunRowIsReplayBoolean,
+} from '../validation/engine-run-is-replay.ts'
+
+export {
+  DEADLINE_HISTORY_SYSTEM_ACTOR_OVERDUE_SWEEP,
+  deadlineHistoryUserActor,
+  deadlineHistorySystemActor,
+  assertDeadlineHistoryActorAttribution,
+} from '../validation/deadline-history-actor.ts'
+export type {
+  DeadlineHistoryUserActor,
+  DeadlineHistorySystemActor,
+} from '../validation/deadline-history-actor.ts'
+
 // ---------------------------------------------------------------------------
 // AuditLog write helper types
 // ---------------------------------------------------------------------------
@@ -336,3 +352,95 @@ export type PaginatedResult<T> = {
   /** Total count of items matching the query (may be approximate for large tables). */
   totalCount: number
 }
+
+// ---------------------------------------------------------------------------
+// Document layer domain event contracts
+// ---------------------------------------------------------------------------
+
+export {
+  INTAKE_REGISTERED,
+  DOCUMENT_REGISTERED,
+  DOCUMENT_ASSOCIATED,
+  DOCUMENT_ARCHIVED,
+  DOCUMENT_CONFIRMED,
+  DOCUMENT_STATUSES_FOR_EXTRACTION_REVIEW_QUEUE,
+  isDocumentExtractionQueueStatus,
+  buildIntakeRegisteredPayload,
+  buildDocumentAssociatedPayload,
+  buildDocumentConfirmedPayload,
+  parseIntakeRegisteredPayload,
+  parseDocumentAssociatedPayload,
+  parseDocumentConfirmedPayload,
+} from './document-layer-events.ts'
+
+export type {
+  DocumentExtractionQueueStatus,
+  IntakeRegisteredPayload,
+  DocumentAssociatedPayload,
+  DocumentConfirmedPayload,
+} from './document-layer-events.ts'
+
+export {
+  OCR_REQUESTED,
+  OCR_RUNNING,
+  OCR_COMPLETED,
+  OCR_FAILED,
+  OCR_ELIGIBLE_MIME_TYPES,
+  isOcrEligibleMimeType,
+  parseDocumentRegisteredPayload,
+  parseOcrRequestedPayload,
+  parseOcrCompletedPayload,
+} from './ocr-events.ts'
+
+export type {
+  OcrRequestedPayload,
+  OcrCompletedPayload,
+  OcrFailedPayload,
+} from './ocr-events.ts'
+
+export {
+  EXTRACTION_REQUESTED,
+  EXTRACTION_RUNNING,
+  EXTRACTION_REVIEW,
+  EXTRACTION_CONFIRMED,
+  EXTRACTION_FAILED,
+  EXTRACTION_REJECTED,
+  parseExtractionRequestedPayload,
+  parseExtractionConfirmedPayload,
+} from './extraction-events.ts'
+
+export type {
+  ExtractionRequestedPayload,
+  ExtractionReviewPayload,
+  ExtractionConfirmedPayload,
+  ExtractionFailedPayload,
+} from './extraction-events.ts'
+
+export {
+  assertExtractionStructuredData,
+  assertExtractionConfidenceLevel,
+  assertDocumentExtractionResultRow,
+} from '../validation/extraction-result.ts'
+
+export type { ValidConfidenceLevel } from '../validation/extraction-result.ts'
+
+export {
+  SNAPSHOT_PROMOTION_REQUESTED,
+  SNAPSHOT_PROPOSED,
+  SNAPSHOT_CONFIRMED,
+  SNAPSHOT_REJECTED,
+  parseSnapshotPromotionRequestedPayload,
+  parseSnapshotConfirmedPayload,
+} from './snapshot-promotion-events.ts'
+
+export type {
+  SnapshotKind,
+  SnapshotPromotionRequestedPayload,
+  SnapshotProposedPayload,
+  SnapshotConfirmedPayload,
+} from './snapshot-promotion-events.ts'
+
+export {
+  assertSnapshotKind,
+  assertSnapshotPromotionRow,
+} from '../validation/snapshot-promotion.ts'

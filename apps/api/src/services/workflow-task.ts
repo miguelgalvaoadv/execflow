@@ -59,7 +59,7 @@ export async function claimTask(
   ctx: WriteContext,
   taskId: string
 ): Promise<ServiceResult<WorkflowTask>> {
-  return ctx.db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx: any) => {
     const taskResult = await findWorkflowTaskById(tx, ctx.organizationId, taskId)
     if (!taskResult.success) return notFoundError('Workflow task not found.')
 
@@ -126,7 +126,7 @@ export async function releaseTask(
   ctx: WriteContext,
   taskId: string
 ): Promise<ServiceResult<WorkflowTask>> {
-  return ctx.db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx: any) => {
     const taskResult = await findWorkflowTaskById(tx, ctx.organizationId, taskId)
     if (!taskResult.success) return notFoundError('Workflow task not found.')
 
@@ -205,7 +205,7 @@ export async function completeTask(
     evidenceId?: string
   }
 ): Promise<ServiceResult<WorkflowTask>> {
-  return ctx.db.transaction(async (tx) => {
+  return ctx.db.transaction(async (tx: any) => {
     const taskResult = await findWorkflowTaskById(tx, ctx.organizationId, taskId)
     if (!taskResult.success) return notFoundError('Workflow task not found.')
 

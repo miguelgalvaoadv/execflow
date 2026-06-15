@@ -6,17 +6,9 @@ import { SidebarNavItem } from "./SidebarNavItem";
 import { footerNavItem, navSections } from "./nav-sections";
 import { borders, surfaces, text } from "./surfaces";
 
-type SidebarProps = {
-  activeItemId?: string;
-};
+type SidebarProps = Record<string, never>;
 
-function SidebarPanel({
-  activeItemId,
-  onNavigate,
-}: {
-  activeItemId: string;
-  onNavigate?: () => void;
-}) {
+function SidebarPanel({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
       <div className={`border-b ${borders.subtle} px-5 py-5`}>
@@ -39,7 +31,6 @@ function SidebarPanel({
                 <li key={item.id}>
                   <SidebarNavItem
                     item={item}
-                    active={item.id === activeItemId}
                     onNavigate={onNavigate}
                   />
                 </li>
@@ -58,7 +49,6 @@ function SidebarPanel({
             <li>
               <SidebarNavItem
                 item={footerNavItem}
-                active={footerNavItem.id === activeItemId}
                 onNavigate={onNavigate}
               />
             </li>
@@ -69,7 +59,7 @@ function SidebarPanel({
   );
 }
 
-export function Sidebar({ activeItemId = "dashboard" }: SidebarProps) {
+export function Sidebar(_props: SidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const closeMobile = () => setMobileOpen(false);
 
@@ -82,7 +72,7 @@ export function Sidebar({ activeItemId = "dashboard" }: SidebarProps) {
         <button
           type="button"
           onClick={() => setMobileOpen(true)}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-[10px] border ${borders.default} bg-white/[0.02] text-zinc-300 hover:bg-white/[0.04] hover:text-zinc-100`}
+          className={`inline-flex h-9 w-9 items-center justify-center rounded-[10px] border ${borders.default} bg-slate-50 text-slate-500 hover:bg-slate-100 hover:text-slate-900`}
           aria-label="Abrir menu"
         >
           <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -99,7 +89,7 @@ export function Sidebar({ activeItemId = "dashboard" }: SidebarProps) {
       {mobileOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-black/70 backdrop-blur-[1px] lg:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[1px] lg:hidden"
           aria-label="Fechar menu"
           onClick={closeMobile}
         />
@@ -107,9 +97,9 @@ export function Sidebar({ activeItemId = "dashboard" }: SidebarProps) {
 
       <aside
         className={[
-          `fixed top-0 left-0 z-50 h-screen w-[260px] border-r ${borders.subtle} ${surfaces.sidebar} shadow-[1px_0_0_0_rgba(255,255,255,0.02)]`,
-          "lg:translate-x-0",
-          mobileOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
+          `fixed top-0 left-0 z-50 h-screen w-64 ${surfaces.sidebar} shadow-xl`,
+          "lg:translate-x-0 transition-transform duration-200 ease-in-out",
+          mobileOpen ? "translate-x-0" : "-translate-x-full",
         ].join(" ")}
       >
         <div
@@ -118,7 +108,7 @@ export function Sidebar({ activeItemId = "dashboard" }: SidebarProps) {
           <button
             type="button"
             onClick={closeMobile}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-200"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] text-slate-500 hover:bg-slate-100 hover:text-slate-800"
             aria-label="Fechar menu"
           >
             <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
@@ -133,7 +123,7 @@ export function Sidebar({ activeItemId = "dashboard" }: SidebarProps) {
         </div>
 
         <div className="h-[calc(100%-3.5rem)] lg:h-full">
-          <SidebarPanel activeItemId={activeItemId} onNavigate={closeMobile} />
+          <SidebarPanel onNavigate={closeMobile} />
         </div>
       </aside>
     </>

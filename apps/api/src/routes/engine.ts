@@ -33,6 +33,7 @@ import { unprocessable, notFound } from '../lib/respond.ts'
 import { buildWriteContext } from '../lib/write-context.ts'
 import { eq, and, desc } from '@execflow/db/client'
 import { engineRuns, engineRuleTraces, explanationBundles } from '@execflow/db/schema'
+import { assertEngineRunRowIsReplayBoolean } from '@execflow/db/types'
 import { runEvaluation, commitEngineRun, failEngineRun, replayAtPointInTime } from '@execflow/engine'
 import { randomUUID } from 'crypto'
 import type { HonoVariables } from '../context/types.ts'
@@ -67,6 +68,8 @@ router.get('/runs/:runId', authMiddleware, orgMiddleware, async (c) => {
     return notFound(c, 'EngineRun')
   }
 
+  assertEngineRunRowIsReplayBoolean(run, `GET /engine/runs/${runId}`)
+
   return c.json({ data: run })
 })
 
@@ -91,6 +94,10 @@ router.get('/runs', authMiddleware, orgMiddleware, async (c) => {
     .where(and(...conditions))
     .orderBy(desc(engineRuns.evaluatedAt))
     .limit(limit)
+
+  for (const run of runs) {
+    assertEngineRunRowIsReplayBoolean(run, 'GET /engine/runs')
+  }
 
   return c.json({ data: runs, count: runs.length })
 })
@@ -145,7 +152,7 @@ const EvaluateBodySchema = z.object({
 })
 
 router.post('/evaluate', authMiddleware, orgMiddleware, requireMinRole('lawyer'), async (c) => {
-  const ctx = buildWriteContext(c, db)
+  const reqCtx = buildWriteContext(c, db)
   const body = await safeJsonBody(c)
   if (body === null) return unprocessable(c, 'Request body must be valid JSON.')
 
@@ -156,52 +163,24 @@ router.post('/evaluate', authMiddleware, orgMiddleware, requireMinRole('lawyer')
   const runId = randomUUID()
 
   try {
-    const result = await runEvaluation(db, {
+    const { result, ctx: evalCtx } = await runEvaluation(db, {
       runId,
-      organizationId: ctx.organizationId,
+      organizationId: reqCtx.organizationId,
       executionCaseId: caseId,
       evaluatedAt: new Date(),
       jurisdictionScope,
       trigger: 'manual',
     })
 
-    const committedRunId = await commitEngineRun(
-      db,
-      {
-        runId,
-        organizationId: ctx.organizationId,
-        executionCaseId: caseId,
-        evaluatedAt: result.evaluatedAt,
-        playbook: {
-          playbookVersionId: result.playbookVersionId,
-          overlayVersionId: null,
-          caseContextId: null,
-          strategyProfile: 'standard',
-          jurisdictionScope,
-          effectiveAt: result.evaluatedAt,
-          groups: [],
-          ruleMap: new Map(),
-        },
-        facts: {
-          organizationId: ctx.organizationId,
-          executionCaseId: caseId,
-          evaluatedAt: result.evaluatedAt,
-          sentence: null,
-          custody: null,
-          activeInterruptions: [],
-          recentEvents: [],
-          hasConfirmedProcessNumber: true,
-          hasRecentConfirmedSnapshot: false,
-        },
-        globalBlockingCodes: [],
+    const committedRunId = await commitEngineRun(db, evalCtx, result, {
+      trigger: 'manual',
+      requestedByUserId: reqCtx.userId,
+      isReplay: false,
+      propagation: {
+        correlationId: reqCtx.correlationId,
+        requestId: reqCtx.requestId,
       },
-      result,
-      {
-        trigger: 'manual',
-        requestedByUserId: ctx.userId,
-        isReplay: false,
-      }
-    )
+    })
 
     return c.json({
       data: {
@@ -234,7 +213,7 @@ const RecalculateBodySchema = z.object({
 })
 
 router.post('/recalculate', authMiddleware, orgMiddleware, requireMinRole('lawyer'), async (c) => {
-  const ctx = buildWriteContext(c, db)
+  const reqCtx = buildWriteContext(c, db)
   const body = await safeJsonBody(c)
   if (body === null) return unprocessable(c, 'Request body must be valid JSON.')
 
@@ -245,52 +224,24 @@ router.post('/recalculate', authMiddleware, orgMiddleware, requireMinRole('lawye
   const runId = randomUUID()
 
   try {
-    const result = await runEvaluation(db, {
+    const { result, ctx: evalCtx } = await runEvaluation(db, {
       runId,
-      organizationId: ctx.organizationId,
+      organizationId: reqCtx.organizationId,
       executionCaseId: caseId,
       evaluatedAt: new Date(),
       jurisdictionScope,
       trigger: 'recalculation',
     })
 
-    const committedRunId = await commitEngineRun(
-      db,
-      {
-        runId,
-        organizationId: ctx.organizationId,
-        executionCaseId: caseId,
-        evaluatedAt: result.evaluatedAt,
-        playbook: {
-          playbookVersionId: result.playbookVersionId,
-          overlayVersionId: null,
-          caseContextId: null,
-          strategyProfile: 'standard',
-          jurisdictionScope,
-          effectiveAt: result.evaluatedAt,
-          groups: [],
-          ruleMap: new Map(),
-        },
-        facts: {
-          organizationId: ctx.organizationId,
-          executionCaseId: caseId,
-          evaluatedAt: result.evaluatedAt,
-          sentence: null,
-          custody: null,
-          activeInterruptions: [],
-          recentEvents: [],
-          hasConfirmedProcessNumber: true,
-          hasRecentConfirmedSnapshot: false,
-        },
-        globalBlockingCodes: [],
+    const committedRunId = await commitEngineRun(db, evalCtx, result, {
+      trigger: 'recalculation',
+      requestedByUserId: reqCtx.userId,
+      isReplay: false,
+      propagation: {
+        correlationId: reqCtx.correlationId,
+        requestId: reqCtx.requestId,
       },
-      result,
-      {
-        trigger: 'recalculation',
-        requestedByUserId: ctx.userId,
-        isReplay: false,
-      }
-    )
+    })
 
     return c.json({
       data: {

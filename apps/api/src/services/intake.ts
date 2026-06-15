@@ -25,6 +25,10 @@ import type { WriteContext } from '../lib/write-context.ts'
 import type { ServiceResult } from './result.ts'
 import type { IntakeBundle } from '@execflow/db/schema'
 import type { IntakeSourceChannel } from '@execflow/db/types'
+import {
+  INTAKE_REGISTERED,
+  buildIntakeRegisteredPayload,
+} from '@execflow/db/types'
 
 // ---------------------------------------------------------------------------
 // Input types
@@ -158,20 +162,20 @@ export async function registerIntakeBundle(
             hasMissingFields: (input.missingFields?.length ?? 0) > 0,
           },
         },
-        eventType: 'intake.bundle_received',
+        eventType: INTAKE_REGISTERED,
         aggregateType: 'IntakeBundle',
         aggregateId: bundleResult.id,
         occurredAt: receivedAt,
-        eventPayload: {
-          bundleId: bundleResult.id,
+        eventPayload: buildIntakeRegisteredPayload({
+          intakeBundleId: bundleResult.id,
           organizationId: ctx.organizationId,
           sourceChannel: input.sourceChannel,
-          receivedAt: receivedAt.toISOString(),
+          receivedAt,
           uploaderUserId: ctx.userId,
-          status: 'received',
+          ref: input.notes?.trim() || input.sourceChannel,
           hasMissingFields: (input.missingFields?.length ?? 0) > 0,
-          missingFieldCount: input.missingFields?.filter(f => f.required).length ?? 0,
-        },
+          missingFieldCount: input.missingFields?.filter((f) => f.required).length ?? 0,
+        }),
       })
 
       return bundleResult

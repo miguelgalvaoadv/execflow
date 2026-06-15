@@ -1,0 +1,7 @@
+
+> @execflow/api@0.0.0 build C:\Users\Miguel Galvão\Documents\execflow\apps\api
+> tsc --noEmit && tsx src/index.ts
+
+src/services/notifications.ts(22,44): error TS4111: Property 'WHATSAPP_API_TOKEN' comes from an index signature, so it must be accessed with ['WHATSAPP_API_TOKEN'].
+src/services/notifications.ts(23,45): error TS4111: Property 'OFFICE_PHONE_NUMBER' comes from an index signature, so it must be accessed with ['OFFICE_PHONE_NUMBER'].
+ ELIFECYCLE  Command failed with exit code 2.

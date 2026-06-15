@@ -62,6 +62,7 @@ import {
   text,
   timestamp,
   jsonb,
+  boolean,
   index,
   type AnyPgColumn,
 } from 'drizzle-orm/pg-core'
@@ -179,6 +180,7 @@ export const sentenceSnapshots = pgTable(
     remainingDays: integer('remaining_days').notNull(),
 
     /**
+     * @deprecated Use crimes_breakdown for exact legal arithmetic in Engine Phase 5B.
      * Fraction of sentence served (served + remission + detraction) / total.
      * Precision: 5 digits, 4 decimal places → 0.0000 to 1.0000 (= 0.00% to 100.00%).
      * Example: 0.1667 = 16.67% served.
@@ -187,6 +189,37 @@ export const sentenceSnapshots = pgTable(
     percentServed: numeric('percent_served', { precision: 5, scale: 4 }).notNull(),
 
     // -------------------------------------------------------------------------
+    // V2 Execution Penal Model (Crimes and Recidivism)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Execution penal foundation: Individual breakdown of sentences (múltiplos crimes).
+     * Essential for calculating separate database dates and fractions.
+     * Schema: Array of CrimeBreakdown objects.
+     * {
+     *   crimeCode: string,
+     *   crimeName: string,
+     *   article: string,
+     *   law: string,
+     *   sentenceDays: number,
+     *   isHediondo: boolean,
+     *   isEquiparado: boolean,
+     *   hasResultingDeath: boolean,
+     *   isAttempted: boolean,
+     *   sentenceDate: string,
+     *   transitDate: string
+     * }
+     */
+    crimesBreakdown: jsonb('crimes_breakdown').notNull().default([]),
+
+    /**
+     * Whether the defendant is a generic recidivist.
+     * Affects fractions for common crimes.
+     */
+    isGenericRecidivist: boolean('is_generic_recidivist').notNull().default(false),
+
+    // -------------------------------------------------------------------------
+
     // Confidence
     // -------------------------------------------------------------------------
 

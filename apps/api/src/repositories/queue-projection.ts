@@ -192,3 +192,30 @@ export async function snoozeQueueProjection(
     }
   }
 }
+
+/** Resolves a queue projection when review completes (confirm/reject). */
+export async function resolveQueueProjection(
+  db: AnyTx,
+  params: {
+    organizationId: string
+    queueType: string
+    entityType: string
+    entityId: string
+  }
+): Promise<void> {
+  await db
+    .update(queueProjections)
+    .set({ status: 'resolved', updatedAt: new Date() })
+    .where(
+      and(
+        eq(queueProjections.organizationId, params.organizationId),
+        eq(
+          queueProjections.queueType,
+          params.queueType as typeof queueProjections.$inferSelect['queueType']
+        ),
+        eq(queueProjections.entityType, params.entityType),
+        eq(queueProjections.entityId, params.entityId),
+        ne(queueProjections.status, 'resolved')
+      )
+    )
+}

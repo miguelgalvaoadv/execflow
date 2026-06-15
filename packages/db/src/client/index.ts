@@ -28,8 +28,24 @@
 
 import { drizzle } from 'drizzle-orm/neon-http'
 import { drizzle as drizzlePool } from 'drizzle-orm/neon-serverless'
+import { drizzle as drizzlePg } from 'drizzle-orm/node-postgres'
 import { neon, Pool } from '@neondatabase/serverless'
+import pg from 'pg'
 import * as schema from '../schema/index.ts'
+
+/**
+ * Local Docker Postgres uses a normal TCP connection. The Neon serverless
+ * driver would otherwise rewrite `localhost` to `wss://localhost` and fail.
+ */
+function isLocalhostDatabaseUrl(connectionString: string): boolean {
+  try {
+    const parsed = new URL(connectionString.replace(/^postgresql:/i, 'http:'))
+    const host = parsed.hostname.toLowerCase()
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
+  }
+}
 
 // ---------------------------------------------------------------------------
 // HTTP client (serverless / Edge functions)
@@ -41,34 +57,44 @@ import * as schema from '../schema/index.ts'
  * Does NOT support long-running connections or full transaction isolation.
  */
 export function createDbClient(connectionString: string) {
+  if (isLocalhostDatabaseUrl(connectionString)) {
+    const pool = new pg.Pool({ connectionString, max: 10 })
+    return drizzlePg(pool, { schema }) as any
+  }
   const sql = neon(connectionString)
   return drizzle(sql, { schema })
 }
 
 export type DbClient = ReturnType<typeof createDbClient>
 
-export type DbTransaction = Parameters<
-  Parameters<DbClient['transaction']>[0]
->[0]
-
 // ---------------------------------------------------------------------------
 // Pool client (long-running worker processes)
 // ---------------------------------------------------------------------------
 
 /**
- * Creates a Drizzle client using the Neon WebSocket Pool transport.
- * Suitable for long-running Node.js processes (packages/workers).
- * Supports real transactions with SERIALIZABLE isolation and FOR UPDATE locks.
+ * Creates a Drizzle client using the Neon WebSocket Pool transport when
+ * connecting to Neon (or other hosts reachable via that driver).
  *
- * The caller must configure the WebSocket constructor for Node.js BEFORE
- * calling this function:
+ * **Local Docker Postgres:** URLs whose host is `localhost` / `127.0.0.1` / `::1`
+ * use the native `pg` pool instead — the Neon driver would otherwise attempt
+ * `wss://localhost` and fail (`ECONNREFUSED`).
+ *
+ * Suitable for long-running Node.js processes (packages/workers). Supports real
+ * transactions with FOR UPDATE SKIP LOCKED (transactional outbox).
+ *
+ * The caller must configure the WebSocket constructor **before** calling this
+ * function when using the Neon pool path:
  *
  *   import ws from 'ws'
  *   import { neonConfig } from '@neondatabase/serverless'
  *   neonConfig.webSocketConstructor = ws
- *   const db = createPoolDbClient(process.env.DATABASE_URL)
  */
 export function createPoolDbClient(connectionString: string) {
+  if (isLocalhostDatabaseUrl(connectionString)) {
+    const pool = new pg.Pool({ connectionString, max: 5 })
+    return drizzlePg(pool, { schema })
+  }
+
   const pool = new Pool({ connectionString, max: 5 })
   return drizzlePool(pool, { schema })
 }
@@ -78,6 +104,8 @@ export type PoolDbClient = ReturnType<typeof createPoolDbClient>
 export type PoolDbTransaction = Parameters<
   Parameters<PoolDbClient['transaction']>[0]
 >[0]
+
+export type DbTransaction = PoolDbTransaction
 
 /**
  * Union of both DB client types.
@@ -127,4 +155,5 @@ export {
   not,
   exists,
   count,
+  max,
 } from 'drizzle-orm'

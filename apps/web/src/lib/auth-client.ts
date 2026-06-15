@@ -21,7 +21,12 @@
 import { createAuthClient } from 'better-auth/client'
 import { adminClient } from 'better-auth/client/plugins'
 
-const apiUrl = process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001'
+// Browser: URL relativa → proxy Next.js → cookie same-origin
+// SSR: URL absoluta da API
+const apiUrl =
+  typeof window !== 'undefined'
+    ? '' // relativa: passa pelo proxy em localhost:3000
+    : (process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3001')
 
 /**
  * Better Auth browser client.

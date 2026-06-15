@@ -1,49 +1,51 @@
-import { NavIcon } from "./NavIcon";
-import type { NavItem } from "./nav-items";
-import { borders, text } from "./surfaces";
+'use client'
+
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+import { NavIcon } from './NavIcon'
+import type { NavItem } from './nav-items'
+import { borders, text } from './surfaces'
 
 type SidebarNavItemProps = {
-  item: NavItem;
-  active?: boolean;
-  onNavigate?: () => void;
-};
+  item: NavItem
+  onNavigate?: () => void
+}
 
-export function SidebarNavItem({
-  item,
-  active = false,
-  onNavigate,
-}: SidebarNavItemProps) {
+export function SidebarNavItem({ item, onNavigate }: SidebarNavItemProps) {
+  const pathname = usePathname()
+  const active = pathname === item.href || pathname.startsWith(`${item.href}/`)
+
   return (
-    <button
-      type="button"
+    <Link
+      href={item.href}
       onClick={onNavigate}
-      aria-current={active ? "page" : undefined}
+      aria-current={active ? 'page' : undefined}
       className={[
-        "group relative flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 text-left",
+        'group relative flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 transition-colors',
         active
-          ? `bg-white/[0.06] ${text.primary} shadow-[inset_0_0_0_1px_rgba(255,255,255,0.06)]`
-          : `${text.muted} hover:bg-white/[0.03] hover:text-zinc-300`,
-      ].join(" ")}
+          ? `bg-slate-100/60 ${text.primary} shadow-sm border border-slate-200/60`
+          : `${text.muted} hover:bg-slate-50 hover:text-slate-800 border border-transparent`,
+      ].join(' ')}
     >
       {active ? (
         <span
-          className="absolute top-1/2 left-0 h-4 w-[2px] -translate-y-1/2 rounded-full bg-zinc-200"
+          className="absolute top-1/2 left-0 h-4 w-[3px] -translate-y-1/2 rounded-full bg-indigo-500"
           aria-hidden
         />
       ) : null}
       <span
         className={[
-          "flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border",
+          'flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border transition-colors',
           active
-            ? `${borders.default} bg-white/[0.04] text-zinc-100`
-            : `border-transparent bg-transparent text-zinc-500 group-hover:border-white/[0.06] group-hover:bg-white/[0.02] group-hover:text-zinc-400`,
-        ].join(" ")}
+            ? `border-slate-200 bg-white text-indigo-600 shadow-sm`
+            : `border-transparent bg-transparent text-slate-500 group-hover:border-slate-200 group-hover:bg-white group-hover:text-slate-600 group-hover:shadow-sm`,
+        ].join(' ')}
       >
         <NavIcon name={item.icon} className="h-4 w-4" />
       </span>
       <span className="truncate text-[13px] font-medium tracking-[-0.01em]">
         {item.label}
       </span>
-    </button>
-  );
+    </Link>
+  )
 }

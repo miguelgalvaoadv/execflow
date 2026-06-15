@@ -19,7 +19,7 @@
  */
 
 import type { AnyDbClient } from '@execflow/db/client'
-import { eq, and, lte, desc } from '@execflow/db/client'
+import { eq, and, lte, desc, narrowDbForDrizzleReturning } from '@execflow/db/client'
 import { engineRuns, engineRuleTraces } from '@execflow/db/schema'
 import type { ReplayBundle, ReplayRequest } from '../types/index.ts'
 import { runEvaluation } from '../runtime/runner.ts'
@@ -36,10 +36,11 @@ export async function replayAtPointInTime(
   db: AnyDbClient,
   request: ReplayRequest
 ): Promise<ReplayBundle> {
+  const client = narrowDbForDrizzleReturning(db)
   const { organizationId, executionCaseId, asOfDate, useHistoricalPlaybook } = request
 
   // Run evaluation at the historical instant (reads-only from DB, no writes)
-  const result = await runEvaluation(db, {
+  const { result, ctx: _ctx } = await runEvaluation(client, {
     organizationId,
     executionCaseId,
     evaluatedAt: asOfDate,
@@ -50,25 +51,15 @@ export async function replayAtPointInTime(
 
   // Check consistency against existing engine run for same case/date if available
   const consistentWithCurrent = await checkReplayConsistency(
-    db,
+    client,
     organizationId,
     executionCaseId,
     asOfDate,
     result.ruleTraces
   )
 
-  // Load the facts used (from the result)
-  const facts = {
-    organizationId,
-    executionCaseId,
-    evaluatedAt: asOfDate,
-    sentence: null, // simplified — full facts reconstruction out of scope for Phase 7 foundation
-    custody: null,
-    activeInterruptions: [],
-    recentEvents: [],
-    hasConfirmedProcessNumber: true,
-    hasRecentConfirmedSnapshot: false,
-  }
+  // Use the actual facts loaded during the historical run
+  const facts = _ctx.facts
 
   return {
     asOfDate,
@@ -92,8 +83,9 @@ async function checkReplayConsistency(
   asOfDate: Date,
   replayTraces: Array<{ ruleId: string; outputsHash: string }>
 ): Promise<boolean | null> {
+  const client = narrowDbForDrizzleReturning(db)
   // Find the most recent completed engine run for this case at or before asOfDate
-  const [priorRun] = await db
+  const [priorRun] = await client
     .select({ id: engineRuns.id })
     .from(engineRuns)
     .where(
@@ -110,14 +102,14 @@ async function checkReplayConsistency(
   if (priorRun === undefined) return null
 
   // Load the stored traces for that run
-  const storedTraces = await db
+  const storedTraces = await client
     .select({ ruleId: engineRuleTraces.ruleId, outputsHash: engineRuleTraces.outputsHash })
     .from(engineRuleTraces)
     .where(eq(engineRuleTraces.engineRunId, priorRun.id))
 
   // Build maps for comparison
-  const storedMap = new Map(storedTraces.map((t) => [t.ruleId, t.outputsHash]))
-  const replayMap = new Map(replayTraces.map((t) => [t.ruleId, t.outputsHash]))
+  const storedMap = new Map<string, string>(storedTraces.map((t: any) => [t.ruleId, t.outputsHash]))
+  const replayMap = new Map<string, string>(replayTraces.map((t: any) => [t.ruleId, t.outputsHash]))
 
   // Check: every ruleId in the stored run must produce the same outputsHash in replay
   for (const [ruleId, storedHash] of storedMap) {

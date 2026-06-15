@@ -21,7 +21,7 @@
  *                   playbook-system.md §7.1 (engine run playbook reference).
  */
 
-import { pgTable, uuid, text, timestamp, jsonb, index } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, text, timestamp, jsonb, boolean, index } from 'drizzle-orm/pg-core'
 import { organizations } from './organization.ts'
 import { executionCases } from './execution-case.ts'
 import { users } from './user.ts'
@@ -166,7 +166,7 @@ export const engineRuns = pgTable(
      * Whether this run was a point-in-time replay (not a current evaluation).
      * Replay runs do NOT commit outputs (no Opportunities created).
      */
-    isReplay: jsonb('is_replay').notNull().default(false),
+    isReplay: boolean('is_replay').notNull().default(false),
 
     /**
      * For superseded runs: the run that replaced this one.
