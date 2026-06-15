@@ -15,7 +15,8 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 
-const SESSION_COOKIE = 'better-auth.session_token'
+const SESSION_COOKIE_HTTP = 'better-auth.session_token'
+const SESSION_COOKIE_HTTPS = '__Secure-better-auth.session_token'
 
 const PUBLIC_PATHS = new Set(['/sign-in'])
 
@@ -34,7 +35,7 @@ export function middleware(request: NextRequest): NextResponse {
     return NextResponse.next()
   }
 
-  const sessionCookie = request.cookies.get(SESSION_COOKIE)
+  const sessionCookie = request.cookies.get(SESSION_COOKIE_HTTPS) ?? request.cookies.get(SESSION_COOKIE_HTTP)
 
   if (sessionCookie === undefined || sessionCookie.value === '') {
     const signIn = new URL('/sign-in', request.url)
