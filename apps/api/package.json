@@ -30,13 +30,13 @@
     "docx": "^9.7.1",
     "drizzle-orm": "0.45.2",
     "hono": "^4.12.19",
+    "tsx": "^4.19.4",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/pg": "^8.11.10",
     "pg": "^8.13.1",
     "postgres": "^3.4.9",
-    "tsx": "^4.19.4",
     "typescript": "^5.8.3"
   }
 }
