@@ -57,12 +57,8 @@ function isLocalhostDatabaseUrl(connectionString: string): boolean {
  * Does NOT support long-running connections or full transaction isolation.
  */
 export function createDbClient(connectionString: string) {
-  if (isLocalhostDatabaseUrl(connectionString)) {
-    const pool = new pg.Pool({ connectionString, max: 10 })
-    return drizzlePg(pool, { schema }) as any
-  }
-  const sql = neon(connectionString)
-  return drizzle(sql, { schema })
+  const pool = new pg.Pool({ connectionString, max: 10 })
+  return drizzlePg(pool, { schema }) as any
 }
 
 export type DbClient = ReturnType<typeof createDbClient>
@@ -90,13 +86,8 @@ export type DbClient = ReturnType<typeof createDbClient>
  *   neonConfig.webSocketConstructor = ws
  */
 export function createPoolDbClient(connectionString: string) {
-  if (isLocalhostDatabaseUrl(connectionString)) {
-    const pool = new pg.Pool({ connectionString, max: 5 })
-    return drizzlePg(pool, { schema })
-  }
-
-  const pool = new Pool({ connectionString, max: 5 })
-  return drizzlePool(pool, { schema })
+  const pool = new pg.Pool({ connectionString, max: 5 })
+  return drizzlePg(pool, { schema }) as any
 }
 
 export type PoolDbClient = ReturnType<typeof createPoolDbClient>
