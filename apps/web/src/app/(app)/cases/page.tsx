@@ -26,6 +26,7 @@ import {
   KanbanBoard,
 } from '@/components/ui'
 import type { KanbanColumn } from '@/components/ui/KanbanBoard'
+import { CreateCaseModal } from '@/components/modals/CreateCaseModal'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
@@ -85,6 +86,7 @@ export default function CasesPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [jurisdictionFilter, setJurisdictionFilter] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
+  const [showCreateModal, setShowCreateModal] = useState(false)
 
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -125,10 +127,23 @@ export default function CasesPage() {
 
   return (
     <div>
-      <DashboardPageHeader
-        eyebrow="Operacional"
-        title="Execuções"
-        description="Casos em execução penal da sua organização."
+      <div className="flex items-start justify-between">
+        <DashboardPageHeader
+          eyebrow="Operacional"
+          title="Execuções"
+          description="Casos em execução penal da sua organização."
+        />
+        <Button
+          variant="primary"
+          onClick={() => setShowCreateModal(true)}
+        >
+          + Novo Caso
+        </Button>
+      </div>
+
+      <CreateCaseModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
       />
 
       <div className="mt-4 flex gap-2">

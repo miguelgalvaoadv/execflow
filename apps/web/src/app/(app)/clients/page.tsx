@@ -23,6 +23,7 @@ import {
   SearchField,
   StatusBadge,
 } from '@/components/ui'
+import { CreateClientModal } from '@/components/modals/CreateClientModal'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
@@ -76,6 +77,7 @@ function formatResponsibleLawyer(userId: string | null): string | null {
 
 export default function ClientsPage() {
   const { data: session, isLoading: sessionLoading } = useSession()
+  const [showCreateModal, setShowCreateModal] = useState(false)
   const [searchInput, setSearchInput] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -115,10 +117,23 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <DashboardPageHeader
-        eyebrow="Operacional"
-        title="Clientes"
-        description="Cadastro de clientes associados a execuções penais."
+      <div className="flex items-start justify-between">
+        <DashboardPageHeader
+          eyebrow="Operacional"
+          title="Clientes"
+          description="Cadastro de clientes associados a execuções penais."
+        />
+        <Button
+          variant="primary"
+          onClick={() => setShowCreateModal(true)}
+        >
+          + Novo Cliente
+        </Button>
+      </div>
+
+      <CreateClientModal
+        open={showCreateModal}
+        onClose={() => setShowCreateModal(false)}
       />
 
       <div className="mt-6 space-y-4">
