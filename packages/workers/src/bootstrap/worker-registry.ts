@@ -193,11 +193,20 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
   await boss.schedule(QUEUE_SLA_DEFER_WAKE, SLA_SWEEP_SCHEDULES.deferWake, {})
   await boss.schedule(QUEUE_SLA_ESCALATION_SWEEP, SLA_SWEEP_SCHEDULES.escalationSweep, {})
   await boss.schedule(QUEUE_SLA_STALE_TASK_SWEEP, SLA_SWEEP_SCHEDULES.staleTaskSweep, {})
-  
-  // Varredura diária de movimentações (Jusbrasil) para TODOS os casos.
-  // 09:00 UTC ≈ 06:00 de Brasília — andamentos frescos quando o escritório abre.
-  // (O botão "Sincronizar" no caso continua disponível para puxar sob demanda.)
-  await boss.schedule(QUEUE_DAILY_CRAWLER_SWEEP, '0 9 * * *', {})
+
+  // Varredura diária de movimentações (Jusbrasil) — OPT-IN (padrão desligado).
+  // SEPARAÇÃO DE PAPÉIS (anti-duplicação, mesmo motivo do DataJud→caso): sem
+  // JUSBRASIL_API_KEY esta varredura só marca TODO caso como 'manual_review'
+  // (inclusive os que o InfoSimples/DJEN já monitoram como 'monitored'),
+  // sobrescrevendo o status real todo dia às 9h UTC — bug observado em produção
+  // 06/07/2026. O botão "Sincronizar" no caso continua disponível sob demanda
+  // independente deste agendamento. Ligue com JUSBRASIL_CRAWLER_SWEEP_ENABLED=true.
+  if (process.env['JUSBRASIL_CRAWLER_SWEEP_ENABLED'] === 'true') {
+    await boss.schedule(QUEUE_DAILY_CRAWLER_SWEEP, '0 9 * * *', {})
+    console.info('[worker-registry] Daily Crawler Sweep (Jusbrasil) registered (diário 09:00 UTC — OPT-IN ligado)')
+  } else {
+    console.info('[worker-registry] Daily Crawler Sweep (Jusbrasil) NÃO agendado (opt-in; InfoSimples/DJEN cobrem TJSP). Botão "Sincronizar" no caso segue disponível.')
+  }
 
   // Health sweep: always registered — covers AASP webhook monitoring + stale-case sweep
   // regardless of whether Astrea email polling is enabled.
