@@ -13,7 +13,7 @@ import {
   parseOcrRequestedPayload,
   isOcrEligibleMimeType,
 } from '@execflow/db/types'
-import { createOcrProvider, resolveOcrMaxAttempts } from '@execflow/ocr'
+import { createOcrProvider, resolveOcrMaxAttempts, OcrProviderError } from '@execflow/ocr'
 import { createStorageProviderFromEnv } from '@execflow/storage'
 import { scheduleOcrForDocument, executeOcrRun } from '../ocr/runner.ts'
 
@@ -52,23 +52,46 @@ function parseEnvelope(job: Job<unknown>): {
 }
 
 // O provider real (pdf-text, padrão) lê o blob — storage injetado aqui.
-function buildOcrProvider(): ReturnType<typeof createOcrProvider> {
-  const storage = createStorageProviderFromEnv()
-  return createOcrProvider(process.env, {
-    getObject: (storageKey) => storage.getObject(storageKey),
-  })
-}
+//
+// CONSTRUÇÃO PREGUIÇOSA E BLINDADA (crítico): NUNCA construir isto no
+// carregamento do módulo. Se STORAGE_PROVIDER=s3 e faltar credencial, isso
+// lança — e como este módulo é importado no boot do worker (junto com
+// InfoSimples/DJEN/DataJud/SLA), um erro aqui derrubava o PROCESSO INTEIRO a
+// cada reinício (loop de crash observado em produção 06/07/2026). A falta de
+// storage deve derrubar só o OCR, nunca as outras integrações que não usam
+// storage nenhum.
+let cachedProvider: ReturnType<typeof createOcrProvider> | null = null
 
-let ocrProvider = buildOcrProvider()
-console.info(`[ocr-events] Provider de OCR ativo: ${ocrProvider.id}`)
+function getOcrProvider(): ReturnType<typeof createOcrProvider> {
+  if (cachedProvider) return cachedProvider
+  try {
+    const storage = createStorageProviderFromEnv()
+    cachedProvider = createOcrProvider(process.env, {
+      getObject: (storageKey) => storage.getObject(storageKey),
+    })
+    console.info(`[ocr-events] Provider de OCR ativo: ${cachedProvider.id}`)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err)
+    console.error(
+      `[ocr-events] Storage/OCR mal configurado — OCR ficará indisponível até corrigir (demais integrações NÃO são afetadas): ${message}`
+    )
+    cachedProvider = {
+      id: 'unavailable',
+      async extractText() {
+        throw new OcrProviderError(`OCR indisponível: ${message}`, { retryable: false })
+      },
+    }
+  }
+  return cachedProvider
+}
 
 /** Test hook — inject mock provider. */
 export function setOcrProviderForTests(provider: ReturnType<typeof createOcrProvider>): void {
-  ocrProvider = provider
+  cachedProvider = provider
 }
 
 export function resetOcrProviderForTests(): void {
-  ocrProvider = buildOcrProvider()
+  cachedProvider = null
 }
 
 export async function handleDocumentRegisteredForOcr(
@@ -111,7 +134,7 @@ export async function handleDocumentRegisteredForOcr(
     documentId: doc.id,
     triggerEventId,
     correlationId: env.correlationId ?? triggerEventId,
-    providerId: ocrProvider.id,
+    providerId: getOcrProvider().id,
     maxAttempts: resolveOcrMaxAttempts(),
   })
 }
@@ -124,7 +147,7 @@ export async function handleOcrRequested(db: WorkersDb, job: Job<unknown>): Prom
   if (parsed === null) return
   if (parsed.organizationId !== env.organizationId) return
 
-  await executeOcrRun(db, ocrProvider, {
+  await executeOcrRun(db, getOcrProvider(), {
     ocrRunId: parsed.ocrRunId,
     organizationId: parsed.organizationId,
     correlationId: env.correlationId,
