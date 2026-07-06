@@ -30,6 +30,15 @@ export type ExecutionCaseDetail = {
   closedAt: string | null
   closedReason: string | null
   processNumberPendingSince: string | null
+  monitoringStatus: string | null
+  lastSyncedAt: string | null
+  astreaSealedCredentialStatus: string | null
+  astreaSealedCredentialUpdatedAt: string | null
+  astreaSealedCredentialReviewDueAt: string | null
+  documentFreshnessStatus: string | null
+  autosLastIngestedAt: string | null
+  pendingCriticalMovementSince: string | null
+  pendingCriticalMovementType: string | null
   createdAt: string
   createdByUserId: string
   updatedAt: string

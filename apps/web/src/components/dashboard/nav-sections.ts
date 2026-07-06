@@ -1,6 +1,7 @@
 import {
   primaryNavItems,
   settingsNavItem,
+  teamNavItem,
   type NavItem,
 } from "./nav-items";
 
@@ -20,6 +21,11 @@ export const navSections: NavSection[] = [
     id: "operations",
     label: "Operações",
     items: primaryNavItems.slice(1),
+  },
+  {
+    id: "system",
+    label: "Sistema",
+    items: [teamNavItem, settingsNavItem],
   },
 ];
 

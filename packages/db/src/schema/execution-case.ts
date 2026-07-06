@@ -224,6 +224,116 @@ export const executionCases = pgTable(
     }),
 
     // -------------------------------------------------------------------------
+    // Monitoramento de tribunal (Escavador)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Estado do monitoramento automático do andamento processual.
+     * 'monitored'     → capturado automaticamente (Astrea, via e-mail).
+     * 'manual_review' → sem dados (ou sem chave); conferir manualmente no SEEU.
+     * 'sealed'        → segredo de justiça (notificação por e-mail não cobre
+     *                   este caso — ver astreaSealedCredentialStatus abaixo).
+     * null            → ainda não sincronizado.
+     */
+    monitoringStatus: text('monitoring_status'),
+
+    /** Última sincronização de andamento. */
+    lastSyncedAt: timestamp('last_synced_at', { withTimezone: true }),
+
+    /**
+     * Estado da credencial Astrea para processos em SEGREDO DE JUSTIÇA.
+     * Só relevante quando monitoringStatus = 'sealed'. NULL para processos
+     * públicos — esses não precisam de credencial, são cobertos pela
+     * notificação "todos os processos públicos do escritório" por e-mail.
+     *
+     * 'needs_setup'       → sigiloso detectado, credencial CPF+senha+SEED
+     *                       ainda não cadastrada no Astrea (via "Seleção de
+     *                       tribunal/órgão").
+     * 'configured'        → credencial cadastrada no Astrea, presumida OK.
+     * 'possibly_expired'  → o advogado suspeita/confirmou que a senha do
+     *                       tribunal expirou (marcação manual — o Astrea não
+     *                       expõe nenhum sinal externo de expiração).
+     * 'not_applicable'    → processo é público, este campo não se aplica.
+     *
+     * LIMITAÇÃO ESTRUTURAL DOCUMENTADA: não existe forma de detectar
+     * programaticamente que uma senha de tribunal sigiloso expirou no
+     * Astrea — isso só é visível dentro da UI do Astrea. Por isso este é
+     * um campo de lembrete operacional, não uma automação.
+     */
+    astreaSealedCredentialStatus: text('astrea_sealed_credential_status'),
+
+    /** Última vez que astreaSealedCredentialStatus foi atualizado manualmente. */
+    astreaSealedCredentialUpdatedAt: timestamp('astrea_sealed_credential_updated_at', {
+      withTimezone: true,
+    }),
+
+    /**
+     * Data sugerida para o advogado revalidar a credencial sigilosa no
+     * Astrea. Recalculada para +90 dias sempre que o status muda para
+     * 'configured' via o painel de revisão.
+     */
+    astreaSealedCredentialReviewDueAt: timestamp('astrea_sealed_credential_review_due_at', {
+      withTimezone: true,
+    }),
+
+    // -------------------------------------------------------------------------
+    // Document freshness gate (Parte 4 — autos versionados)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Tracks whether the autos on file are still valid relative to the most
+     * recent court movements.
+     *
+     * 'fresh'   → autos loaded AND no tier-1/tier-2 movement received since last load.
+     *             Claude can generate pieces without restriction.
+     * 'stale'   → a tier-1 or tier-2 movement arrived AFTER the last autos load.
+     *             Claude is BLOCKED from generating pieces until new autos are uploaded.
+     * 'unknown' → no autos have ever been loaded for this case.
+     *             Claude is allowed but receives a warning in its prompt.
+     * null      → not yet evaluated (legacy cases prior to migration).
+     *
+     * Transitions:
+     *   → 'stale'  : when AASP/Jusbrasil webhook receives tier-1 or tier-2 movement
+     *   → 'fresh'  : when new autos are confirmed (automated ingestion or manual upload)
+     *   → 'unknown': initial state for new cases
+     */
+    documentFreshnessStatus: text('document_freshness_status'),
+
+    /** When autos were last successfully ingested (automated or manual). */
+    autosLastIngestedAt: timestamp('autos_last_ingested_at', { withTimezone: true }),
+
+    /**
+     * When the pending critical movement was first received.
+     * Set alongside documentFreshnessStatus='stale'; cleared on new autos.
+     * Used by the stale-case sweep to alert when >7 days.
+     */
+    pendingCriticalMovementSince: timestamp('pending_critical_movement_since', {
+      withTimezone: true,
+    }),
+
+    /**
+     * The event_type of the movement that caused the stale status.
+     * Example: 'sentence.regressao', 'sentence.extincao', 'sentence.recalculo'.
+     * Displayed in the staleness banner so the lawyer knows what to look for.
+     */
+    pendingCriticalMovementType: text('pending_critical_movement_type'),
+
+    // -------------------------------------------------------------------------
+    // Prioridade operacional
+    // -------------------------------------------------------------------------
+
+    /**
+     * Prioridade operacional do caso: 'high' | 'medium' | 'low' | null.
+     * Calculada por regra determinística (réu preso, prazo aberto, movimentação
+     * sensível recente, segredo, stale) e ajustável manualmente. A justificativa
+     * fica em priorityReason para exibição no painel.
+     */
+    priority: text('priority'),
+
+    /** Justificativa legível da prioridade atual. */
+    priorityReason: text('priority_reason'),
+
+    // -------------------------------------------------------------------------
     // Timestamps — immutable fields noted
     // -------------------------------------------------------------------------
 

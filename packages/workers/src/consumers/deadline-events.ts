@@ -132,16 +132,28 @@ export async function handleDeadlineCreated(
     createdBySystemActorId: 'worker.deadline-consumer',
   })
 
-  if (dueAt) {
-    // Simula notificação de WhatsApp para prazo recém criado
-    await sendWhatsappDeadlineReminder(
-      'Advogado Responsável',
-      null, // phone
-      'Cliente do Processo',
-      title,
-      dueAt,
-      'warning'
-    )
+  if (dueAt && executionCaseId) {
+    const { domainEvents } = await import('@execflow/db/schema')
+    const crypto = await import('crypto')
+    await db.insert(domainEvents).values({
+      id: crypto.randomUUID(),
+      organizationId,
+      eventType: 'whatsapp.notification.requested',
+      aggregateType: 'ExecutionCase',
+      aggregateId: executionCaseId,
+      actorType: 'system',
+      actorId: 'worker.deadline-consumer',
+      payload: {
+        notificationType: 'deadline_alert',
+        executionCaseId,
+        deadlineTitle: title,
+        dueAt,
+        status: 'warning',
+      },
+      correlationId: job.data.correlationId,
+      causationId: eventId,
+      occurredAt: new Date(),
+    })
   }
 }
 
@@ -267,15 +279,27 @@ export async function handleDeadlineOverdue(
     metadata: { deadlineClass, isOverdue: true },
   })
 
-  if (dueAt) {
-    // Simula notificação de WhatsApp para prazo vencido
-    await sendWhatsappDeadlineReminder(
-      'Advogado Responsável',
-      null, // phone
-      'Cliente do Processo',
-      title,
-      dueAt,
-      'overdue'
-    )
+  if (dueAt && executionCaseId) {
+    const { domainEvents } = await import('@execflow/db/schema')
+    const crypto = await import('crypto')
+    await db.insert(domainEvents).values({
+      id: crypto.randomUUID(),
+      organizationId,
+      eventType: 'whatsapp.notification.requested',
+      aggregateType: 'ExecutionCase',
+      aggregateId: executionCaseId,
+      actorType: 'system',
+      actorId: 'worker.deadline-consumer',
+      payload: {
+        notificationType: 'deadline_alert',
+        executionCaseId,
+        deadlineTitle: title,
+        dueAt,
+        status: 'overdue',
+      },
+      correlationId: job.data.correlationId,
+      causationId: eventId,
+      occurredAt: new Date(),
+    })
   }
 }

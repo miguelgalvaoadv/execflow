@@ -3,7 +3,7 @@
  */
 
 import type { ReactNode } from 'react'
-import { borders, text, surfaces } from '@/components/dashboard/surfaces'
+import { text } from '@/components/dashboard/surfaces'
 
 export type EmptyStateVariant = 'default' | 'tab'
 
@@ -25,11 +25,9 @@ export function EmptyState({
   variant: _variant = 'default',
 }: EmptyStateProps) {
   return (
-    <div
-      className={`flex flex-col items-center justify-center rounded-xl border ${borders.subtle} ${surfaces.panelInset} px-6 py-12 text-center`}
-    >
+    <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-300 bg-white px-6 py-12 text-center">
       <div
-        className={`mb-3 flex h-10 w-10 items-center justify-center rounded-full border ${borders.default} bg-white/[0.03]`}
+        className="mb-3 flex h-11 w-11 items-center justify-center rounded-full border border-slate-200 bg-slate-50"
         aria-hidden
       >
         {icon !== undefined ? (
@@ -48,7 +46,7 @@ export function EmptyState({
           </svg>
         )}
       </div>
-      <p className={`text-sm font-medium ${text.secondary}`}>{title}</p>
+      <p className={`text-[14px] font-medium ${text.secondary}`}>{title}</p>
       {description !== undefined && (
         <p className={`mt-1 max-w-xs text-[13px] ${text.faint}`}>{description}</p>
       )}

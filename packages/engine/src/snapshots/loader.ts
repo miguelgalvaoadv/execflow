@@ -118,6 +118,7 @@ async function loadConfirmedSentenceSnapshot(
       ? (row.missingDataFlags as Array<{ field: string; impact: 'high' | 'medium'; description: string }>)
       : [],
     playbookVersionId: row.playbookVersionId,
+    crimesBreakdown: Array.isArray(row.crimesBreakdown) ? (row.crimesBreakdown as any[]) : [],
   }
 }
 

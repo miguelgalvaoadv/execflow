@@ -67,15 +67,6 @@ export function lepParoleFractionEvaluator(input: RuleEvaluatorInput): RuleEvalu
     }
   }
 
-  // ---- Extract playbook parameters ----
-  const requiredFraction = parameters['requiredFraction'] as number | undefined
-  const requiresGoodBehavior = parameters['requiresGoodBehavior'] as boolean | undefined ?? true
-  const requiresCriminologicalExam = parameters['requiresCriminologicalExam'] as boolean | undefined ?? false
-
-  if (requiredFraction === undefined) {
-    return insufficientData('playbook_parameters', 'requiredFraction deve estar configurado no playbook para livramento')
-  }
-
   const sentence = facts.sentence
   const totalDays = sentence.totalSentenceDays
 
@@ -110,7 +101,100 @@ export function lepParoleFractionEvaluator(input: RuleEvaluatorInput): RuleEvalu
   }
 
   // ---- Calculate fraction ----
-  const fractionalDaysNeeded = totalDays * requiredFraction
+  let fractionalDaysNeeded: number
+  let requiresGoodBehavior = parameters['requiresGoodBehavior'] as boolean | undefined ?? true
+  let requiresCriminologicalExam = parameters['requiresCriminologicalExam'] as boolean | undefined ?? false
+  let isProhibitedFlag = false
+  
+  const calculationSteps = []
+
+  if (sentence.crimesBreakdown && sentence.crimesBreakdown.length > 0) {
+    fractionalDaysNeeded = 0
+    
+    for (const crime of sentence.crimesBreakdown) {
+      let fraction = 1/3 // default comum primário
+      let legalBasis = 'Art. 83, I, CP'
+      
+      const isHeinousOrEquated = crime.isHediondo || crime.isEquiparado
+      const isSpecificRecidivist = crime.isSpecificRecidivist
+      const isRecidivist = crime.isRecidivist || crime.isSpecificRecidivist // fallback
+      
+      if (isHeinousOrEquated && isSpecificRecidivist) {
+        fraction = -1; legalBasis = 'Art. 83, V, CP — VEDADO'
+        isProhibitedFlag = true
+      } else if (isHeinousOrEquated) {
+        fraction = 2/3; legalBasis = 'Art. 83, V, CP'
+        requiresCriminologicalExam = true
+      } else if (isRecidivist) {
+        fraction = 1/2; legalBasis = 'Art. 83, II, CP'
+      }
+      
+      if (fraction !== -1) {
+        const daysForThisCrime = crime.sentenceDays * fraction
+        fractionalDaysNeeded += daysForThisCrime
+        
+        calculationSteps.push({
+          crime: crime.crimeName || crime.crimeCode || 'N/A',
+          sentenceDays: crime.sentenceDays,
+          fraction,
+          fractionLabel: `${(fraction * 100).toFixed(2)}%`,
+          legalBasis,
+          daysNeeded: Math.ceil(daysForThisCrime),
+        })
+      } else {
+        calculationSteps.push({
+          crime: crime.crimeName || crime.crimeCode || 'N/A',
+          sentenceDays: crime.sentenceDays,
+          fraction: 0,
+          fractionLabel: 'VEDADO',
+          legalBasis,
+          daysNeeded: 0,
+        })
+      }
+    }
+  } else {
+    // Fallback to static playbook param
+    const requiredFraction = parameters['requiredFraction'] as number | undefined
+    if (requiredFraction === undefined) {
+      return insufficientData('playbook_parameters', 'requiredFraction deve estar configurado no playbook para livramento')
+    }
+    fractionalDaysNeeded = totalDays * requiredFraction
+    
+    calculationSteps.push({
+      crime: 'Pena Unificada',
+      sentenceDays: totalDays,
+      fraction: requiredFraction,
+      fractionLabel: `${(requiredFraction * 100).toFixed(2)}%`,
+      legalBasis: 'Art. 83, CP',
+      daysNeeded: Math.ceil(fractionalDaysNeeded),
+    })
+  }
+
+  // If any crime prohibits parole, the entire opportunity is blocked
+  if (isProhibitedFlag) {
+    return {
+      outcome: 'opportunity_blocked',
+      confidenceLevel: 'high',
+      uncertaintyLevel: 'none',
+      blockingCodes: ['BLK_PAROLE_PROHIBITED'],
+      uncertaintyFactors: [],
+      missingData: [],
+      legalRulesApplied: [{
+        ruleId,
+        playbookVersionId,
+        branchId: null,
+        citationRef: 'Art. 83, V, CP — Vedado para reincidente específico em crime hediondo',
+      }],
+      calculations: [{
+        name: 'Vedação de livramento condicional',
+        inputs: { motivoVedação: 'Reincidência específica em crime hediondo/equiparado em um ou mais crimes' },
+        output: 'VEDADO — livramento condicional não é cabível',
+        confidence: 'high',
+        derivationNote: 'Art. 83, V, do Código Penal veda o livramento condicional ao reincidente específico em crime hediondo.',
+      }],
+    }
+  }
+
   const numerator = sentence.servedDays + sentence.remissionDays + sentence.detractionDays
   const eligible = numerator >= fractionalDaysNeeded
   const missingDays = Math.max(0, Math.ceil(fractionalDaysNeeded - numerator))
@@ -132,11 +216,16 @@ export function lepParoleFractionEvaluator(input: RuleEvaluatorInput): RuleEvalu
 
   const calculations = [
     {
-      name: 'Fração para livramento condicional',
+      name: 'Fração para livramento condicional (por crime)',
       inputs: {
-        penaTotalDias: totalDays,
-        fração: `${(requiredFraction * 100).toFixed(2)}%`,
-        diasNecessários: Math.ceil(fractionalDaysNeeded),
+        crimes: calculationSteps.map((s) => ({
+          crime: s.crime,
+          penaDias: s.sentenceDays,
+          fração: s.fractionLabel,
+          fundamentoLegal: s.legalBasis,
+          diasNecessários: s.daysNeeded,
+        })),
+        totalDiasNecessários: Math.ceil(fractionalDaysNeeded),
         diasCumpridos: sentence.servedDays,
         diasRemidos: sentence.remissionDays,
         diasDetração: sentence.detractionDays,
@@ -146,7 +235,7 @@ export function lepParoleFractionEvaluator(input: RuleEvaluatorInput): RuleEvalu
         ? `ELEGÍVEL para livramento — cumpriu ${numerator}/${Math.ceil(fractionalDaysNeeded)} dias`
         : `NÃO ELEGÍVEL — faltam ${missingDays} dias (${numerator}/${Math.ceil(fractionalDaysNeeded)})`,
       confidence: outputConfidence,
-      derivationNote: `Fração: ${(requiredFraction * 100).toFixed(2)}% da pena total. Parâmetros do playbook v${playbookVersionId}.`,
+      derivationNote: `Soma ponderada: Σ(pena_crime × fração_crime). Fração calculada por crime conforme Art. 83, CP.`,
     },
     ...(subjectiveWarnings.length > 0 ? [{
       name: 'Requisitos subjetivos pendentes',
@@ -182,8 +271,8 @@ export function lepParoleFractionEvaluator(input: RuleEvaluatorInput): RuleEvalu
     ...(eligible ? {
       opportunityProposal: {
         opportunityType: 'livramento',
-        summary: `Livramento condicional — elegível (${((numerator / totalDays) * 100).toFixed(1)}% cumprido, limiar: ${(requiredFraction * 100).toFixed(1)}%)`,
-        rationale: `Cumprido ${numerator} dias dos ${Math.ceil(fractionalDaysNeeded)} necessários (${(requiredFraction * 100).toFixed(2)}%). ${subjectiveWarnings.length > 0 ? 'Requisitos subjetivos pendentes de verificação.' : ''}`,
+        summary: `Livramento condicional — elegível (${((numerator / totalDays) * 100).toFixed(1)}% cumprido)`,
+        rationale: `Cumprido ${numerator} dias dos ${Math.ceil(fractionalDaysNeeded)} necessários. ${subjectiveWarnings.length > 0 ? 'Requisitos subjetivos pendentes de verificação.' : ''}`,
         windowStartAt: null,
         windowEndAt: null,
         riskLevel: 'high' as const,

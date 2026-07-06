@@ -77,13 +77,13 @@ export function PieceEditorModal({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 bg-slate-100 backdrop-blur-sm flex items-center justify-center p-4">
       <div className="w-full max-w-5xl h-[90vh] flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-200 overflow-hidden">
         {/* Header */}
-        <div className="border-b bg-gradient-to-r from-indigo-50 to-purple-50 px-6 py-4 flex flex-row items-center justify-between">
+        <div className="border-b bg-gradient-to-r from-blue-50 to-purple-50 px-6 py-4 flex flex-row items-center justify-between">
           <div>
             <h2 className="text-xl font-semibold flex items-center gap-2 text-gray-900">
-              <Sparkles className="h-5 w-5 text-indigo-500" />
+              <Sparkles className="h-5 w-5 text-blue-600" />
               Editor de Peça Processual
             </h2>
             <p className="text-sm text-gray-500 mt-1">
@@ -143,8 +143,8 @@ export function PieceEditorModal({
           {isLoading || isGenerating ? (
             <div className="flex-1 flex flex-col items-center justify-center space-y-4">
               <div className="relative">
-                <Loader2 className="h-12 w-12 animate-spin text-indigo-500" />
-                <Sparkles className="h-4 w-4 text-purple-400 absolute top-0 right-0 animate-pulse" />
+                <Loader2 className="h-12 w-12 animate-spin text-blue-600" />
+                <Sparkles className="h-4 w-4 text-purple-700 absolute top-0 right-0 animate-pulse" />
               </div>
               <p className="text-gray-600 font-medium">O Claude está redigindo a sua petição...</p>
               <p className="text-xs text-gray-400">
@@ -247,7 +247,7 @@ export function PieceEditorModal({
             </Button>
             <Button
               onClick={handleFinalize}
-              className="bg-indigo-600 hover:bg-indigo-700 text-white"
+              className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={
                 isLoading || isGenerating || updateDraft.isPending || draft?.status === 'finalized'
               }

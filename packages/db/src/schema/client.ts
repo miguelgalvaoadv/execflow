@@ -87,6 +87,12 @@ export const clients = pgTable(
     rg: text('rg'),
 
     /**
+     * Matrícula do réu no sistema penitenciário (ex.: matrícula SAP).
+     * Identifica o apenado no SEEU / unidade prisional. Opcional.
+     */
+    matricula: text('matricula'),
+
+    /**
      * Date of birth. Used for legal age calculations and identity verification.
      * LGPD SENSITIVE. PostgreSQL `date` type (no time component needed).
      */
@@ -166,6 +172,27 @@ export const clients = pgTable(
      * Architecture ref: data-model-v1.md §2.1 lifecycle.
      */
     status: clientStatusEnum('status').notNull().default('active'),
+
+    // -------------------------------------------------------------------------
+    // Origem e validação do cadastro (cadastro sugerido pela IA)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Como este cadastro nasceu:
+     * 'manual'       → digitado por humano (padrão)
+     * 'ai_suggested' → sugerido pela IA a partir dos autos, aguardando validação
+     * 'csv_import'   → importado de planilha
+     * Cadastros 'ai_suggested' NÃO devem ser tratados como definitivos até
+     * validatedAt ser preenchido — em processo criminal há vítima, corréu,
+     * testemunha e homônimos.
+     */
+    registrationOrigin: text('registration_origin').notNull().default('manual'),
+
+    /** Quem validou o cadastro sugerido. NULL = ainda não validado. */
+    validatedByUserId: uuid('validated_by_user_id').references(() => users.id),
+
+    /** Quando o cadastro foi validado por humano. */
+    validatedAt: timestamp('validated_at', { withTimezone: true }),
 
     // -------------------------------------------------------------------------
     // Merge tracking

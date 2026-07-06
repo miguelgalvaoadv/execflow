@@ -29,6 +29,11 @@ export type { CommitOptions, CommitPropagationContext } from './runtime/commit-o
 // MVP E2E engine (Phase 1 — replaces stub evaluators for demo; to be superseded by full evaluators in Phase 2+)
 export { runMvpEngine } from './engine-run-mvp.ts'
 
+// Inventário por OAB — classificação determinística de prioridade (spec §6).
+// Puro e sem IA; usado pela API (importação/triagem) e pelo worker (cron diário).
+export { classifyInventoryItem } from './inventory-classifier.ts'
+export type { ClassifiableItem, ClassificationResult } from './inventory-classifier.ts'
+
 // Dependency invalidation
 export { invalidateDependencies, hasStaleDependencies } from './snapshots/staleness.ts'
 

@@ -66,6 +66,16 @@ export const memberships = pgTable(
      */
     role: membershipRoleEnum('role').notNull(),
 
+    /**
+     * Para memberships com role='client': aponta o registro de Client cujos
+     * dados este usuário pode ver no PORTAL restrito. NULL para staff.
+     * O portal resolve TUDO a partir deste vínculo — um usuário-cliente sem
+     * linked_client_id não vê nada.
+     * FK sem referência circular: clients importa users, então aqui a FK é
+     * criada na migração (0011), não via .references().
+     */
+    linkedClientId: uuid('linked_client_id'),
+
     // -------------------------------------------------------------------------
     // Lifecycle
     // -------------------------------------------------------------------------

@@ -17,26 +17,20 @@ export function WorkspacePanel({
   variant = "default",
 }: WorkspacePanelProps) {
   const surface =
-    variant === "inset" ? surfaces.panelInset : surfaces.panel;
+    variant === "inset" ? surfaces.panelInset : "bg-white";
 
   return (
     <section
       className={[
-        "flex flex-col overflow-hidden rounded-xl",
+        "flex flex-col overflow-hidden rounded-xl border border-slate-200 shadow-sm",
         surface,
-        borders.subtle,
-        "border",
         className,
       ].join(" ")}
     >
-      <header className={`border-b ${borders.subtle} px-5 py-4`}>
-        <h2
-          className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${text.muted}`}
-        >
-          {title}
-        </h2>
+      <header className="border-b border-slate-100 px-5 py-4">
+        <h2 className="text-[14px] font-semibold text-slate-900">{title}</h2>
         {description ? (
-          <p className={`mt-1 text-[12px] leading-relaxed ${text.faint}`}>
+          <p className="mt-0.5 text-[12px] leading-relaxed text-slate-500">
             {description}
           </p>
         ) : null}
@@ -49,9 +43,9 @@ export function WorkspacePanel({
 function PanelPlaceholder({ message }: { message: string }) {
   return (
     <div
-      className={`flex min-h-[120px] flex-1 items-center justify-center rounded-lg border border-dashed ${borders.subtle} ${surfaces.panelMuted} px-4 py-8`}
+      className={`flex min-h-[120px] flex-1 items-center justify-center rounded-lg border border-dashed ${borders.default} ${surfaces.panelMuted} px-4 py-8`}
     >
-      <p className={`text-center text-[12px] leading-relaxed ${text.faint}`}>
+      <p className={`text-center text-[13px] leading-relaxed ${text.faint}`}>
         {message}
       </p>
     </div>

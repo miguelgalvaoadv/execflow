@@ -92,6 +92,8 @@ export type CreateCaseInput = {
   sentenceSummary?: string | undefined
 }
 
+export type UpdateCaseInput = Partial<Omit<CreateCaseInput, 'clientId' | 'openedAt'>>
+
 // ---------------------------------------------------------------------------
 // Service operations
 // ---------------------------------------------------------------------------
@@ -274,6 +276,40 @@ export async function createCase(
         },
       })
 
+      if (normalizedProcessNumber) {
+        // Auto-sync Jusbrasil imediato ao cadastrar o caso (mesmo caminho do botão "Sincronizar"):
+        // busca capa/partes/movimentações, baixa autos e ativa o monitoramento contínuo.
+        const { domainEvents, crawlerSyncLogs } = await import('@execflow/db/schema')
+        const crypto = await import('crypto')
+        const logId = crypto.randomUUID()
+        await tx.insert(crawlerSyncLogs).values({
+          id: logId,
+          organizationId: ctx.organizationId,
+          executionCaseId: caseResult.id,
+          status: 'pending',
+          tribunalName: 'Jusbrasil',
+          createdByUserId: ctx.userId,
+        })
+        await tx.insert(domainEvents).values({
+          id: crypto.randomUUID(),
+          organizationId: ctx.organizationId,
+          eventType: 'crawler.sync.requested',
+          aggregateType: 'CrawlerSyncLog',
+          aggregateId: logId,
+          actorType: ctx.actor.actorType,
+          actorId: ctx.actor.actorId,
+          payload: {
+            logId,
+            organizationId: ctx.organizationId,
+            executionCaseId: caseResult.id,
+            requestedByUserId: ctx.userId,
+          },
+          correlationId: ctx.correlationId,
+          causationId: null,
+          occurredAt: new Date(),
+        })
+      }
+
       return caseResult
     })
 
@@ -288,5 +324,95 @@ export async function createCase(
 
     console.error('[case.service] createCase failed:', err)
     return internalServiceError('Failed to create execution case.', err)
+  }
+}
+
+/**
+ * Update an existing execution case.
+ */
+export async function updateCase(
+  ctx: WriteContext,
+  caseId: string,
+  input: UpdateCaseInput
+): Promise<ServiceResult<ExecutionCase>> {
+  if (input.internalRef !== undefined && !input.internalRef.trim()) {
+    return validationError('Internal reference number is required.', 'internalRef')
+  }
+
+  let normalizedProcessNumber: string | undefined
+  if (input.executionProcessNumber !== undefined) {
+    if (input.executionProcessNumber === '') {
+       normalizedProcessNumber = '' // Allow clearing
+    } else {
+       if (!validateProcessNumber(input.executionProcessNumber)) {
+         return validationError(
+           'Execution process number format is not recognized. Expected CNJ format (NNNNNNN-DD.AAAA.J.TT.OOOO) or a valid legacy format.',
+           'executionProcessNumber'
+         )
+       }
+       normalizedProcessNumber = normalizeProcessNumber(input.executionProcessNumber)
+    }
+  }
+
+  try {
+    const executionCase = await withTx(ctx.db, async (tx) => {
+      const { updateExecutionCase: repoUpdateCase } = await import('../repositories/execution-case.ts')
+
+      const updateData: any = {}
+      if (input.internalRef !== undefined) updateData.internalRef = input.internalRef.trim()
+      if (normalizedProcessNumber !== undefined) updateData.executionProcessNumber = normalizedProcessNumber === '' ? null : normalizedProcessNumber
+      if (input.originProcessNumber !== undefined) updateData.originProcessNumber = input.originProcessNumber.trim()
+      if (input.courtName !== undefined) updateData.courtName = input.courtName.trim()
+      if (input.courtJurisdiction !== undefined) updateData.courtJurisdiction = input.courtJurisdiction.trim()
+      if (input.caseKind !== undefined) updateData.caseKind = input.caseKind
+      if (input.parentExecutionCaseId !== undefined) updateData.parentExecutionCaseId = input.parentExecutionCaseId
+      if (input.responsibleLawyerUserId !== undefined) updateData.responsibleLawyerUserId = input.responsibleLawyerUserId
+      if (input.sentenceSummary !== undefined) updateData.sentenceSummary = input.sentenceSummary.trim()
+
+      const now = new Date()
+      updateData.updatedAt = now
+
+      const updateResult = unwrapOrThrow(
+        await repoUpdateCase(tx, ctx.organizationId, caseId, updateData)
+      )
+
+      await writeAuditAndEvent({
+        tx,
+        actor: ctx.actor,
+        organizationId: ctx.organizationId,
+        requestId: ctx.requestId,
+        correlationId: ctx.correlationId,
+        action: 'updated',
+        entityType: 'ExecutionCase',
+        entityId: caseId,
+        changes: { type: 'field_update' as const, fields: Object.fromEntries(
+          Object.entries(updateData).map(([k, v]) => [k, { previous: null, next: v }])
+        ) },
+        eventType: 'case.updated',
+        aggregateType: 'ExecutionCase',
+        aggregateId: caseId,
+        occurredAt: now,
+        eventPayload: {
+          caseId,
+          organizationId: ctx.organizationId,
+        },
+      })
+
+      return updateResult
+    })
+
+    return ok(executionCase)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('execution_cases_process_number_unique')) {
+      return conflictError('Process number is already assigned to another case in this organization.')
+    }
+    if (err instanceof Error && err.message.includes('execution_cases_internal_ref_unique')) {
+      return conflictError('Internal reference number is already in use in this organization.')
+    }
+    if (err instanceof Error && err.message === 'NOT_FOUND') {
+       return validationError('Case not found')
+    }
+    console.error('[case.service] updateCase failed:', err)
+    return internalServiceError('Failed to update execution case.', err)
   }
 }

@@ -19,7 +19,7 @@ import { db } from '../lib/db.ts'
 import { buildWriteContext } from '../lib/write-context.ts'
 import { parseBody } from '../lib/zod-helpers.ts'
 import { serviceErrorToResponse, safeJsonBody } from '../lib/route-helpers.ts'
-import { createClient } from '../services/client.ts'
+import { createClient, updateClient } from '../services/client.ts'
 import { getClientDetail, listClients } from '../services/client-read.ts'
 import { toReadContext } from '../lib/read-context.ts'
 import { PaginationQuerySchema } from '../lib/pagination-schemas.ts'
@@ -113,6 +113,7 @@ const CreateClientSchema = z.object({
   fullName: z.string().min(1, 'Full name is required').max(300),
   cpf: z.string().optional(),
   rg: z.string().max(30).optional(),
+  matricula: z.string().max(50).optional(),
   birthDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}$/, 'birthDate must be in YYYY-MM-DD format')
@@ -159,6 +160,44 @@ router.post(
 
     // 201 Created: return the new client resource
     return c.json({ data: result.data }, 201)
+  }
+)
+
+// -------------------------------------------------------------------------
+// PATCH /api/v1/clients/:id — Update a client
+// -------------------------------------------------------------------------
+
+const UpdateClientSchema = CreateClientSchema.partial()
+
+router.patch(
+  '/:id',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsedParams = ClientIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsedParams.success) {
+      return unprocessable(c, 'Invalid client ID.', { issues: parsedParams.error.issues })
+    }
+
+    const body = await safeJsonBody(c)
+    if (body === null) {
+      return unprocessable(c, 'Request body must be valid JSON.')
+    }
+
+    const parsed = parseBody(UpdateClientSchema, body)
+    if (!parsed.success) {
+      return unprocessable(c, parsed.message, parsed.issues)
+    }
+
+    const ctx = buildWriteContext(c, db)
+    const result = await updateClient(ctx, parsedParams.data.id, parsed.data as import('../services/client.ts').UpdateClientInput)
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data }, 200)
   }
 )
 

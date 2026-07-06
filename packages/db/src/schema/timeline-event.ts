@@ -288,6 +288,30 @@ export const timelineEvents = pgTable(
     ),
 
     // -------------------------------------------------------------------------
+    // Movement criticality (set at insert time by opportunity-detector)
+    // -------------------------------------------------------------------------
+
+    /**
+     * Criticality tier of this movement, as classified by the AI at ingestion.
+     * '1' = invalidates autos (regression, extinction, new calc, revocation)
+     * '2' = relevant but does not invalidate (progression pending, hearing, partial remission)
+     * '3' = procedural/informational (views, loads, certificates, conclusos)
+     * null = not classified / non-movement event
+     *
+     * Set at INSERT time (opportunity-detector runs before timeline insert).
+     * NEVER updated after insert — append-only contract.
+     */
+    criticalityTier: text('criticality_tier'),
+
+    /**
+     * Impressão digital source-agnostic para dedup CRUZADO entre fontes
+     * (DataJud/DJEN/InfoSimples/AASP): sha256(dígitos do CNJ | AAAAMMDD |
+     * texto normalizado). Duas fontes que relatam o mesmo fato colidem aqui e
+     * não empilham. Set no INSERT; nunca atualizado (append-only).
+     */
+    dedupFingerprint: text('dedup_fingerprint'),
+
+    // -------------------------------------------------------------------------
     // NO updated_at, NO deleted_at — this table is APPEND-ONLY
     // -------------------------------------------------------------------------
   },

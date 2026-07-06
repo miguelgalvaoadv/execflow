@@ -22,6 +22,76 @@
       "when": 1781122037447,
       "tag": "0002_complex_sage",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781573723042,
+      "tag": "0003_dry_dazzler",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1781639293219,
+      "tag": "0004_concerned_wasp",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1781639346275,
+      "tag": "0005_panoramic_swarm",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1781987423632,
+      "tag": "0006_left_black_bolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1782056946604,
+      "tag": "0007_misty_blizzard",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1782900000000,
+      "tag": "0008_astrea_email_ingestion",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1782960000000,
+      "tag": "0009_aasp_integration",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1782950400000,
+      "tag": "0010_painel_juridico",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1782970000000,
+      "tag": "0011_client_portal",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1782980000000,
+      "tag": "0012_movement_fingerprint",
+      "breakpoints": true
     }
   ]
 }

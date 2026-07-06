@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { borders, surfaces, text } from '@/components/dashboard/surfaces'
+import { surfaces } from '@/components/dashboard/surfaces'
 
 type ProfileSectionProps = {
   title: string
@@ -10,16 +10,11 @@ type ProfileSectionProps = {
 export function ProfileSection({ title, children, className }: ProfileSectionProps) {
   return (
     <section
-      className={[
-        `rounded-xl border ${borders.subtle} ${surfaces.panel} p-4`,
-        className,
-      ]
+      className={[`rounded-xl ${surfaces.panel} p-5`, className]
         .filter(Boolean)
         .join(' ')}
     >
-      <h2
-        className={`pb-3 mb-3 border-b border-white/[0.04] text-[11px] font-semibold uppercase tracking-[0.12em] ${text.muted}`}
-      >
+      <h2 className="mb-4 border-b border-slate-100 pb-3 text-[14px] font-semibold text-slate-900">
         {title}
       </h2>
       {children}

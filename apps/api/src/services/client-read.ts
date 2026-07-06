@@ -64,6 +64,7 @@ export type ClientReadView = {
   updatedAt: string
   cpf?: string | null
   rg?: string | null
+  matricula?: string | null
   birthDate?: string | null
   contactChannels?: Array<{ type: string; value: string; notes?: string }>
 }
@@ -86,6 +87,7 @@ function toClientReadView(row: Client, includeSensitive: boolean): ClientReadVie
   if (includeSensitive) {
     base.cpf = row.cpf
     base.rg = row.rg
+    base.matricula = row.matricula
     base.birthDate = row.birthDate
     base.contactChannels = (row.contactChannels as ClientReadView['contactChannels']) ?? []
   }

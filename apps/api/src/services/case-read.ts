@@ -27,6 +27,10 @@ export type ExecutionCaseListItemResponse = {
   courtName: string | null
   courtJurisdiction: string | null
   updatedAt: string
+  monitoringStatus: string | null
+  documentFreshnessStatus: string | null
+  pendingCriticalMovementType: string | null
+  pendingCriticalMovementSince: string | null
   clientSummary: ExecutionCaseListItem['clientSummary']
 }
 
@@ -44,6 +48,10 @@ function toListItemResponse(item: ExecutionCaseListItem): ExecutionCaseListItemR
     courtName: item.courtName,
     courtJurisdiction: item.courtJurisdiction,
     updatedAt: item.updatedAt.toISOString(),
+    monitoringStatus: item.monitoringStatus,
+    documentFreshnessStatus: item.documentFreshnessStatus,
+    pendingCriticalMovementType: item.pendingCriticalMovementType,
+    pendingCriticalMovementSince: item.pendingCriticalMovementSince?.toISOString() ?? null,
     clientSummary: item.clientSummary,
   }
 }

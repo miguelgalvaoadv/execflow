@@ -20,6 +20,10 @@ export type ExecutionCaseListItem = {
   courtName: string | null
   courtJurisdiction: string | null
   updatedAt: string
+  monitoringStatus: string | null
+  documentFreshnessStatus: string | null
+  pendingCriticalMovementType: string | null
+  pendingCriticalMovementSince: string | null
   clientSummary: CaseClientSummary
 }
 

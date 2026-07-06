@@ -66,14 +66,20 @@ export const membershipStatusEnum = pgEnum('membership_status', [
  * MVP: one role per (user, organization) pair.
  * Architecture ref: functional-architecture.md §1, data-model-v1.md §1 (Membership)
  *
- * Permission hierarchy: admin > lawyer > assistant
+ * Permission hierarchy: admin > lawyer > assistant > client
  * Agents (agent.ingestion, agent.analysis, etc.) are NOT membership roles —
  * they are actor types tracked in audit records, not human org members.
+ *
+ * 'client' — cliente do escritório com acesso APENAS ao portal restrito
+ * (spec §17). Todas as rotas operacionais internas exigem no mínimo
+ * 'assistant', então o client é estruturalmente bloqueado delas. O vínculo
+ * com o registro Client é memberships.linked_client_id.
  */
 export const membershipRoleEnum = pgEnum('membership_role', [
   'admin',
   'lawyer',
   'assistant',
+  'client',
 ])
 
 // ---------------------------------------------------------------------------

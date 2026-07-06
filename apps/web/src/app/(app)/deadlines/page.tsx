@@ -7,6 +7,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '@/lib/hooks/use-session'
 import { useDeadlines } from '@/lib/hooks/use-deadlines'
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
 import {
@@ -15,7 +17,6 @@ import {
   ErrorState,
   FilterBar,
   FilterSelect,
-  ListCard,
   LoadingState,
   PriorityBadge,
   SearchField,
@@ -88,7 +89,7 @@ export default function DeadlinesPage() {
       <DashboardPageHeader
         eyebrow="Operacional"
         title="Prazos"
-        description="Prazos processuais activos e vencidos da organização."
+        description="Prazos processuais ativos e vencidos da organização."
       />
 
       <div className="mt-6 space-y-4">
@@ -140,7 +141,7 @@ export default function DeadlinesPage() {
             title={hasActiveFilters ? 'Nenhum prazo encontrado' : 'Nenhum prazo'}
             description={
               hasActiveFilters
-                ? 'Nenhum prazo corresponde aos filtros actuais.'
+                ? 'Nenhum prazo corresponde aos filtros atuais.'
                 : 'Os prazos da organização aparecerão aqui.'
             }
           />
@@ -150,40 +151,46 @@ export default function DeadlinesPage() {
               {items.length} {items.length === 1 ? 'prazo' : 'prazos'}
               {hasActiveFilters ? ' encontrado(s)' : ''}
             </p>
-            <ul className="space-y-2" aria-label="Prazos">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {items.map((item) => {
                 const accent = deadlineCardAccentClass(item.status, item.priority)
                 return (
-                  <li key={item.id}>
-                    <ListCard
-                      href={`/deadlines/${item.id}`}
-                      accentClassName={accent}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-                        <p className={`text-[13px] font-medium ${text.secondary}`}>
-                          {item.title}
-                        </p>
-                        <span className={`text-[11px] ${text.faint} tabular-nums shrink-0`}>
-                          {formatDateTime(item.dueAt)}
-                        </span>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2 mb-1">
-                        <StatusBadge variant="deadline" status={item.status} />
-                        <PriorityBadge variant="deadline" priority={item.priority} />
-                        <span className={`text-[11px] ${text.faint}`}>
-                          {deadlineClassLabel(item.deadlineClass)}
-                        </span>
-                      </div>
-                      {item.caseInternalRef !== null && (
-                        <p className={`text-[11px] ${text.faint}`}>
-                          Caso: {item.caseInternalRef}
-                        </p>
-                      )}
-                    </ListCard>
-                  </li>
+                  <Link
+                    key={item.id}
+                    href={`/deadlines/${item.id}`}
+                    className={[
+                      'group flex flex-col rounded-xl border bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg',
+                      accent || 'border-slate-200',
+                    ].join(' ')}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-400">
+                        {deadlineClassLabel(item.deadlineClass)}
+                      </span>
+                      <span className="shrink-0 text-[11px] tabular-nums text-slate-500">
+                        {formatDateTime(item.dueAt)}
+                      </span>
+                    </div>
+                    <p className="mt-2 text-[14px] font-semibold leading-snug text-slate-900 group-hover:text-blue-700">
+                      {item.title}
+                    </p>
+                    <div className="mt-2.5 flex flex-wrap items-center gap-2">
+                      <StatusBadge variant="deadline" status={item.status} />
+                      <PriorityBadge variant="deadline" priority={item.priority} />
+                    </div>
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px]">
+                      <span className="truncate text-slate-500">
+                        {item.caseInternalRef !== null ? `Caso: ${item.caseInternalRef}` : 'Sem caso vinculado'}
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600">
+                        Abrir
+                        <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                      </span>
+                    </div>
+                  </Link>
                 )
               })}
-            </ul>
+            </div>
 
             {hasNextPage ? (
               <div className="pt-2">

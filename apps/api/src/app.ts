@@ -45,6 +45,16 @@ import { extractionsRouter } from './routes/extractions.ts'
 import { snapshotsRouter } from './routes/snapshots.ts'
 import { pieceDraftsRouter } from './routes/piece-drafts.ts'
 import { webhooksRouter } from './routes/webhooks.ts'
+import { orgsRouter } from './routes/orgs.ts'
+import { astreaTriageRouter } from './routes/astrea-triage.ts'
+import { astreaSealedCasesRouter } from './routes/astrea-sealed-cases.ts'
+import { inventoryRouter } from './routes/inventory.ts'
+import { communicationsRouter } from './routes/communications.ts'
+import { integrationsRouter } from './routes/integrations.ts'
+import { aiLogsRouter } from './routes/ai-logs.ts'
+import { portalRouter } from './routes/portal.ts'
+import { partiesRouter } from './routes/parties.ts'
+import { internalRouter } from './routes/internal.ts'
 import type { HonoVariables } from './context/types.ts'
 import { internalError } from './lib/respond.ts'
 
@@ -54,8 +64,8 @@ app.use(
   '*',
   cors({
     origin: process.env['BETTER_AUTH_TRUSTED_ORIGINS'] ?? 'http://localhost:3000',
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id'],
-    allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE'],
+    allowHeaders: ['Content-Type', 'Authorization', 'X-Request-Id', 'X-Organization-Id', 'X-Upload-Token'],
+    allowMethods: ['POST', 'GET', 'OPTIONS', 'PUT', 'DELETE', 'PATCH'],
     exposeHeaders: ['Content-Length', 'X-Request-Id'],
     maxAge: 600,
     credentials: true,
@@ -127,12 +137,14 @@ app.route('/api/v1/cases', timelineRouter) // timeline: /api/v1/cases/:caseId/ti
 app.route('/api/v1/cases', crawlersRouter) // crawlers: /api/v1/cases/:caseId/sync-tribunal
 app.route('/api/v1/cases', caseSnapshotsRouter) // snapshots: /api/v1/cases/:caseId/*-snapshots
 app.route('/api/v1/cases', caseWorkspaceReadRouter) // read lists: documents, opportunities, deadlines
+app.route('/api/v1/cases', partiesRouter) // partes + busca nos autos: /:caseId/parties, /:caseId/search-autos
 
 // -------------------------------------------------------------------------
 // Domain routes (Phase 5) — deadline and opportunity foundation
 // -------------------------------------------------------------------------
 
 app.route('/api/v1/deadlines', deadlinesRouter)
+app.route('/api/v1/orgs', orgsRouter)
 app.route('/api/v1/opportunities', opportunitiesRouter)
 
 // -------------------------------------------------------------------------
@@ -151,36 +163,30 @@ app.route('/api/v1/piece-drafts', pieceDraftsRouter)
 // Phase 9 - Webhooks (JusBrasil, etc)
 // -------------------------------------------------------------------------
 app.route('/api/v1/webhooks', webhooksRouter)
+app.route('/api/v1/astrea', astreaTriageRouter)
+app.route('/api/v1/astrea', astreaSealedCasesRouter)
+
+// -------------------------------------------------------------------------
+// Painel jurídico — Inventário por OAB (descoberta e triagem em massa)
+// -------------------------------------------------------------------------
+app.route('/api/v1/inventory', inventoryRouter)
+app.route('/api/v1/communications', communicationsRouter)
+app.route('/api/v1/integrations', integrationsRouter)
+app.route('/api/v1/ai-logs', aiLogsRouter)
+app.route('/api/v1/portal', portalRouter)
+
+// Rotas internas (worker → API): reanálise disparada por DataJud/DJEN.
+// Autenticadas por INTERNAL_API_TOKEN, nunca por sessão.
+app.route('/api/v1/internal', internalRouter)
 
 app.route('/api/v1/queue-projections', queueRouter)
 // workflow-tasks/:id/claim|release|complete are sub-routes on the queue router
-
-// -------------------------------------------------------------------------
-// Domain routes (Phase 7) — legal computation engine
-// -------------------------------------------------------------------------
-
-app.route('/api/v1/engine', engineRouter)
-
-// -------------------------------------------------------------------------
-// Domain routes (Phase 7+) — snapshot lifecycle (propose → confirm → supersede)
-// -------------------------------------------------------------------------
-
-app.route('/api/v1/sentence-snapshots', sentenceSnapshotsRouter)
-app.route('/api/v1/custody-snapshots', custodySnapshotsRouter)
 
 // -------------------------------------------------------------------------
 // Domain routes — upload + storage (presigned blob upload)
 // -------------------------------------------------------------------------
 
 app.route('/api/v1/uploads', uploadsRouter)
-
-// -------------------------------------------------------------------------
-// Domain routes — human review & confirmation
-// -------------------------------------------------------------------------
-
-app.route('/api/v1/extractions', extractionsRouter)
-app.route('/api/v1/snapshots', snapshotsRouter)
-app.route('/api/v1/piece-drafts', pieceDraftsRouter)
 
 // -------------------------------------------------------------------------
 // 404 handler — catches unmatched routes

@@ -26,6 +26,7 @@ type CreateClientInput = {
   fullName: string
   cpf?: string
   rg?: string
+  matricula?: string
   birthDate?: string
   displayName?: string
   internalRef?: string
@@ -35,8 +36,8 @@ type CreateClientInput = {
 const inputClassName = [
   'w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none transition-colors',
   `${borders.default} bg-white shadow-sm ${text.primary}`,
-  'placeholder:text-slate-400',
-  'focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500',
+  'placeholder:text-slate-700',
+  'focus:border-blue-600 focus:ring-1 focus:ring-blue-600',
 ].join(' ')
 
 const labelClassName = `mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] ${text.muted}`
@@ -48,6 +49,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
   const [fullName, setFullName] = useState('')
   const [cpf, setCpf] = useState('')
   const [rg, setRg] = useState('')
+  const [matricula, setMatricula] = useState('')
   const [birthDate, setBirthDate] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [internalRef, setInternalRef] = useState('')
@@ -69,6 +71,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
     setFullName('')
     setCpf('')
     setRg('')
+    setMatricula('')
     setBirthDate('')
     setDisplayName('')
     setInternalRef('')
@@ -81,6 +84,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
       fullName: fullName.trim(),
       ...(cpf.trim() ? { cpf: cpf.trim() } : {}),
       ...(rg.trim() ? { rg: rg.trim() } : {}),
+      ...(matricula.trim() ? { matricula: matricula.trim() } : {}),
       ...(birthDate ? { birthDate } : {}),
       ...(displayName.trim() ? { displayName: displayName.trim() } : {}),
       ...(internalRef.trim() ? { internalRef: internalRef.trim() } : {}),
@@ -95,7 +99,7 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-100 backdrop-blur-sm"
         onClick={onClose}
       />
 
@@ -161,6 +165,22 @@ export function CreateClientModal({ open, onClose }: CreateClientModalProps) {
                 disabled={mutation.isPending}
               />
             </div>
+          </div>
+
+          {/* Matrícula do réu */}
+          <div>
+            <label htmlFor="client-matricula" className={labelClassName}>
+              Matrícula (réu)
+            </label>
+            <input
+              id="client-matricula"
+              type="text"
+              value={matricula}
+              onChange={(e) => setMatricula(e.target.value)}
+              className={inputClassName}
+              placeholder="Ex: 477.860-1 (matrícula SAP)"
+              disabled={mutation.isPending}
+            />
           </div>
 
           {/* Data de nascimento + Apelido */}

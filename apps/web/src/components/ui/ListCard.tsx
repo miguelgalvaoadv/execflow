@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import type { ReactNode } from 'react'
-import { borders, surfaces } from '@/components/dashboard/surfaces'
+import { surfaces } from '@/components/dashboard/surfaces'
 
 export type ListCardVariant = 'link' | 'row' | 'static'
 
@@ -13,7 +13,7 @@ type ListCardProps = {
 }
 
 const VARIANT_CLASS: Record<ListCardVariant, string> = {
-  link: 'block transition-colors hover:bg-slate-50 hover:shadow-md hover:border-slate-300',
+  link: 'block transition-colors duration-150 hover:bg-slate-50 hover:border-slate-300',
   row: 'flex items-start gap-4',
   static: '',
 }
@@ -26,12 +26,13 @@ export function ListCard({
   children,
 }: ListCardProps) {
   const classes = [
-    'rounded-xl border',
-    borders.subtle,
+    'rounded-xl',
     surfaces.panel,
-    'px-4 py-3',
+    'px-4 py-3.5',
     VARIANT_CLASS[variant],
-    href !== undefined && variant === 'row' ? 'transition-colors hover:bg-slate-50' : '',
+    href !== undefined && variant === 'row'
+      ? 'transition-colors duration-150 hover:bg-slate-50 hover:border-slate-300'
+      : '',
     accentClassName,
     className,
   ]

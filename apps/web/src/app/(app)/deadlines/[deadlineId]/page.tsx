@@ -144,7 +144,7 @@ export default function DeadlineDetailPage() {
           <div className="mb-5">
             <Link
               href="/deadlines"
-              className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.muted} hover:text-zinc-300 transition-colors`}
+              className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.muted} hover:text-slate-700 transition-colors`}
             >
               ← Prazos
             </Link>
@@ -164,20 +164,20 @@ export default function DeadlineDetailPage() {
               <StatusBadge variant="deadline" status={deadline.status} />
               <PriorityBadge variant="deadline" priority={deadline.priority} />
               {deadline.isBlocked && (
-                <span className="inline-flex items-center rounded border border-amber-900/40 bg-amber-950/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-400">
+                <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-700">
                   Bloqueado
                 </span>
               )}
               {deadline.isStale && (
-                <span className="inline-flex items-center rounded border border-zinc-700 bg-white/[0.03] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
-                  Desactualizado
+                <span className="inline-flex items-center rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">
+                  Desatualizado
                 </span>
               )}
             </div>
           </div>
 
           {!isTerminal && (
-            <ProfileSection title="Acções" className="mb-4">
+            <ProfileSection title="Ações" className="mb-4">
               <div className="flex flex-wrap gap-2">
                 {canAcknowledge && (
                   <Button
@@ -207,7 +207,7 @@ export default function DeadlineDetailPage() {
               </div>
 
               {showDismissForm && canDismiss && (
-                <form onSubmit={handleDismissSubmit} className="mt-4 space-y-3 border-t border-white/[0.04] pt-4">
+                <form onSubmit={handleDismissSubmit} className="mt-4 space-y-3 border-t border-slate-100 pt-4">
                   <div>
                     <label htmlFor="dismiss-reason" className={`mb-1.5 block text-[11px] font-medium uppercase tracking-[0.1em] ${text.muted}`}>
                       Motivo do encerramento
@@ -220,8 +220,8 @@ export default function DeadlineDetailPage() {
                       onChange={(e) => { setDismissReason(e.target.value) }}
                       className={[
                         'w-full rounded-lg border px-3 py-2 text-[13px] outline-none transition-colors',
-                        `${borders.default} bg-white/[0.03] ${text.primary}`,
-                        'focus:border-white/[0.14] focus:bg-white/[0.05]',
+                        `${borders.default} bg-slate-50 ${text.primary}`,
+                        'focus:border-white/[0.14] focus:bg-slate-50',
                       ].join(' ')}
                     />
                   </div>
@@ -237,8 +237,8 @@ export default function DeadlineDetailPage() {
                         onChange={(e) => { setDismissReasonCode(e.target.value) }}
                         className={[
                           'w-full rounded-lg border px-3 py-2 text-[13px] outline-none transition-colors',
-                          `${borders.default} bg-white/[0.03] ${text.primary}`,
-                          'focus:border-white/[0.14] focus:bg-white/[0.05]',
+                          `${borders.default} bg-slate-50 ${text.primary}`,
+                          'focus:border-white/[0.14] focus:bg-slate-50',
                         ].join(' ')}
                       >
                         <option value="">Seleccionar…</option>
@@ -273,7 +273,7 @@ export default function DeadlineDetailPage() {
               )}
 
               {activeMutationError !== null && (
-                <p className="mt-3 text-[12px] text-red-400" role="alert">
+                <p className="mt-3 text-[12px] text-red-700" role="alert">
                   {activeMutationError}
                 </p>
               )}
@@ -350,7 +350,7 @@ export default function DeadlineDetailPage() {
             <ProfileSection title="Datas relevantes">
               <dl>
                 <FieldRow label="Criado em" value={formatDateTime(deadline.createdAt)} />
-                <FieldRow label="Actualizado em" value={formatDateTime(deadline.updatedAt)} />
+                <FieldRow label="Atualizado em" value={formatDateTime(deadline.updatedAt)} />
                 {deadline.acknowledgedAt !== null && (
                   <FieldRow label="Reconhecido em" value={formatDateTime(deadline.acknowledgedAt)} />
                 )}
@@ -393,7 +393,7 @@ export default function DeadlineDetailPage() {
                   {history.map((entry) => (
                     <li
                       key={entry.id}
-                      className="border-b border-white/[0.04] pb-3 last:border-0 last:pb-0"
+                      className="border-b border-slate-100 pb-3 last:border-0 last:pb-0"
                     >
                       <div className="flex flex-wrap items-baseline justify-between gap-2">
                         <p className={`text-[13px] font-medium ${text.secondary}`}>

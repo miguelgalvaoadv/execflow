@@ -25,7 +25,7 @@ export function ErrorState({
       role="alert"
     >
       {variant === 'default' && (
-        <p className="text-sm font-medium text-red-400">{title}</p>
+        <p className="text-sm font-medium text-red-700">{title}</p>
       )}
       <p
         className={[

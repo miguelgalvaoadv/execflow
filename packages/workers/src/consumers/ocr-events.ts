@@ -14,6 +14,7 @@ import {
   isOcrEligibleMimeType,
 } from '@execflow/db/types'
 import { createOcrProvider, resolveOcrMaxAttempts } from '@execflow/ocr'
+import { createStorageProviderFromEnv } from '@execflow/storage'
 import { scheduleOcrForDocument, executeOcrRun } from '../ocr/runner.ts'
 
 type RelayJobEnvelope = {
@@ -50,7 +51,16 @@ function parseEnvelope(job: Job<unknown>): {
   }
 }
 
-let ocrProvider = createOcrProvider()
+// O provider real (pdf-text, padrão) lê o blob — storage injetado aqui.
+function buildOcrProvider(): ReturnType<typeof createOcrProvider> {
+  const storage = createStorageProviderFromEnv()
+  return createOcrProvider(process.env, {
+    getObject: (storageKey) => storage.getObject(storageKey),
+  })
+}
+
+let ocrProvider = buildOcrProvider()
+console.info(`[ocr-events] Provider de OCR ativo: ${ocrProvider.id}`)
 
 /** Test hook — inject mock provider. */
 export function setOcrProviderForTests(provider: ReturnType<typeof createOcrProvider>): void {
@@ -58,7 +68,7 @@ export function setOcrProviderForTests(provider: ReturnType<typeof createOcrProv
 }
 
 export function resetOcrProviderForTests(): void {
-  ocrProvider = createOcrProvider()
+  ocrProvider = buildOcrProvider()
 }
 
 export async function handleDocumentRegisteredForOcr(

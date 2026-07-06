@@ -64,7 +64,9 @@ async function assertCaseInOrg(
   return ok(undefined)
 }
 
-function timelineVisibilityForRole(role: 'assistant' | 'lawyer' | 'admin'): Array<
+// Aceita MembershipRole completo; 'client' nunca chega aqui na prática —
+// canViewCases exige no mínimo 'assistant' antes desta chamada.
+function timelineVisibilityForRole(role: 'assistant' | 'lawyer' | 'admin' | 'client'): Array<
   'legal' | 'internal' | 'both'
 > {
   if (hasMinRole(role, 'lawyer')) {

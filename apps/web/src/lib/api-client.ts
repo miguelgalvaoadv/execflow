@@ -123,3 +123,66 @@ export function apiPut<T>(
 ): Promise<T> {
   return request<T>(path, { method: 'PUT', body: JSON.stringify(body) }, opts)
 }
+
+export function apiPatch<T>(
+  path: string,
+  body: unknown,
+  opts?: RequestOptions
+): Promise<T> {
+  return request<T>(path, { method: 'PATCH', body: JSON.stringify(body) }, opts)
+}
+
+export function apiDelete<T>(path: string, opts?: RequestOptions): Promise<T> {
+  return request<T>(path, { method: 'DELETE' }, opts)
+}
+
+// ---------------------------------------------------------------------------
+// Binary download helpers (documents, peças em Word)
+// Buscam o blob com o cookie de sessão + X-Organization-Id (um <a href> não
+// envia o header de org), e então baixam ou abrem o arquivo.
+// ---------------------------------------------------------------------------
+
+async function fetchBlobUrl(path: string, organizationId: string): Promise<string> {
+  const res = await fetch(`${apiBase()}${path}`, {
+    method: 'GET',
+    headers: { 'X-Organization-Id': organizationId },
+    credentials: 'include',
+  })
+  if (!res.ok) {
+    let message = res.statusText
+    try {
+      const b = (await res.json()) as { error?: { message?: string } | string }
+      const e = b.error
+      message = (typeof e === 'string' ? e : e?.message) ?? message
+    } catch { /* corpo não-JSON */ }
+    throw new ApiError(res.status, 'DOWNLOAD_ERROR', message || 'Falha no download.')
+  }
+  const blob = await res.blob()
+  return URL.createObjectURL(blob)
+}
+
+/** Baixa o arquivo (dispara o "salvar como" do navegador). */
+export async function downloadBlob(
+  path: string,
+  opts: { organizationId: string; fileName: string }
+): Promise<void> {
+  const url = await fetchBlobUrl(path, opts.organizationId)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = opts.fileName
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 2000)
+}
+
+/** Abre o arquivo numa nova aba (visualização). */
+export async function viewBlob(
+  path: string,
+  opts: { organizationId: string }
+): Promise<void> {
+  const url = await fetchBlobUrl(path, opts.organizationId)
+  window.open(url, '_blank', 'noopener')
+  setTimeout(() => URL.revokeObjectURL(url), 60000)
+}
+

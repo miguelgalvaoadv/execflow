@@ -246,6 +246,48 @@ export async function insertClient(
 }
 
 /**
+ * Update an existing client record.
+ * Must be called inside a transaction alongside AuditLog writes.
+ */
+export async function updateClient(
+  tx: DbTransaction,
+  organizationId: string,
+  clientId: string,
+  data: Partial<Omit<Client, 'id' | 'organizationId' | 'createdAt' | 'createdByUserId' | 'deletedAt'>>
+): Promise<RepositoryResult<Client>> {
+  try {
+    const [row] = await tx
+      .update(clients)
+      .set(data)
+      .where(and(eq(clients.id, clientId), eq(clients.organizationId, organizationId)))
+      .returning()
+
+    if (!row) {
+      return { success: false, error: { code: 'NOT_FOUND', message: 'Client not found.' } }
+    }
+
+    return { success: true, data: row }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('clients_org_cpf_unique')) {
+      return {
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'A client with this CPF already exists in the organization.',
+          cause: err,
+        },
+      }
+    }
+
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to update client.', cause: err },
+    }
+  }
+}
+
+/**
  * Update the responsible lawyer for a client.
  * Produces an AuditLog entry at the service layer (not here).
  */

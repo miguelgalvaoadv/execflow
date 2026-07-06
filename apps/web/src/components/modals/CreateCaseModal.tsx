@@ -45,14 +45,14 @@ type CreateCaseInput = {
 const inputClassName = [
   'w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none transition-colors',
   `${borders.default} bg-white shadow-sm ${text.primary}`,
-  'placeholder:text-slate-400',
-  'focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500',
+  'placeholder:text-slate-700',
+  'focus:border-blue-600 focus:ring-1 focus:ring-blue-600',
 ].join(' ')
 
 const selectClassName = [
   'w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none transition-colors appearance-none',
   `${borders.default} bg-white shadow-sm ${text.primary}`,
-  'focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500',
+  'focus:border-blue-600 focus:ring-1 focus:ring-blue-600',
   '[&>option]:bg-white [&>option]:text-slate-900',
 ].join(' ')
 
@@ -144,7 +144,7 @@ export function CreateCaseModal({ open, onClose, preselectedClientId }: CreateCa
     <div className="fixed inset-0 z-50 flex items-center justify-center">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-100 backdrop-blur-sm"
         onClick={onClose}
       />
 

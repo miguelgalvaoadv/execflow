@@ -70,28 +70,28 @@ export function deadlineHistoryLabel(changeType: string, newValue: Record<string
 
 export function deadlineCardAccentClass(status: string, priority: string): string {
   if (status === 'overdue') {
-    return 'border-red-900/50 bg-red-950/20'
+    return 'border-red-200 bg-red-50'
   }
   if (priority === 'critical') {
-    return 'border-red-900/30 bg-red-950/10'
+    return 'border-red-200 bg-red-50'
   }
   if (priority === 'high') {
-    return 'border-orange-900/30 bg-orange-950/10'
+    return 'border-orange-200 bg-orange-50'
   }
   return ''
 }
 
 export function deadlineStatusBadgeClass(status: string): string {
-  if (status === 'overdue') return 'text-red-400 bg-red-950/40 border-red-900/40'
-  if (status === 'completed') return 'text-emerald-400 bg-emerald-950/30 border-emerald-900/30'
+  if (status === 'overdue') return 'text-red-700 bg-red-50 border-red-200'
+  if (status === 'completed') return 'text-emerald-700 bg-emerald-50 border-emerald-200'
   if (status === 'dismissed') return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
-  if (status === 'acknowledged') return 'text-blue-400 bg-blue-950/30 border-blue-900/30'
+  if (status === 'acknowledged') return 'text-blue-700 bg-blue-50 border-blue-200'
   return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
 }
 
 export function deadlinePriorityBadgeClass(priority: string): string {
-  if (priority === 'critical') return 'text-red-400 bg-red-950/40 border-red-900/40'
-  if (priority === 'high') return 'text-orange-400 bg-orange-950/40 border-orange-900/40'
+  if (priority === 'critical') return 'text-red-700 bg-red-50 border-red-200'
+  if (priority === 'high') return 'text-orange-700 bg-orange-50 border-orange-200'
   return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
 }
 

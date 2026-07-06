@@ -52,7 +52,7 @@ import {
   QUEUE_ENGINE_EVALUATION_REQUESTED,
   QUEUE_ENGINE_RUN_COMPLETED,
   QUEUE_CRAWLER_SYNC_REQUESTED,
-  QUEUE_COURT_SCRAPER_REQUESTED,
+  QUEUE_WHATSAPP_NOTIFICATION_REQUESTED,
 } from '../queues/names.ts'
 import {
   DOMAIN_EVENT_WORKER_OPTIONS,
@@ -107,12 +107,49 @@ import {
   handleCrawlerSyncRequested,
 } from '../consumers/crawler-sync.ts'
 import {
-  handleCourtScraperRequested,
-} from '../consumers/court-scraper-worker.ts'
-import {
   runEscalationSweep,
   runStaleTaskSweep,
 } from '../sla/escalation-engine.ts'
+import {
+  handleEmailNotificationRequested,
+} from '../consumers/email-notifier.ts'
+import { runAstreaEmailSync } from '../consumers/astrea-email-sync.ts'
+import { runSystemHealthSweep } from '../sla/system-health-sweep.ts'
+import { createAstreaImapConfig } from '../integrations/astrea-imap-client.ts'
+import { QUEUE_ASTREA_EMAIL_POLL, QUEUE_SYSTEM_HEALTH_SWEEP } from '../queues/names.ts'
+import { ASTREA_SCHEDULES } from '../queues/config.ts'
+
+/**
+ * Validates the Astrea e-mail pipeline configuration at boot. Returns true
+ * only when it's safe to register the poller — never throws, mirrors the
+ * graceful-degradation pattern used by createJusbrasilClient(): if
+ * misconfigured, the feature is simply disabled (logged clearly) rather
+ * than crashing the whole worker process.
+ */
+function validateAstreaEmailConfig(): boolean {
+  const config = createAstreaImapConfig()
+  if (!config) {
+    console.warn(
+      '[worker-registry] ASTREA_IMAP_HOST/USER/PASS ausentes — pipeline de e-mail do Astrea desabilitado. Configure as variáveis para ativar.'
+    )
+    return false
+  }
+
+  if (process.env['ASTREA_EMAIL_POLL_ENABLED'] === 'false') {
+    console.warn('[worker-registry] ASTREA_EMAIL_POLL_ENABLED=false — pipeline de e-mail do Astrea desabilitado manualmente.')
+    return false
+  }
+
+  const alertEmail = process.env['ASTREA_HEALTH_ALERT_EMAIL']
+  if (alertEmail && alertEmail.toLowerCase() === config.user.toLowerCase()) {
+    console.error(
+      '[worker-registry] ERRO DE CONFIGURAÇÃO: ASTREA_HEALTH_ALERT_EMAIL não pode ser igual a ASTREA_IMAP_USER (geraria loop de alerta dentro da própria caixa monitorada). Corrija o .env — pipeline desabilitado até lá.'
+    )
+    return false
+  }
+
+  return true
+}
 
 /**
  * Registers all scheduled cron jobs for SLA monitoring.
@@ -141,12 +178,92 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
     await runStaleTaskSweep(db)
   })
 
+  // NEW: Daily Crawler Sweep
+  // Dynamic import to avoid circular dependency issues at the top level
+  const { QUEUE_DAILY_CRAWLER_SWEEP } = await import('../queues/names.ts')
+  const { runDailyCrawlerSweep } = await import('../consumers/daily-crawler-sweep.ts')
+  
+  await boss.work(QUEUE_DAILY_CRAWLER_SWEEP, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runDailyCrawlerSweep(db, boss)
+  })
+
   // Schedule the periodic sweeps
   await boss.schedule(QUEUE_SLA_OVERDUE_SWEEP, SLA_SWEEP_SCHEDULES.overdueSweep, {})
   await boss.schedule(QUEUE_SLA_SNOOZE_WAKE, SLA_SWEEP_SCHEDULES.snoozeWake, {})
   await boss.schedule(QUEUE_SLA_DEFER_WAKE, SLA_SWEEP_SCHEDULES.deferWake, {})
   await boss.schedule(QUEUE_SLA_ESCALATION_SWEEP, SLA_SWEEP_SCHEDULES.escalationSweep, {})
   await boss.schedule(QUEUE_SLA_STALE_TASK_SWEEP, SLA_SWEEP_SCHEDULES.staleTaskSweep, {})
+  
+  // Varredura diária de movimentações (Jusbrasil) para TODOS os casos.
+  // 09:00 UTC ≈ 06:00 de Brasília — andamentos frescos quando o escritório abre.
+  // (O botão "Sincronizar" no caso continua disponível para puxar sob demanda.)
+  await boss.schedule(QUEUE_DAILY_CRAWLER_SWEEP, '0 9 * * *', {})
+
+  // Health sweep: always registered — covers AASP webhook monitoring + stale-case sweep
+  // regardless of whether Astrea email polling is enabled.
+  await boss.work(QUEUE_SYSTEM_HEALTH_SWEEP, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runSystemHealthSweep(db)
+  })
+  await boss.schedule(QUEUE_SYSTEM_HEALTH_SWEEP, ASTREA_SCHEDULES.healthSweep, {})
+  console.info('[worker-registry] System health sweep registered (diário)')
+
+  // Inventário por OAB: enriquecimento diário via DataJud (metadados públicos).
+  // 09:30 UTC ≈ 06:30 Brasília — logo após a varredura de movimentações.
+  // Sem DATAJUD_API_KEY a rodada degrada graciosamente (aviso, sem crash).
+  const { QUEUE_INVENTORY_ENRICHMENT, QUEUE_DATAJUD_CASE_SYNC, QUEUE_DJEN_SYNC, QUEUE_INFOSIMPLES_SYNC } = await import('../queues/names.ts')
+  const { runInventoryEnrichment } = await import('../consumers/inventory-enrichment.ts')
+  await boss.work(QUEUE_INVENTORY_ENRICHMENT, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runInventoryEnrichment(db)
+  })
+  await boss.schedule(QUEUE_INVENTORY_ENRICHMENT, '30 9 * * *', {})
+  console.info('[worker-registry] Inventory DataJud enrichment registered (diário 09:30 UTC)')
+
+  // DataJud → CASO: movimentações novas dos casos promovidos + reanálise.
+  // SEPARAÇÃO DE PAPÉIS (anti-duplicação): para o TJSP, o InfoSimples já traz as
+  // movimentações do caso — deixar o DataJud também escrever na timeline
+  // duplicaria o mesmo fato com texto diferente (impossível deduplicar 100%).
+  // Por isso o DataJud→caso fica OPT-IN (padrão desligado). O DataJud continua
+  // SEMPRE ligado no enriquecimento do INVENTÁRIO (metadado, não duplica caso).
+  // Ligue com DATAJUD_CASE_SYNC_ENABLED=true se usar tribunais fora do InfoSimples.
+  const { runDatajudCaseSync } = await import('../consumers/datajud-case-sync.ts')
+  await boss.work(QUEUE_DATAJUD_CASE_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runDatajudCaseSync(db)
+  })
+  if (process.env['DATAJUD_CASE_SYNC_ENABLED'] === 'true') {
+    await boss.schedule(QUEUE_DATAJUD_CASE_SYNC, '0 6,18 * * *', {})
+    console.info('[worker-registry] DataJud case-sync registered (2x/dia — OPT-IN ligado)')
+  } else {
+    console.info('[worker-registry] DataJud case-sync NÃO agendado (opt-in; InfoSimples é a fonte de movimentação). Inventário DataJud segue ativo.')
+  }
+
+  // DJEN → intimações oficiais por OAB (grátis, sem CNPJ). 08:00 e 20:00 UTC.
+  const { runDjenSync } = await import('../consumers/djen-sync.ts')
+  await boss.work(QUEUE_DJEN_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runDjenSync(db)
+  })
+  await boss.schedule(QUEUE_DJEN_SYNC, '0 8,20 * * *', {})
+  console.info('[worker-registry] DJEN intimações sync registered (2x/dia)')
+
+  // InfoSimples → descoberta+monitoramento por OAB (TJSP e-SAJ). PAGO (R$0,20/pág).
+  // 1x/dia, 07:00 UTC (~04:00 Brasília). Custo estimado ~R$72/mês (296 processos,
+  // ~12 páginas/rodada). Decisão confirmada com o usuário em 05/07/2026 — trocado
+  // de 2x/semana (~R$19/mês) para diário, priorizando atualidade. Sem token → no-op.
+  const { runInfosimplesSync } = await import('../consumers/infosimples-sync.ts')
+  await boss.work(QUEUE_INFOSIMPLES_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runInfosimplesSync(db)
+  })
+  await boss.schedule(QUEUE_INFOSIMPLES_SYNC, '0 7 * * *', {})
+  console.info('[worker-registry] InfoSimples OAB sync registered (diário 07:00 UTC)')
+
+  // Astrea email poll: only registered when config is valid.
+  // Kill-switch: set ASTREA_EMAIL_POLL_ENABLED=false to pause without removing credentials.
+  if (validateAstreaEmailConfig()) {
+    await boss.work(QUEUE_ASTREA_EMAIL_POLL, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+      await runAstreaEmailSync(db)
+    })
+    await boss.schedule(QUEUE_ASTREA_EMAIL_POLL, ASTREA_SCHEDULES.emailPoll, {})
+    console.info('[worker-registry] Astrea email pipeline registered (poll a cada 10min)')
+  }
 
   console.info('[worker-registry] SLA sweep jobs registered')
 }
@@ -311,9 +428,10 @@ async function registerEventConsumers(boss: PgBoss, db: WorkersDb): Promise<void
     }
   })
 
-  await boss.work(QUEUE_COURT_SCRAPER_REQUESTED, DOMAIN_EVENT_WORKER_OPTIONS, async (jobs: Job<any>[]) => {
+  await boss.work(QUEUE_WHATSAPP_NOTIFICATION_REQUESTED, async (jobs) => {
     for (const job of jobs) {
-      await handleCourtScraperRequested(db, job)
+      // Fila histórica mantida por retrocompatibilidade; hoje notificamos por e-mail.
+      await handleEmailNotificationRequested(db, job as any)
     }
   })
 

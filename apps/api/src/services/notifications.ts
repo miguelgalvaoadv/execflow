@@ -10,57 +10,42 @@ import { db } from '../lib/db.ts'
 import { organizations } from '@execflow/db/schema'
 import { eq } from 'drizzle-orm'
 
-// ─────────────────────────────────────────────────────────────────────
-// WhatsApp Client inline (API side — não depende do package workers)
-// ─────────────────────────────────────────────────────────────────────
+import nodemailer from 'nodemailer'
 
-const GRAPH_API_VERSION = 'v21.0'
+const fromEmail = process.env['SMTP_USER'] || 'no-reply@execflow.app'
 
-async function sendWhatsAppMessage(to: string, body: string): Promise<void> {
-  const token = process.env['WHATSAPP_API_TOKEN']
-  const phoneNumberId = process.env['WHATSAPP_PHONE_NUMBER_ID']
+async function sendEmailMessage(to: string, subject: string, htmlBody: string): Promise<void> {
+  const user = process.env['SMTP_USER']
+  const pass = process.env['SMTP_PASS']
+  const host = process.env['SMTP_HOST'] || 'smtp.gmail.com'
+  const port = Number(process.env['SMTP_PORT'] || 465)
 
-  // Normaliza telefone
-  let digits = to.replace(/\D/g, '')
-  if (digits.startsWith('0')) digits = digits.substring(1)
-  if (!digits.startsWith('55')) digits = '55' + digits
-
-  if (!token || !phoneNumberId) {
-    // Mock mode
+  if (!user || !pass) {
     console.log(`\n=============================================`)
-    console.log(`[MOCK WHATSAPP NOTIFICATION] 📱`)
-    console.log(`To: ${digits}`)
-    console.log(`Body: \n${body}`)
+    console.log(`[MOCK EMAIL NOTIFICATION] 📧`)
+    console.log(`To: ${to}`)
+    console.log(`Subject: ${subject}`)
     console.log(`=============================================\n`)
     return
   }
 
-  // Chamada real Meta Cloud API
   try {
-    const url = `https://graph.facebook.com/${GRAPH_API_VERSION}/${phoneNumberId}/messages`
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${token}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: digits,
-        type: 'text',
-        text: { preview_url: true, body },
-      }),
+    const transporter = nodemailer.createTransport({
+      host,
+      port,
+      secure: port === 465,
+      auth: { user, pass },
     })
 
-    if (!response.ok) {
-      const error = await response.text()
-      console.error(`[WhatsApp API] Erro ${response.status}: ${error}`)
-    } else {
-      console.log(`[WhatsApp API] ✅ Mensagem enviada para ${digits}`)
-    }
+    const info = await transporter.sendMail({
+      from: `"ExecFlow Alertas" <${fromEmail}>`,
+      to,
+      subject,
+      html: htmlBody,
+    })
+    console.log(`[Email API] ✅ E-mail enviado para ${to} (ID: ${info.messageId})`)
   } catch (e) {
-    console.error(`[WhatsApp API] Falha de rede ao enviar notificação`, e)
+    console.error(`[Email API] Falha de rede ao enviar notificação`, e)
   }
 }
 
@@ -75,85 +60,62 @@ export class NotificationService {
     movementType: string,
     description: string
   ) {
-    // 1. Fetch organization details
-    const [org] = await db
-      .select()
-      .from(organizations)
-      .where(eq(organizations.id, organizationId))
+    const officeEmail = process.env['OFFICE_EMAIL'] || 'miguelgalvao.adv@gmail.com'
 
-    if (!org) return
-
-    const officePhone = process.env['OFFICE_PHONE_NUMBER'] || '+5511999999999'
-
-    const messageBody = [
-      '🏛️ *Nova Movimentação Processual — ExecFlow*',
-      '',
-      `*Processo:* ${cnj}`,
-      `*Tipo:* ${movementType}`,
-      `*Resumo:* ${description}`,
-      '',
-      '🔗 Acesse o painel do ExecFlow para verificar se isso gerou uma oportunidade automática!',
-      '',
-      '_Mensagem automática do ExecFlow._',
-    ].join('\n')
-
-    await sendWhatsAppMessage(officePhone, messageBody)
+    const htmlBody = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #1976d2;">🏛️ Nova Movimentação — ExecFlow</h2>
+        <p>O robô detectou uma nova movimentação no processo <strong>${cnj}</strong>:</p>
+        <div style="background-color: #e3f2fd; padding: 15px; border-left: 4px solid #1976d2; margin: 15px 0;">
+          <p style="margin: 0;"><strong>Tipo:</strong> ${movementType}</p>
+          <p style="margin: 5px 0 0 0;"><strong>Resumo:</strong> ${description}</p>
+        </div>
+      </div>
+    `
+    await sendEmailMessage(officeEmail, `🏛️ Movimentação: ${cnj}`, htmlBody)
   }
 
-  /**
-   * Envia notificação de oportunidade detectada.
-   */
   async sendOpportunityAlert(
     organizationId: string,
     clientName: string,
     opportunityType: string,
     summary: string
   ) {
-    const officePhone = process.env['OFFICE_PHONE_NUMBER'] || '+5511999999999'
+    const officeEmail = process.env['OFFICE_EMAIL'] || 'miguelgalvao.adv@gmail.com'
 
-    const messageBody = [
-      '✨ *Oportunidade Detectada — ExecFlow*',
-      '',
-      `*Cliente:* ${clientName}`,
-      `*Tipo:* ${opportunityType}`,
-      `*Resumo:* ${summary}`,
-      '',
-      'O motor de cálculos do ExecFlow identificou uma possível oportunidade.',
-      '🔗 Acesse o painel para redigir a petição com IA.',
-      '',
-      '_Mensagem automática do ExecFlow._',
-    ].join('\n')
-
-    await sendWhatsAppMessage(officePhone, messageBody)
+    const htmlBody = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #2e7d32;">✨ Oportunidade Detectada — ExecFlow</h2>
+        <p>Possível oportunidade identificada para <strong>${clientName}</strong>:</p>
+        <div style="background-color: #f1f8e9; padding: 15px; border-left: 4px solid #2e7d32; margin: 15px 0;">
+          <p style="margin: 0;"><strong>Tipo:</strong> ${opportunityType}</p>
+          <p style="margin: 5px 0 0 0;"><strong>Resumo:</strong> ${summary}</p>
+        </div>
+      </div>
+    `
+    await sendEmailMessage(officeEmail, `✨ Nova Oportunidade: ${clientName}`, htmlBody)
   }
 
-  /**
-   * Envia notificação de prazo.
-   */
   async sendDeadlineAlert(
     advogadoName: string,
-    phone: string,
+    phone: string, // Kept for backwards compat in arguments, but ignored internally
     deadlineTitle: string,
     dueAt: string,
     status: 'warning' | 'overdue'
   ) {
-    const icon = status === 'overdue' ? '🚨' : '⚠️'
+    const officeEmail = process.env['OFFICE_EMAIL'] || 'miguelgalvao.adv@gmail.com'
     const statusText = status === 'overdue' ? 'venceu' : 'está próximo do vencimento'
-    const dueDate = new Date(dueAt).toLocaleDateString('pt-BR')
-
-    const messageBody = [
-      `${icon} *Lembrete de Prazo — ExecFlow*`,
-      '',
-      `Olá Dr(a). ${advogadoName},`,
-      '',
-      `📋 ${deadlineTitle}`,
-      `📅 ${statusText} em *${dueDate}*`,
-      '',
-      '🔗 Acesse o painel do ExecFlow para atualizar o status.',
-      '',
-      '_Mensagem automática do ExecFlow._',
-    ].join('\n')
-
-    await sendWhatsAppMessage(phone, messageBody)
+    
+    const htmlBody = `
+      <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #ddd; border-radius: 8px;">
+        <h2 style="color: #d32f2f;">🚨 Lembrete de Prazo — ExecFlow</h2>
+        <p>Olá Dr(a). <strong>${advogadoName}</strong>,</p>
+        <div style="background-color: #f9f9f9; padding: 15px; border-left: 4px solid #d32f2f; margin: 15px 0;">
+          <p style="margin: 0;"><strong>Tarefa:</strong> ${deadlineTitle}</p>
+          <p style="margin: 5px 0 0 0;"><strong>Status:</strong> ${statusText} em <strong>${new Date(dueAt).toLocaleDateString()}</strong></p>
+        </div>
+      </div>
+    `
+    await sendEmailMessage(officeEmail, `🚨 Prazo: ${deadlineTitle}`, htmlBody)
   }
 }

@@ -45,6 +45,34 @@ export function useCaseDocuments(
   })
 }
 
+export type CasePieceDraftItem = {
+  id: string
+  status: string
+  modelUsed: string | null
+  createdAt: string
+  updatedAt: string
+  finalizedAt: string | null
+  opportunityId: string | null
+}
+
+/** Peças geradas pelo Claude para o caso (aparecem junto dos documentos). */
+export function useCasePieceDrafts(
+  organizationId: string,
+  caseId: string,
+  enabled = true
+) {
+  return useQuery<{ data: CasePieceDraftItem[] }, ApiError>({
+    queryKey: ['case-piece-drafts', organizationId, caseId],
+    queryFn: ({ signal }) =>
+      apiGet<{ data: CasePieceDraftItem[] }>(`/api/v1/piece-drafts/by-case/${caseId}`, {
+        organizationId,
+        signal,
+      }),
+    staleTime: 30 * 1000,
+    enabled: organizationId !== '' && caseId !== '' && enabled,
+  })
+}
+
 export type RequestUploadResponse = {
   uploadId: string
   uploadToken: string

@@ -75,6 +75,7 @@ router.get(
   '/',
   authMiddleware,
   orgMiddleware,
+  requireMinRole('assistant'), // dados operacionais internos — nunca para role 'client'
   async (c) => {
     const rawQuery = c.req.query()
     const parsed = ListQueueProjectionsQuerySchema.safeParse(rawQuery)
@@ -111,6 +112,67 @@ router.get(
       data: result.data.items,
       nextCursor: result.data.nextCursor,
     })
+  }
+)
+
+// -------------------------------------------------------------------------
+// GET /api/v1/queue/workflow-tasks — list workflow tasks (tela de Tarefas)
+// -------------------------------------------------------------------------
+
+const ListWorkflowTasksQuerySchema = z.object({
+  status: z
+    .enum(['pending', 'claimed', 'in_progress', 'blocked', 'released', 'completed', 'cancelled', 'escalated'])
+    .optional(),
+  executionCaseId: z.string().uuid().optional(),
+  mine: z.enum(['true', 'false']).optional(),
+  limit: z.coerce.number().int().min(1).max(300).default(100),
+})
+
+router.get(
+  '/workflow-tasks',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'), // tarefas internas — nunca para role 'client'
+  async (c) => {
+    const parsed = ListWorkflowTasksQuerySchema.safeParse(c.req.query())
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid query parameters', { issues: parsed.error.issues })
+    }
+    const ctx = buildWriteContext(c, db)
+    const q = parsed.data
+
+    const { workflowTasks } = await import('@execflow/db/schema')
+    const { eq, and, or, desc, sql, inArray } = await import('drizzle-orm')
+
+    const conditions = [eq(workflowTasks.organizationId, ctx.organizationId)]
+    if (q.status) {
+      conditions.push(eq(workflowTasks.status, q.status))
+    } else {
+      // Padrão: só tarefas vivas (não terminais)
+      conditions.push(
+        inArray(workflowTasks.status, ['pending', 'claimed', 'in_progress', 'blocked', 'released', 'escalated'])
+      )
+    }
+    if (q.executionCaseId) conditions.push(eq(workflowTasks.executionCaseId, q.executionCaseId))
+    if (q.mine === 'true') {
+      const mine = or(
+        eq(workflowTasks.claimedByUserId, ctx.userId),
+        eq(workflowTasks.assignedToUserId, ctx.userId)
+      )
+      if (mine) conditions.push(mine)
+    }
+
+    const items = await db
+      .select()
+      .from(workflowTasks)
+      .where(and(...conditions))
+      .orderBy(
+        sql`case ${workflowTasks.priority} when 'critical' then 0 when 'high' then 1 when 'normal' then 2 else 3 end`,
+        desc(workflowTasks.createdAt)
+      )
+      .limit(q.limit)
+
+    return c.json({ data: items })
   }
 )
 

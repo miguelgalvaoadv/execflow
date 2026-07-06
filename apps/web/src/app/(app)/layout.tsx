@@ -7,7 +7,12 @@
  */
 
 import { DashboardLayout } from '@/components/dashboard'
+import { ClientRoleGuard } from '@/components/dashboard/ClientRoleGuard'
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <DashboardLayout>{children}</DashboardLayout>
+  return (
+    <ClientRoleGuard>
+      <DashboardLayout>{children}</DashboardLayout>
+    </ClientRoleGuard>
+  )
 }

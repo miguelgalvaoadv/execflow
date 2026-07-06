@@ -1,29 +1,37 @@
 /** Shared surface, border and text tokens for the dashboard shell.
  *
- * Derivados do plano visual EXECFLOW (visual_architecture §7).
- * Tokens intocáveis — qualquer adição requer revisão do plano.
+ * Tema: claro e profissional (estilo Linear/Stripe), destaque azul.
+ * Estes tokens cascateiam para todos os componentes — alterar com cuidado.
  */
 export const surfaces = {
-  canvas:       "bg-slate-50",    // Fundo root — alinhado com globals.css
-  sidebar:      "bg-white border-r border-slate-200",  // Sidebar branca com borda subtil
-  main:         "bg-slate-50",    // Área main de scroll
-  panel:        "bg-white border border-slate-200 shadow-sm", // Cards de lista, painéis brancos
-  panelMuted:   "bg-slate-100",   // Wrapper de página (page container)
-  panelInset:   "bg-slate-50 border border-slate-200",   // Tab bars, empty states, inputs
-  panelRaised:  "bg-white shadow-md border border-slate-200",  // Cards hover, modais, overlays
+  canvas:       "bg-slate-50",                                    // page background
+  sidebar:      "bg-white border-r border-slate-200",            // sidebar
+  main:         "bg-slate-50",                                    // main area
+  panel:        "bg-white border border-slate-200 shadow-sm",    // cards / panels
+  panelMuted:   "bg-slate-50",                                    // subtle wrapper
+  panelInset:   "bg-slate-50 border border-slate-200",           // inputs / inset areas
+  panelRaised:  "bg-white border border-slate-200 shadow-xl",    // modals / popovers
 } as const;
 
 export const borders = {
-  subtle:  "border-slate-100",    // Bordas secundárias, separadores
-  default: "border-slate-200",    // Cards, inputs, contentor padrão
-  strong:  "border-slate-300",    // Ênfase, hover states
-  focus:   "border-indigo-500",   // Focus ring (acessibilidade)
+  subtle:  "border-slate-100",                                   // faint separators
+  default: "border-slate-200",                                   // standard
+  strong:  "border-slate-300",                                   // hover / focused
+  focus:   "border-blue-500 ring-1 ring-blue-500/30",            // focus glow
 } as const;
 
 export const text = {
-  primary:   "text-slate-900",    // Títulos, h1, texto de destaque
-  secondary: "text-slate-600",    // Corpo, descriptions, summaries
-  muted:     "text-slate-500",    // Labels, eyebrows, metadados
-  faint:     "text-slate-400",    // Dados terciários, timestamps
-  disabled:  "text-slate-300",    // Elementos desactivados
+  primary:   "text-slate-900",
+  secondary: "text-slate-600",
+  muted:     "text-slate-500",
+  faint:     "text-slate-700",
+  disabled:  "text-slate-700",
+} as const;
+
+/** Accent (azul confiança) — botões, links, itens ativos. */
+export const accent = {
+  solid:  "bg-blue-600 text-white hover:bg-blue-700",
+  soft:   "bg-blue-50 text-blue-700",
+  text:   "text-blue-600",
+  border: "border-blue-200",
 } as const;

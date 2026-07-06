@@ -51,3 +51,32 @@ export function useTriggerCrawlerSync(organizationId: string, caseId: string) {
     },
   })
 }
+
+export type CaseAnalysisResult = {
+  snapshotId?: string
+  resumoPena: string | null
+  oportunidadesCriadas: number
+  prazosCriados: number
+}
+
+/**
+ * Dispara a análise dos autos por IA (Claude): gera cálculo de pena, oportunidades
+ * e prazos a partir dos autos confirmados. Síncrono (pode levar ~30s).
+ */
+export function useAnalyzeAutos(organizationId: string, caseId: string) {
+  const queryClient = useQueryClient()
+
+  return useMutation<{ data: CaseAnalysisResult }, ApiError, void>({
+    mutationFn: () =>
+      apiPost<{ data: CaseAnalysisResult }>(
+        `/api/v1/cases/${caseId}/analyze`,
+        {},
+        { organizationId }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caseSentenceSnapshots(organizationId, caseId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caseOpportunities(organizationId, caseId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.caseDeadlines(organizationId, caseId) })
+    },
+  })
+}

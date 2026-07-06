@@ -37,9 +37,9 @@ const QUEUE_FILTERS = [
 
 /** Accent visual por prioridade — helper local, não altera ListCard. */
 function queuePriorityAccentClass(priority: number): string {
-  if (priority === 0) return 'border-red-900/50 bg-red-950/20'
-  if (priority === 1) return 'border-orange-900/30 bg-orange-950/10'
-  if (priority === 2) return 'border-amber-900/30 bg-amber-950/10'
+  if (priority === 0) return 'border-red-200 bg-red-50'
+  if (priority === 1) return 'border-orange-200 bg-orange-50'
+  if (priority === 2) return 'border-amber-200 bg-amber-50'
   return ''
 }
 
@@ -83,7 +83,7 @@ export default function QueuesPage() {
               className={[
                 'shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-colors',
                 activeFilter === f.id
-                  ? `bg-white/[0.07] ${text.primary} shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]`
+                  ? `bg-slate-50 ${text.primary} shadow-[inset_0_0_0_1px_rgba(255,255,255,0.07)]`
                   : `${text.faint} hover:${text.muted}`,
               ].join(' ')}
             >

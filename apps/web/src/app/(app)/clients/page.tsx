@@ -11,6 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '@/lib/hooks/use-session'
 import { useClients } from '@/lib/hooks/use-clients'
 import { DashboardPageHeader } from '@/components/dashboard'
+import { ClientCard } from '@/components/dashboard/ClientCard'
 import { text } from '@/components/dashboard/surfaces'
 import {
   Button,
@@ -18,61 +19,37 @@ import {
   ErrorState,
   FilterBar,
   FilterSelect,
-  ListCard,
   LoadingState,
   SearchField,
-  StatusBadge,
 } from '@/components/ui'
 import { CreateClientModal } from '@/components/modals/CreateClientModal'
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
-  { value: 'active', label: 'Activo' },
-  { value: 'inactive', label: 'Inactivo' },
+  { value: 'active', label: 'Ativo' },
+  { value: 'inactive', label: 'Inativo' },
   { value: 'merged', label: 'Fundido' },
   { value: 'archived', label: 'Arquivado' },
 ] as const
 
 const STATUS_LABELS: Record<string, string> = {
-  active: 'Activo',
-  inactive: 'Inactivo',
+  active: 'Ativo',
+  inactive: 'Inativo',
   merged: 'Fundido',
   archived: 'Arquivado',
 }
 
-/** Accent visual por status de cliente — helper local. */
-function clientStatusAccentClass(status: string): string {
-  if (status === 'active') return 'border-emerald-900/30 bg-emerald-950/10'
-  if (status === 'inactive') return 'border-amber-900/30 bg-amber-950/10'
-  return ''
-}
-
 /** Badge class semântica por status de cliente. */
 function clientStatusBadgeClass(status: string): string {
-  if (status === 'active') return 'text-emerald-400 bg-emerald-950/40 border-emerald-900/40'
-  if (status === 'inactive') return 'text-amber-400 bg-amber-950/40 border-amber-900/40'
-  if (status === 'merged') return 'text-blue-400 bg-blue-950/40 border-blue-900/40'
-  if (status === 'archived') return 'text-zinc-500 bg-white/[0.02] border-white/[0.04]'
-  return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
-}
-
-function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso))
+  if (status === 'active') return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+  if (status === 'inactive') return 'text-amber-700 bg-amber-50 border-amber-200'
+  if (status === 'merged') return 'text-blue-700 bg-blue-50 border-blue-200'
+  if (status === 'archived') return 'text-slate-500 bg-slate-100 border-slate-200'
+  return 'text-slate-600 bg-slate-100 border-slate-200'
 }
 
 function clientDisplayName(item: { displayName: string | null; fullName: string }): string {
   return item.displayName ?? item.fullName
-}
-
-function formatResponsibleLawyer(userId: string | null): string | null {
-  if (userId === null) return null
-  return `Responsável · ${userId.slice(0, 8)}…`
 }
 
 export default function ClientsPage() {
@@ -117,26 +94,23 @@ export default function ClientsPage() {
 
   return (
     <div>
-      <div className="flex items-start justify-between">
-        <DashboardPageHeader
-          eyebrow="Operacional"
-          title="Clientes"
-          description="Cadastro de clientes associados a execuções penais."
-        />
-        <Button
-          variant="primary"
-          onClick={() => setShowCreateModal(true)}
-        >
-          + Novo Cliente
-        </Button>
-      </div>
+      <DashboardPageHeader
+        eyebrow="Operacional"
+        title="Clientes"
+        description="Cadastro de clientes associados a execuções penais."
+        actions={
+          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+            <span className="text-[15px] leading-none">+</span> Novo cliente
+          </Button>
+        }
+      />
 
       <CreateClientModal
         open={showCreateModal}
         onClose={() => setShowCreateModal(false)}
       />
 
-      <div className="mt-6 space-y-4">
+      <div className="space-y-4">
         <FilterBar>
           <SearchField
             id="client-search"
@@ -169,55 +143,33 @@ export default function ClientsPage() {
             title={hasActiveFilters ? 'Nenhum cliente encontrado' : 'Nenhum cliente'}
             description={
               hasActiveFilters
-                ? 'Nenhum cliente corresponde aos filtros actuais.'
+                ? 'Nenhum cliente corresponde aos filtros atuais.'
                 : 'Os clientes da organização aparecerão aqui.'
             }
           />
         ) : (
-          <div className="space-y-2">
-            <p className={`text-[12px] ${text.faint} mb-3`}>
+          <div className="space-y-3">
+            <p className={`text-[12px] ${text.muted}`}>
               {items.length} {items.length === 1 ? 'cliente' : 'clientes'}
               {hasActiveFilters ? ' encontrado(s)' : ''}
             </p>
-            <ul className="space-y-2" aria-label="Clientes">
-              {items.map((item) => {
-                const responsible = formatResponsibleLawyer(item.responsibleLawyerUserId)
-                return (
-                  <li key={item.id}>
-                    <ListCard
-                      href={`/clients/${item.id}`}
-                      accentClassName={clientStatusAccentClass(item.status)}
-                    >
-                      <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-                        <p className={`text-[13px] font-medium ${text.secondary}`}>
-                          {clientDisplayName(item)}
-                        </p>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span
-                            className={[
-                              'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]',
-                              clientStatusBadgeClass(item.status),
-                            ].join(' ')}
-                          >
-                            {STATUS_LABELS[item.status] ?? item.status}
-                          </span>
-                          <span className={`text-[11px] ${text.faint} tabular-nums`}>
-                            {formatDateTime(item.updatedAt)}
-                          </span>
-                        </div>
-                      </div>
-                      <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] ${text.faint}`}>
-                        {item.internalRef !== null && <span>Ref. {item.internalRef}</span>}
-                        {responsible !== null && <span>{responsible}</span>}
-                      </div>
-                    </ListCard>
-                  </li>
-                )
-              })}
-            </ul>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {items.map((item) => (
+                <ClientCard
+                  key={item.id}
+                  id={item.id}
+                  name={clientDisplayName(item)}
+                  internalRef={item.internalRef}
+                  statusLabel={STATUS_LABELS[item.status] ?? item.status}
+                  statusBadgeClass={clientStatusBadgeClass(item.status)}
+                  updatedAt={item.updatedAt}
+                />
+              ))}
+            </div>
 
             {hasNextPage ? (
-              <div className="pt-2">
+              <div className="pt-1">
                 <Button
                   size="md"
                   onClick={() => { void fetchNextPage() }}

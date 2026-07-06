@@ -115,15 +115,15 @@ function ConfidenceBadge({ score }: { score: number }) {
   let icon = ''
 
   if (score >= 0.85) {
-    cls = 'bg-emerald-950/50 border-emerald-800/40 text-emerald-400'
+    cls = 'bg-emerald-50 border-emerald-200 text-emerald-700'
     label = `${(score * 100).toFixed(0)}%`
     icon = '🟢'
   } else if (score >= 0.60) {
-    cls = 'bg-amber-950/50 border-amber-800/40 text-amber-400'
+    cls = 'bg-amber-50 border-amber-200 text-amber-700'
     label = `${(score * 100).toFixed(0)}%`
     icon = '🟡'
   } else {
-    cls = 'bg-red-950/50 border-red-800/40 text-red-400'
+    cls = 'bg-red-50 border-red-200 text-red-700'
     label = `${(score * 100).toFixed(0)}%`
     icon = '🔴'
   }
@@ -168,9 +168,9 @@ function FieldRow({
   const hasOverride = override !== undefined && override !== field.value
 
   return (
-    <div className={`border rounded-lg p-3 space-y-1.5 ${field.confidence < 0.60 ? 'border-red-900/40 bg-red-950/10' : field.confidence < 0.85 ? 'border-amber-900/30 bg-amber-950/5' : 'border-white/[0.06] bg-white/[0.02]'}`}>
+    <div className={`border rounded-lg p-3 space-y-1.5 ${field.confidence < 0.60 ? 'border-red-200 bg-red-50' : field.confidence < 0.85 ? 'border-amber-200 bg-amber-50' : 'border-slate-100 bg-slate-50'}`}>
       <div className="flex items-start justify-between gap-2">
-        <span className="text-[11px] text-zinc-400 font-medium">{label}</span>
+        <span className="text-[11px] text-slate-600 font-medium">{label}</span>
         <ConfidenceBadge score={field.confidence} />
       </div>
 
@@ -180,7 +180,7 @@ function FieldRow({
             type="text"
             value={editValue}
             onChange={(e) => setEditValue(e.target.value)}
-            className="flex-1 bg-black/40 border border-indigo-500/60 text-white rounded px-2 py-1 text-[12px] focus:outline-none"
+            className="flex-1 bg-slate-50 border border-blue-600/60 text-slate-900 rounded px-2 py-1 text-[12px] focus:outline-none"
             autoFocus
           />
           <button
@@ -188,13 +188,13 @@ function FieldRow({
               onOverride(fieldPath, editValue)
               setEditing(false)
             }}
-            className="text-[11px] bg-indigo-600 hover:bg-indigo-500 text-white rounded px-2 py-1 cursor-pointer font-medium"
+            className="text-[11px] bg-blue-600 hover:bg-blue-600 text-white rounded px-2 py-1 cursor-pointer font-medium"
           >
             ✓
           </button>
           <button
             onClick={() => setEditing(false)}
-            className="text-[11px] text-zinc-400 hover:text-white rounded px-2 py-1 cursor-pointer"
+            className="text-[11px] text-slate-600 hover:text-slate-900 rounded px-2 py-1 cursor-pointer"
           >
             ✕
           </button>
@@ -202,7 +202,7 @@ function FieldRow({
       ) : (
         <div className="flex items-center gap-2">
           <span
-            className={`text-[13px] font-mono ${hasOverride ? 'text-indigo-300' : 'text-white'} ${displayValue === null || displayValue === undefined ? 'text-zinc-500 italic' : ''}`}
+            className={`text-[13px] font-mono ${hasOverride ? 'text-blue-500' : 'text-slate-900'} ${displayValue === null || displayValue === undefined ? 'text-slate-500 italic' : ''}`}
           >
             {displayValue === null || displayValue === undefined
               ? 'Não encontrado'
@@ -211,7 +211,7 @@ function FieldRow({
               : String(displayValue)}
           </span>
           {hasOverride && (
-            <span className="text-[10px] text-indigo-400 bg-indigo-950/40 border border-indigo-800/40 rounded px-1.5 py-0.5">
+            <span className="text-[10px] text-blue-600 bg-blue-100 border border-blue-200 rounded px-1.5 py-0.5">
               corrigido
             </span>
           )}
@@ -220,7 +220,7 @@ function FieldRow({
               setEditValue(String(displayValue ?? ''))
               setEditing(true)
             }}
-            className="ml-auto text-[10px] text-zinc-500 hover:text-white cursor-pointer"
+            className="ml-auto text-[10px] text-slate-500 hover:text-slate-900 cursor-pointer"
           >
             ✏️
           </button>
@@ -230,7 +230,7 @@ function FieldRow({
       {field.evidence.textSnippet && (
         <button
           onClick={() => onNavigatePage(field.evidence.pageNumber)}
-          className="w-full text-left text-[10px] text-zinc-500 hover:text-zinc-300 italic border-t border-white/[0.04] pt-1.5 mt-1 transition-colors cursor-pointer"
+          className="w-full text-left text-[10px] text-slate-500 hover:text-slate-700 italic border-t border-slate-100 pt-1.5 mt-1 transition-colors cursor-pointer"
           title={`Evidência na página ${field.evidence.pageNumber ?? '?'}`}
         >
           📌 p.{field.evidence.pageNumber ?? '?'}: &ldquo;{field.evidence.textSnippet.slice(0, 100)}&rdquo;
@@ -404,7 +404,7 @@ export function ExtractionReviewWorkspace({
 
   if (reviewQuery.isLoading) {
     return (
-      <div className="flex items-center justify-center h-64 text-zinc-400 text-[13px]">
+      <div className="flex items-center justify-center h-64 text-slate-600 text-[13px]">
         Carregando dados da extração…
       </div>
     )
@@ -413,10 +413,10 @@ export function ExtractionReviewWorkspace({
   if (reviewQuery.isError || !envelope) {
     return (
       <div className="flex flex-col items-center justify-center h-64 gap-3">
-        <p className="text-red-400 text-[13px]">Erro ao carregar dados da extração.</p>
+        <p className="text-red-700 text-[13px]">Erro ao carregar dados da extração.</p>
         <button
           onClick={onClose}
-          className="text-[12px] text-zinc-400 hover:text-white cursor-pointer"
+          className="text-[12px] text-slate-600 hover:text-slate-900 cursor-pointer"
         >
           Fechar
         </button>
@@ -425,31 +425,31 @@ export function ExtractionReviewWorkspace({
   }
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/90 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-slate-100 flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-zinc-950/90">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 bg-slate-50/90">
         <div className="flex items-center gap-4">
           <div>
-            <span className="text-[10px] uppercase tracking-widest font-bold text-amber-400">
+            <span className="text-[10px] uppercase tracking-widest font-bold text-amber-700">
               Revisão de Extração
             </span>
-            <h2 className="text-[16px] font-semibold text-white mt-0.5">
+            <h2 className="text-[16px] font-semibold text-slate-900 mt-0.5">
               {envelope.classification.documentType.replace(/_/g, ' ')}
             </h2>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-zinc-400">
+          <div className="flex items-center gap-2 text-[11px] text-slate-600">
             <ConfidenceBadge score={envelope.documentConfidence} />
             <span>confiança global</span>
           </div>
           {envelope.versioning && (
-            <span className="text-[10px] text-zinc-600">
+            <span className="text-[10px] text-slate-700">
               {envelope.versioning.modelName} · {envelope.versioning.promptVersion}
             </span>
           )}
         </div>
         <button
           onClick={onClose}
-          className="text-zinc-500 hover:text-white text-[20px] cursor-pointer"
+          className="text-slate-500 hover:text-slate-900 text-[20px] cursor-pointer"
         >
           ✕
         </button>
@@ -457,9 +457,9 @@ export function ExtractionReviewWorkspace({
 
       {/* Classification reasoning */}
       {envelope.classification.reasoning && (
-        <div className="px-6 py-2 bg-zinc-900/60 border-b border-white/[0.04]">
-          <p className="text-[11px] text-zinc-400">
-            <span className="text-zinc-500">Classificação:</span>{' '}
+        <div className="px-6 py-2 bg-white border-b border-slate-100">
+          <p className="text-[11px] text-slate-600">
+            <span className="text-slate-500">Classificação:</span>{' '}
             {envelope.classification.reasoning}
           </p>
         </div>
@@ -467,9 +467,9 @@ export function ExtractionReviewWorkspace({
 
       {/* Validation alerts */}
       {validationErrors.length > 0 && (
-        <div className="px-6 py-2 bg-red-950/30 border-b border-red-900/40">
+        <div className="px-6 py-2 bg-red-50 border-b border-red-200">
           {validationErrors.map((err, i) => (
-            <p key={i} className="text-[11px] text-red-400">
+            <p key={i} className="text-[11px] text-red-700">
               🚫 [{err.field}] {err.message}
             </p>
           ))}
@@ -479,9 +479,9 @@ export function ExtractionReviewWorkspace({
         </div>
       )}
       {validationWarnings.length > 0 && (
-        <div className="px-6 py-2 bg-amber-950/20 border-b border-amber-900/30">
+        <div className="px-6 py-2 bg-amber-50 border-b border-amber-200">
           {validationWarnings.map((w, i) => (
-            <p key={i} className="text-[11px] text-amber-400">
+            <p key={i} className="text-[11px] text-amber-700">
               ⚠ [{w.field}] {w.message}
             </p>
           ))}
@@ -491,16 +491,16 @@ export function ExtractionReviewWorkspace({
       {/* Main split pane */}
       <div className="flex-1 flex overflow-hidden">
         {/* Left: PDF viewer */}
-        <div className="w-[58%] border-r border-white/[0.08] flex flex-col">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-zinc-900/40">
-            <span className="text-[11px] text-zinc-400">Documento Original</span>
+        <div className="w-[58%] border-r border-slate-200 flex flex-col">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-white">
+            <span className="text-[11px] text-slate-600">Documento Original</span>
             {currentPage && (
-              <span className="text-[11px] text-indigo-400 font-mono">
+              <span className="text-[11px] text-blue-600 font-mono">
                 Página {currentPage}
               </span>
             )}
           </div>
-          <div className="flex-1 bg-black/60">
+          <div className="flex-1 bg-slate-50">
             <iframe
               key={pdfSrc}
               src={pdfSrc}
@@ -512,16 +512,16 @@ export function ExtractionReviewWorkspace({
 
         {/* Right: Fields */}
         <div className="w-[42%] flex flex-col overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.06] bg-zinc-900/40">
-            <span className="text-[11px] text-zinc-400">Campos Extraídos</span>
-            <span className="text-[11px] text-zinc-500">
+          <div className="flex items-center justify-between px-4 py-2 border-b border-slate-100 bg-white">
+            <span className="text-[11px] text-slate-600">Campos Extraídos</span>
+            <span className="text-[11px] text-slate-500">
               {fields.length} campos · {Object.keys(fieldOverrides).length} corrigidos
             </span>
           </div>
 
           <div className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {fields.length === 0 ? (
-              <p className="text-[12px] text-zinc-500 italic text-center py-8">
+              <p className="text-[12px] text-slate-500 italic text-center py-8">
                 Nenhum campo estruturado encontrado.
               </p>
             ) : (
@@ -542,12 +542,12 @@ export function ExtractionReviewWorkspace({
 
             {/* Conflicts */}
             {envelope.conflicts.length > 0 && (
-              <div className="border border-red-900/40 bg-red-950/20 rounded-lg p-3">
-                <p className="text-[11px] text-red-400 font-semibold mb-2">
+              <div className="border border-red-200 bg-red-50 rounded-lg p-3">
+                <p className="text-[11px] text-red-700 font-semibold mb-2">
                   ⚡ Conflitos Documentais Detectados
                 </p>
                 {envelope.conflicts.map((conflict, i) => (
-                  <div key={i} className="text-[11px] text-red-300 mt-1">
+                  <div key={i} className="text-[11px] text-red-700 mt-1">
                     Campo: <span className="font-mono">{conflict.fieldPath}</span> —{' '}
                     {conflict.conflictingValues.length} valores conflitantes
                   </div>
@@ -557,17 +557,17 @@ export function ExtractionReviewWorkspace({
           </div>
 
           {/* Action bar */}
-          <div className="border-t border-white/[0.08] px-4 py-4 space-y-3 bg-zinc-950/60">
+          <div className="border-t border-slate-200 px-4 py-4 space-y-3 bg-slate-50">
             {/* Effective date for snapshot */}
             <div>
-              <label className="block text-[11px] text-zinc-400 mb-1">
+              <label className="block text-[11px] text-slate-600 mb-1">
                 Data efetiva do cálculo proposto
               </label>
               <input
                 type="date"
                 value={effectiveAt}
                 onChange={(e) => setEffectiveAt(e.target.value)}
-                className="bg-black/40 border border-white/[0.08] text-white rounded px-2 py-1 text-[12px] focus:outline-none focus:border-indigo-500"
+                className="bg-slate-50 border border-slate-200 text-slate-900 rounded px-2 py-1 text-[12px] focus:outline-none focus:border-blue-600"
               />
             </div>
 
@@ -578,7 +578,7 @@ export function ExtractionReviewWorkspace({
                   id="btn-generate-snapshot"
                   onClick={() => promoteMutation.mutate()}
                   disabled={!canPromote}
-                  className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:bg-zinc-800 disabled:text-zinc-600 disabled:cursor-not-allowed text-white rounded text-[12px] font-semibold transition cursor-pointer"
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-600 disabled:bg-slate-100 disabled:text-slate-700 disabled:cursor-not-allowed text-white rounded text-[12px] font-semibold transition cursor-pointer"
                 >
                   {promoteMutation.isPending
                     ? 'Gerando…'
@@ -586,14 +586,14 @@ export function ExtractionReviewWorkspace({
                 </button>
                 <button
                   onClick={() => setShowRejectForm(true)}
-                  className="px-3 py-2 border border-red-900/40 text-red-400 hover:bg-red-950/30 rounded text-[12px] transition cursor-pointer"
+                  className="px-3 py-2 border border-red-200 text-red-700 hover:bg-red-50 rounded text-[12px] transition cursor-pointer"
                 >
                   Rejeitar
                 </button>
               </div>
             ) : (
               <div className="space-y-2">
-                <label className="block text-[11px] text-zinc-400">
+                <label className="block text-[11px] text-slate-600">
                   Motivo da rejeição (obrigatório)
                 </label>
                 <textarea
@@ -601,7 +601,7 @@ export function ExtractionReviewWorkspace({
                   onChange={(e) => setRejectReason(e.target.value)}
                   rows={3}
                   placeholder="Descreva o motivo da rejeição..."
-                  className="w-full bg-black/40 border border-white/[0.08] text-white rounded px-2 py-1 text-[12px] focus:outline-none focus:border-red-500 resize-none"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded px-2 py-1 text-[12px] focus:outline-none focus:border-red-500 resize-none"
                 />
                 <div className="flex gap-2">
                   <button
@@ -611,13 +611,13 @@ export function ExtractionReviewWorkspace({
                       }
                     }}
                     disabled={rejectReason.length < 10 || rejectMutation.isPending}
-                    className="flex-1 py-2 bg-red-700 hover:bg-red-600 disabled:bg-zinc-800 disabled:text-zinc-600 text-white rounded text-[12px] font-semibold transition cursor-pointer"
+                    className="flex-1 py-2 bg-red-700 hover:bg-red-600 disabled:bg-slate-100 disabled:text-slate-700 text-white rounded text-[12px] font-semibold transition cursor-pointer"
                   >
                     {rejectMutation.isPending ? 'Rejeitando…' : 'Confirmar Rejeição'}
                   </button>
                   <button
                     onClick={() => setShowRejectForm(false)}
-                    className="px-3 py-2 text-zinc-400 hover:text-white text-[12px] transition cursor-pointer"
+                    className="px-3 py-2 text-slate-600 hover:text-slate-900 text-[12px] transition cursor-pointer"
                   >
                     Cancelar
                   </button>
@@ -627,12 +627,12 @@ export function ExtractionReviewWorkspace({
 
             {/* Feedback */}
             {promoteMutation.isSuccess && (
-              <p className="text-[11px] text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 rounded p-2">
+              <p className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 rounded p-2">
                 ✓ Cálculo proposto gerado com sucesso! Disponível na aba Cálculos.
               </p>
             )}
             {promoteMutation.isError && (
-              <p className="text-[11px] text-red-400 bg-red-950/20 border border-red-900/30 rounded p-2">
+              <p className="text-[11px] text-red-700 bg-red-50 border border-red-200 rounded p-2">
                 Erro: {promoteMutation.error?.message ?? 'Falha ao gerar cálculo.'}
               </p>
             )}

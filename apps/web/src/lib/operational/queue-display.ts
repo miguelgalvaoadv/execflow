@@ -17,8 +17,8 @@ export const QUEUE_TYPE_LABELS: Record<string, string> = {
 }
 
 export const PRIORITY_LABELS: Record<number, { label: string; color: string }> = {
-  0: { label: 'Urgente', color: 'text-red-400 bg-red-950/40 border-red-900/40' },
-  1: { label: 'Alta', color: 'text-orange-400 bg-orange-950/40 border-orange-900/40' },
+  0: { label: 'Urgente', color: 'text-red-700 bg-red-50 border-red-200' },
+  1: { label: 'Alta', color: 'text-orange-700 bg-orange-50 border-orange-200' },
   2: { label: 'Média', color: 'text-yellow-400 bg-yellow-950/40 border-yellow-900/40' },
   3: { label: 'Normal', color: 'text-zinc-400 bg-white/[0.03] border-white/[0.06]' },
 }

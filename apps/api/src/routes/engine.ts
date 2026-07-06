@@ -46,7 +46,7 @@ const UUID_RE = /^[0-9a-f-]{36}$/i
 // GET /api/v1/engine/runs/:runId — fetch a single engine run
 // ---------------------------------------------------------------------------
 
-router.get('/runs/:runId', authMiddleware, orgMiddleware, async (c) => {
+router.get('/runs/:runId', authMiddleware, orgMiddleware, requireMinRole('assistant'), async (c) => {
   const ctx = buildWriteContext(c, db)
   const runId = c.req.param('runId')
   if (runId === undefined || !UUID_RE.test(runId)) {
@@ -77,7 +77,7 @@ router.get('/runs/:runId', authMiddleware, orgMiddleware, async (c) => {
 // GET /api/v1/engine/runs?caseId= — list engine runs for a case
 // ---------------------------------------------------------------------------
 
-router.get('/runs', authMiddleware, orgMiddleware, async (c) => {
+router.get('/runs', authMiddleware, orgMiddleware, requireMinRole('assistant'), async (c) => {
   const ctx = buildWriteContext(c, db)
   const caseId = c.req.query('caseId')
   const limitStr = c.req.query('limit') ?? '20'
@@ -106,7 +106,7 @@ router.get('/runs', authMiddleware, orgMiddleware, async (c) => {
 // GET /api/v1/engine/runs/:runId/explanation — ExplanationBundle for a run
 // ---------------------------------------------------------------------------
 
-router.get('/runs/:runId/explanation', authMiddleware, orgMiddleware, async (c) => {
+router.get('/runs/:runId/explanation', authMiddleware, orgMiddleware, requireMinRole('assistant'), async (c) => {
   const ctx = buildWriteContext(c, db)
   const runId = c.req.param('runId')
   if (runId === undefined || !UUID_RE.test(runId)) {

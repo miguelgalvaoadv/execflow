@@ -125,6 +125,23 @@ export function createS3StorageProvider(options: S3StorageProviderOptions): Stor
         throw new StorageVerificationError('NOT_FOUND', 'Object not found in S3.')
       }
     },
+
+    /**
+     * Server-side write — used by background workers (e.g., ingesting autos do
+     * processo pulled from Escavador). Keys remain immutable: callers must use a
+     * unique key per object. Browser clients still upload via presigned PUT.
+     */
+    async putObject(storageKey: string, body: Buffer, contentType: string): Promise<void> {
+      await client.send(
+        new PutObjectCommand({
+          Bucket: options.bucket,
+          Key: storageKey,
+          Body: body,
+          ContentType: contentType,
+          ContentLength: body.byteLength,
+        })
+      )
+    },
   }
 }
 

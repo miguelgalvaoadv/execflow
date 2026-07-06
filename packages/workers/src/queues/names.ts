@@ -75,9 +75,28 @@ export const QUEUE_ENGINE_RECALCULATION_SCHEDULED = 'engine.recalculation.schedu
 
 export const QUEUE_ENGINE_RUN_COMPLETED = 'engine.run.completed'
 
-// Crawler Pipeline
+// Sincronização com o Escavador (motor único de tribunais)
+export const QUEUE_DAILY_CRAWLER_SWEEP = 'crawler.daily-sweep'
 export const QUEUE_CRAWLER_SYNC_REQUESTED = 'crawler.sync.requested'
-export const QUEUE_COURT_SCRAPER_REQUESTED = 'court.scraper.requested'
+
+// Astrea — monitoramento de tribunais via e-mail (IMAP)
+export const QUEUE_ASTREA_EMAIL_POLL = 'astrea.email-poll'
+export const QUEUE_SYSTEM_HEALTH_SWEEP = 'system.astrea-health-sweep'
+
+// Inventário por OAB — enriquecimento diário via DataJud (metadados públicos)
+export const QUEUE_INVENTORY_ENRICHMENT = 'inventory.datajud-enrichment'
+
+// DataJud → caso: sync de movimentações dos casos promovidos + reanálise
+export const QUEUE_DATAJUD_CASE_SYNC = 'datajud.case-sync'
+
+// DJEN → intimações oficiais por OAB (Comunica/PJe) + reanálise
+export const QUEUE_DJEN_SYNC = 'djen.intimacoes-sync'
+
+// InfoSimples → descoberta+monitoramento por OAB (TJSP e-SAJ) 1x/dia
+export const QUEUE_INFOSIMPLES_SYNC = 'infosimples.oab-sync'
+
+// WhatsApp Notifier
+export const QUEUE_WHATSAPP_NOTIFICATION_REQUESTED = 'whatsapp.notification.requested'
 
 // ---------------------------------------------------------------------------
 // SLA and escalation sweep jobs (cron-triggered via pg-boss schedule)
@@ -129,5 +148,5 @@ export const DOMAIN_EVENT_QUEUES = [
   QUEUE_ENGINE_RECALCULATION_SCHEDULED,
   QUEUE_ENGINE_RUN_COMPLETED,
   QUEUE_CRAWLER_SYNC_REQUESTED,
-  QUEUE_COURT_SCRAPER_REQUESTED,
+  QUEUE_WHATSAPP_NOTIFICATION_REQUESTED,
 ] as const

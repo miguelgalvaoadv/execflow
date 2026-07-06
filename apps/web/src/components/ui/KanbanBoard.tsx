@@ -27,7 +27,7 @@ export function KanbanBoard<T>({ columns }: KanbanBoardProps<T>) {
           <div className="flex-1 overflow-y-auto space-y-3 p-1">
             {col.items.map(col.renderItem)}
             {col.items.length === 0 && (
-              <div className="p-4 border border-dashed border-slate-300 rounded-lg text-center text-slate-400 text-[12px]">
+              <div className="p-4 border border-dashed border-slate-300 rounded-lg text-center text-slate-700 text-[12px]">
                 Nenhum item
               </div>
             )}

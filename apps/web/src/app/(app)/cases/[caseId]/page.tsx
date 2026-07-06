@@ -12,6 +12,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { ExtractionReviewWorkspace } from '@/components/extraction/ExtractionReviewWorkspace'
 import Link from 'next/link'
+import { TriangleAlert, AlertCircle } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { useSession } from '@/lib/hooks/use-session'
 import { useCase } from '@/lib/hooks/use-case'
@@ -20,7 +21,9 @@ import {
   useCaseDocuments,
   useRequestUpload,
   useCompleteUpload,
+  useCasePieceDrafts,
 } from '@/lib/hooks/use-case-documents'
+import { downloadBlob, viewBlob } from '@/lib/api-client'
 import {
   useCaseOpportunities,
   useReviewOpportunity,
@@ -31,6 +34,7 @@ import {
 import { useCaseDeadlines } from '@/lib/hooks/use-case-deadlines'
 import { useQueryClient } from '@tanstack/react-query'
 import { CrawlerSyncButton } from '@/components/case-workspace/CrawlerSyncButton'
+import { AnalyzeAutosButton } from '@/components/case-workspace/AnalyzeAutosButton'
 import { useDeadline } from '@/lib/hooks/use-deadline'
 import {
   useCreateDeadline,
@@ -50,8 +54,10 @@ import {
 } from '@/lib/hooks/use-case-snapshots'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { CaseTabBar, type CaseTabId } from '@/components/case-workspace/CaseTabBar'
+import { CasePartiesAndSearch } from '@/components/case-workspace/CasePartiesAndSearch'
 import { PieceEditorModal } from '@/components/case-workspace/PieceEditorModal'
-import { PromptEditorModal } from '@/components/opportunities/PromptEditorModal'
+import { PromptEditorModal, type GeneratePiecePayload } from '@/components/opportunities/PromptEditorModal'
+import { EditCaseModal } from '@/components/modals/EditCaseModal'
 import { borders, text } from '@/components/dashboard/surfaces'
 import {
   EmptyState,
@@ -60,6 +66,7 @@ import {
   LoadingState,
   PriorityBadge,
   StatusBadge,
+  Button,
 } from '@/components/ui'
 import {
   QUEUE_TYPE_LABELS,
@@ -73,6 +80,15 @@ import {
   documentStatusLabel,
   ocrStatusLabel,
 } from '@/lib/operational/document-display'
+import {
+  timelineEventTypeLabel,
+  timelineCategoryLabel,
+  timelineVisibilityLabel,
+  opportunityStatusLabel,
+  engineTriggerLabel,
+  engineStatusLabel,
+  documentClassLabel,
+} from '@/lib/operational/labels'
 import {
   CrimeBreakdownForm,
   type CrimeBreakdownItem,
@@ -122,7 +138,7 @@ function docMimeIcon(mimeType: string): string {
 /* ─── Case status chip — 4.3 ────────────────────────────────────────────── */
 const CASE_STATUS_LABELS: Record<string, string> = {
   intake: 'Triagem',
-  active: 'Activo',
+  active: 'Ativo',
   suspended: 'Suspenso',
   closed: 'Encerrado',
   archived: 'Arquivado',
@@ -130,18 +146,18 @@ const CASE_STATUS_LABELS: Record<string, string> = {
 
 function caseStatusChipClass(status: string): string {
   if (status === 'active')
-    return 'text-emerald-400 bg-emerald-950/40 border-emerald-900/40'
-  if (status === 'intake') return 'text-blue-400 bg-blue-950/40 border-blue-900/40'
+    return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+  if (status === 'intake') return 'text-blue-700 bg-blue-50 border-blue-200'
   if (status === 'suspended')
-    return 'text-amber-400 bg-amber-950/40 border-amber-900/40'
-  return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
+    return 'text-amber-700 bg-amber-50 border-amber-200'
+  return 'text-slate-600 bg-slate-50 border-slate-100'
 }
 
 /* ─── 4.4 Priority accent (Trabalho tab) — numeric priority ─────────────── */
 function workPriorityAccentClass(priority: number): string {
-  if (priority === 0) return 'border-red-900/50 bg-red-950/20'
-  if (priority === 1) return 'border-orange-900/30 bg-orange-950/10'
-  if (priority === 2) return 'border-amber-900/30 bg-amber-950/10'
+  if (priority === 0) return 'border-red-200 bg-red-50'
+  if (priority === 1) return 'border-orange-200 bg-orange-50'
+  if (priority === 2) return 'border-amber-200 bg-amber-50'
   return ''
 }
 
@@ -160,7 +176,7 @@ function FadeIn({ children }: { children: React.ReactNode }) {
 export default function CaseWorkspacePage() {
   const params = useParams()
   const caseId = typeof params['caseId'] === 'string' ? params['caseId'] : ''
-  const [activeTab, setActiveTab] = useState<CaseTabId>('trabalho')
+  const [activeTab, setActiveTab] = useState<CaseTabId>('timeline')
   const [selectedDocId, setSelectedDocId] = useState<string | null>(null)
   const [selectedDeadlineId, setSelectedDeadlineId] = useState<string | null>(null)
 
@@ -176,17 +192,14 @@ export default function CaseWorkspacePage() {
   const [isEditorOpen, setIsEditorOpen] = useState(false)
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
 
+  // Edit Case Modal State
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+
   const { data: session, isLoading: sessionLoading } = useSession()
   const orgId = session?.organization.id ?? ''
 
   // Hooks — lazy per tab (unchanged)
   const caseQuery = useCase(orgId, caseId, session !== null && caseId !== '')
-  const trabalhoQuery = useQueueProjections({
-    organizationId: orgId,
-    executionCaseId: caseId,
-    limit: 50,
-    enabled: activeTab === 'trabalho',
-  })
   const timelineQuery = useCaseTimeline(orgId, caseId, activeTab === 'timeline')
   const documentsQuery = useCaseDocuments(orgId, caseId, activeTab === 'documentos')
   const opportunitiesQuery = useCaseOpportunities(
@@ -195,10 +208,7 @@ export default function CaseWorkspacePage() {
     activeTab === 'oportunidades',
   )
   const deadlinesQuery = useCaseDeadlines(orgId, caseId, activeTab === 'prazos')
-  const engineQuery = useEngineRuns(orgId, caseId, activeTab === 'motor')
   const snapshotsQuery = useCaseSentenceSnapshots(orgId, caseId, activeTab === 'calculos')
-
-  const evaluateEngineMutation = useEvaluateEngine(orgId, caseId)
 
   const proposeMutation = useProposeSentenceSnapshot(orgId, caseId)
   const confirmMutation = useConfirmSentenceSnapshot(orgId, caseId)
@@ -268,7 +278,7 @@ export default function CaseWorkspacePage() {
               <div className="mb-5">
                 <Link
                   href="/cases"
-                  className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.muted} hover:text-zinc-300 transition-colors`}
+                  className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.muted} hover:text-slate-700 transition-colors`}
                 >
                   ← {breadcrumb}
                 </Link>
@@ -279,22 +289,58 @@ export default function CaseWorkspacePage() {
                 eyebrow="Execução penal"
                 title={headerTitle}
                 description={
-                  // Description mantida como string para compatibilidade com DashboardPageHeader
-                  caseData !== undefined
-                    ? [
-                        `Ref. ${caseData.internalRef}`,
-                        caseData.executionProcessNumber !== null
-                          ? `Processo ${caseData.executionProcessNumber}`
-                          : 'Processo pendente',
-                        caseData.courtName ?? undefined,
-                        caseData.courtJurisdiction ?? undefined,
-                      ]
-                        .filter((s): s is string => s !== undefined)
-                        .join(' · ')
-                    : undefined
+                  caseData !== undefined ? (
+                    <div className="flex flex-wrap items-center gap-3 mt-3">
+                      {metaChips.map((chip, i) => (
+                        <div key={i} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-white border border-slate-100 shadow-inner">
+                          <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-500">{chip.label}</span>
+                          <span className="text-[12px] text-slate-700 font-medium">{chip.value}</span>
+                        </div>
+                      ))}
+                      {caseData.monitoringStatus === 'sealed' && (
+                        <Link
+                          href="/settings/astrea-sigilosos"
+                          className={[
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-md border shadow-inner transition-colors',
+                            caseData.astreaSealedCredentialStatus === 'configured'
+                              ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                              : caseData.astreaSealedCredentialStatus === 'possibly_expired'
+                                ? 'bg-amber-50 border-amber-200 text-amber-700'
+                                : 'bg-slate-100 border-slate-300 text-slate-700',
+                          ].join(' ')}
+                        >
+                          <span className="text-[10px] font-semibold uppercase tracking-wider opacity-70">Segredo de justiça</span>
+                          <span className="text-[12px] font-medium">
+                            {caseData.astreaSealedCredentialStatus === 'configured'
+                              ? 'Credencial OK'
+                              : caseData.astreaSealedCredentialStatus === 'possibly_expired'
+                                ? 'Verificar senha'
+                                : 'Cadastrar no Astrea'}
+                          </span>
+                        </Link>
+                      )}
+                    </div>
+                  ) : undefined
                 }
-                actions={<CrawlerSyncButton organizationId={orgId} caseId={caseId} />}
+                actions={
+                  <div className="flex gap-2">
+                    <Button variant="secondary" onClick={() => setIsEditModalOpen(true)}>
+                      Editar Caso
+                    </Button>
+                    <CrawlerSyncButton organizationId={orgId} caseId={caseId} />
+                    <AnalyzeAutosButton organizationId={orgId} caseId={caseId} />
+                  </div>
+                }
               />
+
+              {/* Edit Modal */}
+              {caseData !== undefined && (
+                <EditCaseModal
+                  open={isEditModalOpen}
+                  onClose={() => setIsEditModalOpen(false)}
+                  caseData={caseData}
+                />
+              )}
 
               {/* 4.3 — Chips de metadados */}
               {caseData !== undefined && (
@@ -308,16 +354,6 @@ export default function CaseWorkspacePage() {
                   >
                     {CASE_STATUS_LABELS[caseData.status] ?? caseData.status}
                   </span>
-                  {/* Metadados secundários */}
-                  {metaChips.map((chip) => (
-                    <span
-                      key={chip.label}
-                      className={`text-[11px] ${text.faint} tabular-nums`}
-                    >
-                      <span className={`${text.muted} mr-1`}>{chip.label}:</span>
-                      {chip.value}
-                    </span>
-                  ))}
                   {/* Link para perfil do cliente */}
                   {caseData.clientSummary.id !== undefined && (
                     <Link
@@ -330,22 +366,51 @@ export default function CaseWorkspacePage() {
                 </div>
               )}
 
+              {/* Freshness banner — shown when autos are stale or missing */}
+              {caseData?.documentFreshnessStatus === 'stale' && (
+                <div className="mt-3 mb-1 flex items-start gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+                  <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-red-800">Autos desatualizados — geração de peça bloqueada</p>
+                    <p className="mt-0.5 text-[12px] text-red-700">
+                      {caseData.pendingCriticalMovementType
+                        ? `Movimentação crítica: ${caseData.pendingCriticalMovementType}.`
+                        : 'Uma movimentação crítica foi recebida após os autos carregados.'}{' '}
+                      Faça upload dos autos atuais na aba{' '}
+                      <button
+                        className="underline underline-offset-2 font-medium hover:text-red-900"
+                        onClick={() => setActiveTab('documentos')}
+                      >
+                        Documentos
+                      </button>{' '}
+                      para desbloquear.
+                    </p>
+                  </div>
+                </div>
+              )}
+              {caseData?.documentFreshnessStatus === 'unknown' && (
+                <div className="mt-3 mb-1 flex items-start gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+                  <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[13px] font-semibold text-amber-800">Nenhum autos carregado</p>
+                    <p className="mt-0.5 text-[12px] text-amber-700">
+                      As peças geradas pelo Claude não terão os autos como base. Faça upload na aba{' '}
+                      <button
+                        className="underline underline-offset-2 font-medium hover:text-amber-900"
+                        onClick={() => setActiveTab('documentos')}
+                      >
+                        Documentos
+                      </button>{' '}
+                      para melhor qualidade.
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Tab bar */}
               <CaseTabBar activeTab={activeTab} onTabChange={setActiveTab} />
 
               {/* Tab content — lazy loading mantido */}
-              {activeTab === 'trabalho' && (
-                <FadeIn>
-                  <TrabalhoTab
-                    isLoading={trabalhoQuery.isLoading}
-                    isError={trabalhoQuery.isError}
-                    errorMessage={trabalhoQuery.error?.message}
-                    onRetry={() => { void trabalhoQuery.refetch() }}
-                    items={trabalhoQuery.data?.data ?? []}
-                  />
-                </FadeIn>
-              )}
-
               {activeTab === 'timeline' && (
                 <FadeIn>
                   <TimelineTab
@@ -375,8 +440,6 @@ export default function CaseWorkspacePage() {
                       return completeUploadMutation.mutateAsync(input)
                     }}
                     isUploading={requestUploadMutation.isPending || completeUploadMutation.isPending}
-                    selectedDocId={selectedDocId}
-                    setSelectedDocId={setSelectedDocId}
                   />
                 </FadeIn>
               )}
@@ -398,8 +461,8 @@ export default function CaseWorkspacePage() {
                     }}
                     isReviewing={reviewOpportunityMutation.isPending}
                     isDeferring={deferOpportunityMutation.isPending}
-                    onGenerateDraft={(opportunityId, instructions, onSuccessCb) => {
-                      generateDraftMutation.mutate({ opportunityId, instructions }, {
+                    onGenerateDraft={(opportunityId, payload, onSuccessCb) => {
+                      generateDraftMutation.mutate({ opportunityId, ...payload }, {
                         onSuccess: (res) => {
                           setActiveDraftId(res.data.id)
                           setIsEditorOpen(true)
@@ -412,6 +475,7 @@ export default function CaseWorkspacePage() {
                     setIsEditorOpen={setIsEditorOpen}
                     activeDraftId={activeDraftId}
                     setActiveDraftId={setActiveDraftId}
+                    documentFreshnessStatus={caseData?.documentFreshnessStatus}
                   />
                 </FadeIn>
               )}
@@ -453,20 +517,6 @@ export default function CaseWorkspacePage() {
                 </FadeIn>
               )}
 
-              {activeTab === 'motor' && (
-                <FadeIn>
-                  <MotorTab
-                    isLoading={engineQuery.isLoading}
-                    isError={engineQuery.isError}
-                    errorMessage={engineQuery.error?.message}
-                    onRetry={() => { void engineQuery.refetch() }}
-                    items={engineQuery.data?.data ?? []}
-                    onEvaluate={() => evaluateEngineMutation.mutate()}
-                    isEvaluating={evaluateEngineMutation.isPending}
-                  />
-                </FadeIn>
-              )}
-
               {activeTab === 'calculos' && (
                 <FadeIn>
                   <CalculosTab
@@ -482,6 +532,12 @@ export default function CaseWorkspacePage() {
                     isConfirming={confirmMutation.isPending}
                     isSuperseding={supersedeMutation.isPending}
                   />
+                </FadeIn>
+              )}
+
+              {activeTab === 'partes' && (
+                <FadeIn>
+                  <CasePartiesAndSearch caseId={caseId} />
                 </FadeIn>
               )}
             </>
@@ -573,11 +629,11 @@ function TimelineTab({
   onRetry,
   items,
 }: TabProps<import('@/lib/hooks/use-case-timeline').TimelineEventItem>) {
-  if (isLoading) return <LoadingState label="Carregando timeline…" />
+  if (isLoading) return <LoadingState label="Carregando movimentações…" />
   if (isError) {
     return (
       <ErrorState
-        message={errorMessage ?? 'Erro ao carregar timeline.'}
+        message={errorMessage ?? 'Erro ao carregar movimentações.'}
         onRetry={onRetry}
       />
     )
@@ -586,36 +642,40 @@ function TimelineTab({
     return (
       <EmptyState
         variant="tab"
-        title="Nenhum evento registado"
-        description="A linha temporal deste caso aparecerá aqui."
+        title="Nenhuma movimentação registrada"
+        description="As movimentações deste processo aparecerão aqui (mais recentes no topo)."
       />
     )
   }
+  // Mais recentes no topo.
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime()
+  )
   return (
-    <ul className="space-y-0" aria-label="Timeline">
-      {items.map((event, index) => (
+    <ul className="space-y-0" aria-label="Movimentações">
+      {sorted.map((event, index) => (
         <li key={event.id} className="flex gap-3">
           {/* 4.5 — linha vertical conectada */}
           <div className="flex flex-col items-center pt-3">
             <span
-              className={`h-2 w-2 shrink-0 rounded-full border ${borders.default} bg-white/[0.08]`}
+              className={`h-2 w-2 shrink-0 rounded-full border ${borders.default} bg-slate-50`}
               aria-hidden
             />
-            {index < items.length - 1 && (
-              <span className="mt-1 flex-1 w-[1px] bg-white/[0.06]" aria-hidden />
+            {index < sorted.length - 1 && (
+              <span className="mt-1 flex-1 w-[1px] bg-slate-50" aria-hidden />
             )}
           </div>
           {/* Conteúdo */}
           <div className="min-w-0 flex-1 pb-4">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <StatusBadge>{event.eventCategory}</StatusBadge>
-              <span className={`text-[11px] ${text.faint}`}>{event.visibility}</span>
+              <StatusBadge>{timelineCategoryLabel(event.eventCategory)}</StatusBadge>
+              <span className={`text-[11px] ${text.faint}`}>{timelineVisibilityLabel(event.visibility)}</span>
               <span className={`text-[11px] ${text.faint} ml-auto tabular-nums shrink-0`}>
                 {formatDateTime(event.occurredAt)}
               </span>
             </div>
             <p className={`text-[13px] ${text.secondary}`}>{event.summary}</p>
-            <p className={`mt-0.5 text-[11px] ${text.faint}`}>{event.eventType}</p>
+            <p className={`mt-0.5 text-[11px] ${text.faint}`}>{timelineEventTypeLabel(event.eventType)}</p>
           </div>
         </li>
       ))}
@@ -633,8 +693,6 @@ type DocumentosTabProps = TabProps<import('@/lib/hooks/use-case-documents').Case
   onRequestUpload: (input: any) => Promise<any>
   onCompleteUpload: (input: any) => Promise<any>
   isUploading: boolean
-  selectedDocId: string | null
-  setSelectedDocId: (id: string | null) => void
 }
 
 function DocumentosTab({
@@ -648,13 +706,50 @@ function DocumentosTab({
   onRequestUpload,
   onCompleteUpload,
   isUploading: isMutatingUpload,
-  selectedDocId,
-  setSelectedDocId,
 }: DocumentosTabProps) {
-  const selectedDoc = items.find((doc) => doc.id === selectedDocId)
   const [reviewingExtractionDocId, setReviewingExtractionDocId] = useState<string | null>(null)
   const handleCloseReview = useCallback(() => setReviewingExtractionDocId(null), [])
   const handleSnapshotCreated = useCallback(() => setReviewingExtractionDocId(null), [])
+
+  // Peças geradas pelo Claude (aparecem junto dos documentos).
+  const pieceDraftsQuery = useCasePieceDrafts(organizationId, caseId, true)
+  const pieces = pieceDraftsQuery.data?.data ?? []
+
+  // Download/visualização (fetch com header de org → blob).
+  const [busyId, setBusyId] = useState<string | null>(null)
+  const handleDownloadDoc = async (doc: { id: string; fileName: string }) => {
+    setBusyId(doc.id)
+    try {
+      await downloadBlob(`/api/v1/documents/${doc.id}/download?download=true`, {
+        organizationId,
+        fileName: doc.fileName,
+      })
+    } catch (e: any) {
+      alert(`Falha ao baixar: ${e?.message ?? 'erro'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
+  const handleViewDoc = async (doc: { id: string }) => {
+    try {
+      await viewBlob(`/api/v1/documents/${doc.id}/download`, { organizationId })
+    } catch (e: any) {
+      alert(`Falha ao abrir: ${e?.message ?? 'erro'}`)
+    }
+  }
+  const handleDownloadPiece = async (p: { id: string }) => {
+    setBusyId(p.id)
+    try {
+      await downloadBlob(`/api/v1/piece-drafts/${p.id}/export-docx`, {
+        organizationId,
+        fileName: `peca-${p.id.substring(0, 8)}.docx`,
+      })
+    } catch (e: any) {
+      alert(`Falha ao baixar a peça: ${e?.message ?? 'erro'}`)
+    } finally {
+      setBusyId(null)
+    }
+  }
 
   // Upload States
   const [file, setFile] = useState<File | null>(null)
@@ -765,22 +860,22 @@ function DocumentosTab({
         />
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-      {/* Left Column: Upload area and Document list */}
-      <div className={`${selectedDocId ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-4`}>
+      <div className="space-y-4">
+      {/* Upload + lista de documentos e peças */}
+      <div className="space-y-4">
         {/* Upload Form Panel */}
-        <div className="border border-white/[0.06] bg-white/[0.02] rounded-lg p-4 space-y-3">
-          <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+        <div className="border border-slate-100 bg-slate-50 rounded-lg p-4 space-y-3">
+          <span className="text-[10px] uppercase font-bold tracking-wider text-slate-600 block">
             Adicionar Novo Documento (PDF)
           </span>
           <form onSubmit={handleUploadSubmit} className="space-y-3">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Classe Documental</label>
+                <label className="block text-[11px] text-slate-600 mb-1">Classe Documental</label>
                 <select
                   value={docClass}
                   onChange={(e) => setDocClass(e.target.value)}
-                  className="w-full bg-black/40 border border-white/[0.08] text-white rounded p-1.5 text-[11px] focus:outline-none focus:border-indigo-500"
+                  className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded p-1.5 text-[11px] focus:outline-none focus:border-blue-600"
                 >
                   <option value="Petição">Petição</option>
                   <option value="Sentença">Sentença</option>
@@ -792,31 +887,31 @@ function DocumentosTab({
                 </select>
               </div>
               <div>
-                <label className="block text-[11px] text-zinc-400 mb-1">Arquivo PDF</label>
+                <label className="block text-[11px] text-slate-600 mb-1">Arquivo PDF</label>
                 <input
                   type="file"
                   accept="application/pdf"
                   onChange={handleFileChange}
-                  className="w-full text-[11px] text-zinc-400 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-indigo-600 file:text-white hover:file:bg-indigo-500 cursor-pointer"
+                  className="w-full text-[11px] text-slate-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-[11px] file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-600 cursor-pointer"
                 />
               </div>
             </div>
 
             {/* Status alerts */}
             {uploadStatus === 'error' && (
-              <div className="text-[11px] text-red-400 bg-red-950/20 border border-red-900/30 p-2 rounded">
+              <div className="text-[11px] text-red-700 bg-red-50 border border-red-200 p-2 rounded">
                 Erro: {uploadError}
               </div>
             )}
             {uploadStatus === 'success' && (
-              <div className="text-[11px] text-emerald-400 bg-emerald-950/20 border border-emerald-900/30 p-2 rounded">
+              <div className="text-[11px] text-emerald-700 bg-emerald-50 border border-emerald-200 p-2 rounded">
                 Documento enviado e associado com sucesso!
               </div>
             )}
 
             {uploadStatus !== 'idle' && uploadStatus !== 'success' && uploadStatus !== 'error' && (
               <div className="space-y-1">
-                <div className="flex justify-between text-[10px] text-zinc-400">
+                <div className="flex justify-between text-[10px] text-slate-600">
                   <span>
                     {uploadStatus === 'hashing' && 'Calculando integridade (SHA-256)...'}
                     {uploadStatus === 'requesting' && 'Solicitando canal seguro...'}
@@ -825,8 +920,8 @@ function DocumentosTab({
                   </span>
                   <span>{uploadProgress}%</span>
                 </div>
-                <div className="w-full bg-white/[0.04] h-1.5 rounded overflow-hidden">
-                  <div className="bg-indigo-500 h-full transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
+                <div className="w-full bg-slate-50 h-1.5 rounded overflow-hidden">
+                  <div className="bg-blue-600 h-full transition-all duration-200" style={{ width: `${uploadProgress}%` }} />
                 </div>
               </div>
             )}
@@ -835,7 +930,7 @@ function DocumentosTab({
               <button
                 type="submit"
                 disabled={isMutatingUpload}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 text-white rounded text-[11px] font-medium transition cursor-pointer"
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-600 disabled:bg-blue-800 text-white rounded text-[11px] font-medium transition cursor-pointer"
               >
                 Iniciar Upload
               </button>
@@ -843,156 +938,105 @@ function DocumentosTab({
           </form>
         </div>
 
-        {/* Documents list */}
-        <div className="flex justify-between items-center">
-          <p className={`text-[12px] ${text.faint}`}>
-            {items.length} {items.length === 1 ? 'peça associada' : 'peças associadas'}
-          </p>
-          {selectedDocId && (
-            <button
-              onClick={() => setSelectedDocId(null)}
-              className="text-[12px] text-zinc-400 hover:text-white underline cursor-pointer"
-            >
-              Limpar seleção
-            </button>
-          )}
-        </div>
-        
+        {/* Peças geradas pelo Claude */}
+        {pieces.length > 0 && (
+          <div className="space-y-2">
+            <p className={`text-[12px] font-semibold ${text.secondary}`}>Peças geradas pela IA</p>
+            <ul className="space-y-2" aria-label="Peças geradas">
+              {pieces.map((p) => (
+                <li
+                  key={p.id}
+                  className="flex items-center gap-3 border border-violet-200 bg-violet-50 rounded-lg p-4"
+                >
+                  <span className="shrink-0 text-[18px] leading-none" aria-hidden="true">📝</span>
+                  <div className="min-w-0 flex-1">
+                    <p className={`text-[13px] font-medium ${text.secondary}`}>
+                      Peça processual (Claude){p.finalizedAt ? ' — finalizada' : ' — rascunho'}
+                    </p>
+                    <div className={`mt-1 flex flex-wrap gap-x-3 text-[11px] ${text.faint}`}>
+                      <span>Gerada {formatDate(p.createdAt)}</span>
+                      {p.modelUsed && <span>{p.modelUsed}</span>}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDownloadPiece(p)}
+                    disabled={busyId === p.id}
+                    className="shrink-0 inline-flex items-center gap-1.5 py-1.5 px-3 bg-violet-600 hover:bg-violet-700 disabled:opacity-50 text-white rounded text-[11px] font-medium transition cursor-pointer"
+                  >
+                    {busyId === p.id ? 'Baixando…' : '📥 Baixar Word'}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Documentos do caso */}
+        <p className={`text-[12px] ${text.faint}`}>
+          {items.length} {items.length === 1 ? 'documento' : 'documentos'}
+        </p>
+
         {items.length === 0 ? (
           <EmptyState
             variant="tab"
-            title="Nenhuma peça associada"
-            description="Documentos associados a este caso aparecerão aqui."
+            title="Nenhum documento"
+            description="Autos, peças e demais documentos deste caso aparecerão aqui (mais recentes no topo)."
           />
         ) : (
-          <ul className="space-y-2" aria-label="Peças">
-            {items.map((doc) => {
-              const isSelected = doc.id === selectedDocId
-              const needsExtractionReview = doc.status === 'extraction_review'
-              return (
-                <li key={doc.id}>
-                  <div
-                    onClick={() => setSelectedDocId(doc.id)}
-                    className={`cursor-pointer transition-all border rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.05] ${
-                      isSelected ? 'border-indigo-500/80 bg-white/[0.04]' : needsExtractionReview ? 'border-amber-500/40 bg-amber-950/10' : 'border-white/[0.06]'
-                    }`}
+          <ul className="space-y-2" aria-label="Documentos">
+            {[...items]
+              .sort((a, b) => new Date(b.uploadedAt).getTime() - new Date(a.uploadedAt).getTime())
+              .map((doc) => {
+                const needsExtractionReview = doc.status === 'extraction_review'
+                const nome = doc.documentClass ? documentClassLabel(doc.documentClass) : doc.fileName
+                return (
+                  <li
+                    key={doc.id}
+                    className={`border rounded-lg p-4 ${needsExtractionReview ? 'border-amber-500/40 bg-amber-50' : 'border-slate-100 bg-slate-50'}`}
                   >
                     <div className="flex items-start gap-3">
                       <span className="shrink-0 text-[18px] leading-none mt-0.5" aria-hidden="true">
                         {docMimeIcon(doc.mimeType)}
                       </span>
                       <div className="min-w-0 flex-1">
-                        <p className={`text-[13px] font-medium ${text.secondary} truncate`}>
-                          {doc.fileName}
-                        </p>
+                        <p className={`text-[13px] font-medium ${text.secondary}`}>{nome}</p>
+                        <p className={`text-[11px] ${text.faint} truncate`}>{doc.fileName}</p>
                         <div className={`mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] ${text.faint}`}>
                           <span>{documentStatusLabel(doc.status)}</span>
-                          <span>OCR: {ocrStatusLabel(doc.ocrStatus)}</span>
-                          {doc.documentClass !== null && <span>Classe: {doc.documentClass}</span>}
                           <span>{formatBytes(doc.byteSize)}</span>
                           <span>Enviado {formatDate(doc.uploadedAt)}</span>
                         </div>
                         {needsExtractionReview && (
-                          <div className="mt-2 flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide text-amber-400 bg-amber-950/30 border border-amber-800/40 rounded px-2 py-0.5">
-                              ⚡ Extração aguardando revisão
-                            </span>
-                            <button
-                              id={`btn-review-extraction-${doc.id}`}
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedDocId(doc.id)
-                                setReviewingExtractionDocId(doc.id)
-                              }}
-                              className="text-[11px] font-semibold text-amber-300 hover:text-amber-200 underline underline-offset-2 cursor-pointer transition-colors"
-                            >
-                              Revisar Extração →
-                            </button>
-                          </div>
+                          <button
+                            onClick={() => setReviewingExtractionDocId(doc.id)}
+                            className="mt-2 text-[11px] font-semibold text-amber-700 hover:text-amber-800 underline underline-offset-2 cursor-pointer"
+                          >
+                            ⚡ Revisar extração →
+                          </button>
                         )}
                       </div>
+                      <div className="shrink-0 flex flex-col gap-1.5">
+                        <button
+                          onClick={() => handleViewDoc(doc)}
+                          className="inline-flex items-center gap-1 py-1 px-2.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded text-[11px] font-medium transition cursor-pointer"
+                        >
+                          👁 Visualizar
+                        </button>
+                        <button
+                          onClick={() => handleDownloadDoc(doc)}
+                          disabled={busyId === doc.id}
+                          className="inline-flex items-center gap-1 py-1 px-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded text-[11px] font-medium transition cursor-pointer"
+                        >
+                          {busyId === doc.id ? '…' : '📥 Baixar'}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                </li>
-              )
-            })}
+                  </li>
+                )
+              })}
           </ul>
         )}
       </div>
-
-      {/* Right Column: PDF Viewer Split Pane */}
-      {selectedDoc && (
-        <div className="lg:col-span-1 border border-white/[0.08] bg-white/[0.03] rounded-lg p-5 space-y-4 sticky top-6 animate-[fadeIn_200ms_ease-out]">
-          <div className="flex justify-between items-start">
-            <div>
-              <span className={`text-[10px] uppercase font-bold tracking-wider ${text.faint}`}>
-                Visualizador de Peça
-              </span>
-              <h4 className="text-[14px] font-semibold text-white mt-0.5 truncate max-w-[200px]" title={selectedDoc.fileName}>
-                {selectedDoc.fileName}
-              </h4>
-            </div>
-            <button
-              onClick={() => setSelectedDocId(null)}
-              className="text-zinc-500 hover:text-white text-[16px] cursor-pointer"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="text-[12px] text-zinc-300 space-y-2 border-t border-white/[0.04] pt-3">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <span className="text-zinc-400 block text-[9.5px]">CLASSE</span>
-                <span className="text-white text-[11px]">{selectedDoc.documentClass || 'Não informada'}</span>
-              </div>
-              <div>
-                <span className="text-zinc-400 block text-[9.5px]">TAMANHO</span>
-                <span className="text-white text-[11px]">{formatBytes(selectedDoc.byteSize)}</span>
-              </div>
-              <div>
-                <span className="text-zinc-400 block text-[9.5px]">STATUS</span>
-                <span className="text-white text-[11px] font-mono">{selectedDoc.status}</span>
-              </div>
-              <div>
-                <span className="text-zinc-400 block text-[9.5px]">ENVIADO EM</span>
-                <span className="text-white text-[11px]">{formatDate(selectedDoc.uploadedAt)}</span>
-              </div>
-            </div>
-          </div>
-
-          {/* Secure Download Button */}
-          <div className="pt-2">
-            <a
-              href={`/api/v1/documents/${selectedDoc.id}/download?download=true`}
-              className="w-full inline-flex justify-center items-center gap-1.5 py-1.5 bg-zinc-800 hover:bg-zinc-700 border border-white/[0.08] text-white rounded text-[11px] font-medium transition cursor-pointer"
-            >
-              📥 Baixar Arquivo com Segurança
-            </a>
-          </div>
-
-          {/* Inline PDF Iframe Viewer */}
-          <div className="border border-white/[0.08] rounded overflow-hidden bg-black/40 h-[450px]">
-            {selectedDoc.mimeType === 'application/pdf' ? (
-              <iframe
-                src={`/api/v1/documents/${selectedDoc.id}/download`}
-                className="w-full h-full border-0"
-                title="Visualizador PDF"
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full text-zinc-500 text-[11px] p-4 text-center">
-                <span>Visualização nativa disponível apenas para PDFs.</span>
-                <a
-                  href={`/api/v1/documents/${selectedDoc.id}/download?download=true`}
-                  className="mt-2 text-indigo-400 hover:underline cursor-pointer"
-                >
-                  Clique aqui para baixar e visualizar.
-                </a>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
       </div>
     </>
   )
@@ -1009,11 +1053,12 @@ type OportunidadesTabProps = TabProps<import('@/lib/hooks/use-case-opportunities
   isReviewing: boolean
   isDeferring: boolean
   isGeneratingDraft: boolean
-  onGenerateDraft: (opportunityId: string, instructions?: string, onSuccessCb?: () => void) => void
+  onGenerateDraft: (opportunityId: string, payload: GeneratePiecePayload, onSuccessCb?: () => void) => void
   isEditorOpen: boolean
   setIsEditorOpen: (open: boolean) => void
   activeDraftId: string | null
   setActiveDraftId: (id: string | null) => void
+  documentFreshnessStatus?: string | null
 }
 
 function OportunidadesTab({
@@ -1033,7 +1078,9 @@ function OportunidadesTab({
   setIsEditorOpen,
   activeDraftId,
   setActiveDraftId,
+  documentFreshnessStatus,
 }: OportunidadesTabProps) {
+  const isStale = documentFreshnessStatus === 'stale'
   const [selectedOppId, setSelectedOppId] = useState<string | null>(null)
   const selectedOpp = items.find((opp) => opp.id === selectedOppId)
   const [promptEditorOpp, setPromptEditorOpp] = useState<any>(null)
@@ -1148,7 +1195,7 @@ function OportunidadesTab({
                 setSelectedOppId(null)
                 setActionForm(null)
               }}
-              className="text-[12px] text-zinc-400 hover:text-white underline cursor-pointer"
+              className="text-[12px] text-slate-600 hover:text-slate-900 underline cursor-pointer"
             >
               Limpar seleção
             </button>
@@ -1166,8 +1213,8 @@ function OportunidadesTab({
                     setErrorMsg(null)
                     setSuccessMsg(null)
                   }}
-                  className={`cursor-pointer transition-all border rounded-lg p-4 bg-white/[0.02] hover:bg-white/[0.05] ${
-                    isSelected ? 'border-indigo-500/80 bg-white/[0.04]' : 'border-white/[0.06]'
+                  className={`cursor-pointer transition-all border rounded-lg p-4 bg-slate-50 hover:bg-slate-50 ${
+                    isSelected ? 'border-blue-600/80 bg-slate-50' : 'border-slate-100'
                   }`}
                 >
                   <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -1175,11 +1222,11 @@ function OportunidadesTab({
                       {OPPORTUNITY_TYPE_LABELS[opp.opportunityType] ?? opp.opportunityType}
                     </StatusBadge>
                     {opp.requiresReview && (
-                      <span className="inline-flex items-center rounded border border-indigo-900/40 bg-indigo-950/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-indigo-400">
+                      <span className="inline-flex items-center rounded border border-blue-200 bg-blue-100 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-blue-600">
                         Motor
                       </span>
                     )}
-                    <span className="text-[11px] font-mono px-1.5 py-0.25 bg-white/[0.04] border border-white/[0.06] rounded text-zinc-400">
+                    <span className="text-[11px] font-mono px-1.5 py-0.25 bg-slate-50 border border-slate-100 rounded text-slate-600">
                       {opp.status}
                     </span>
                     {opp.confidenceLevel !== null && (
@@ -1188,7 +1235,7 @@ function OportunidadesTab({
                       </span>
                     )}
                     {opp.isBlocked && (
-                      <span className="inline-flex items-center rounded border border-amber-900/40 bg-amber-950/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-400">
+                      <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-700">
                         Bloqueada
                       </span>
                     )}
@@ -1211,13 +1258,13 @@ function OportunidadesTab({
 
       {/* Right side: Detailed View & Review form */}
       {selectedOpp && (
-        <div className="lg:col-span-1 border border-white/[0.08] bg-white/[0.03] rounded-lg p-5 space-y-4 sticky top-6 animate-[fadeIn_200ms_ease-out]">
+        <div className="lg:col-span-1 border border-slate-200 bg-slate-50 rounded-lg p-5 space-y-4 sticky top-6 animate-[fadeIn_200ms_ease-out]">
           <div className="flex justify-between items-start">
             <div>
               <span className={`text-[10px] uppercase font-bold tracking-wider ${text.faint}`}>
                 Detalhe da Oportunidade
               </span>
-              <h4 className="text-[14px] font-semibold text-white mt-0.5">
+              <h4 className="text-[14px] font-semibold text-slate-900 mt-0.5">
                 {OPPORTUNITY_TYPE_LABELS[selectedOpp.opportunityType] ?? selectedOpp.opportunityType}
               </h4>
             </div>
@@ -1226,42 +1273,42 @@ function OportunidadesTab({
                 setSelectedOppId(null)
                 setActionForm(null)
               }}
-              className="text-zinc-500 hover:text-white text-[16px] cursor-pointer"
+              className="text-slate-500 hover:text-slate-900 text-[16px] cursor-pointer"
             >
               ✕
             </button>
           </div>
 
-          <div className="text-[12px] text-zinc-300 space-y-2 border-t border-white/[0.04] pt-3">
+          <div className="text-[12px] text-slate-700 space-y-2 border-t border-slate-100 pt-3">
             <div>
-              <span className="font-semibold block text-zinc-400">Resumo:</span>
+              <span className="font-semibold block text-slate-600">Resumo:</span>
               <p className="mt-0.5 text-[13px]">{selectedOpp.summary}</p>
             </div>
             {selectedOpp.rationale && (
               <div>
-                <span className="font-semibold block text-zinc-400">Raciocínio Técnico:</span>
-                <p className="mt-0.5 whitespace-pre-wrap font-mono text-[11px] bg-black/20 p-2 rounded border border-white/[0.04] max-h-[150px] overflow-y-auto">
+                <span className="font-semibold block text-slate-600">Raciocínio Técnico:</span>
+                <p className="mt-0.5 whitespace-pre-wrap font-mono text-[11px] bg-slate-50 p-2 rounded border border-slate-100 max-h-[150px] overflow-y-auto">
                   {selectedOpp.rationale}
                 </p>
               </div>
             )}
-            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/[0.04]">
+            <div className="grid grid-cols-2 gap-2 pt-2 border-t border-slate-100">
               <div>
-                <span className="text-zinc-400 block text-[10px]">STATUS</span>
-                <span className="text-white text-[11px] font-mono">{selectedOpp.status}</span>
+                <span className="text-slate-600 block text-[10px]">STATUS</span>
+                <span className="text-slate-900 text-[11px]">{opportunityStatusLabel(selectedOpp.status)}</span>
               </div>
               <div>
-                <span className="text-zinc-400 block text-[10px]">DETECTADO EM</span>
-                <span className="text-white text-[11px]">{formatDate(selectedOpp.detectedAt)}</span>
+                <span className="text-slate-600 block text-[10px]">DETECTADO EM</span>
+                <span className="text-slate-900 text-[11px]">{formatDate(selectedOpp.detectedAt)}</span>
               </div>
             </div>
           </div>
 
           {/* Render Rich Metadata if available */}
           {(selectedOpp.blockingConditions?.length ?? 0) > 0 && (
-            <div className="space-y-1 text-[11px] bg-amber-950/20 border border-amber-900/30 p-3 rounded">
-              <span className="font-semibold text-amber-400 block">Condições de Bloqueio:</span>
-              <ul className="list-disc pl-4 space-y-1 text-zinc-300">
+            <div className="space-y-1 text-[11px] bg-amber-50 border border-amber-200 p-3 rounded">
+              <span className="font-semibold text-amber-700 block">Condições de Bloqueio:</span>
+              <ul className="list-disc pl-4 space-y-1 text-slate-700">
                 {selectedOpp.blockingConditions?.map((cond, i) => (
                   <li key={i}>{cond.condition} ({cond.type})</li>
                 ))}
@@ -1270,9 +1317,9 @@ function OportunidadesTab({
           )}
 
           {(selectedOpp.requiredDocuments?.length ?? 0) > 0 && (
-            <div className="space-y-1 text-[11px] bg-blue-950/20 border border-blue-900/30 p-3 rounded">
-              <span className="font-semibold text-blue-400 block">Documentos Necessários:</span>
-              <ul className="list-disc pl-4 space-y-1 text-zinc-300">
+            <div className="space-y-1 text-[11px] bg-blue-50 border border-blue-200 p-3 rounded">
+              <span className="font-semibold text-blue-700 block">Documentos Necessários:</span>
+              <ul className="list-disc pl-4 space-y-1 text-slate-700">
                 {selectedOpp.requiredDocuments?.map((doc, i) => (
                   <li key={i}>{doc.required} — <span className="italic">{doc.reason}</span> ({doc.urgency})</li>
                 ))}
@@ -1281,19 +1328,19 @@ function OportunidadesTab({
           )}
 
           {/* Action buttons or forms */}
-          <div className="border-t border-white/[0.06] pt-4 space-y-3">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+          <div className="border-t border-slate-100 pt-4 space-y-3">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-600 block">
               Ações de Revisão Humana
             </span>
 
             {/* Success and Error messages */}
             {errorMsg && (
-              <div className="bg-red-950/40 border border-red-900/60 text-red-400 text-[11px] p-2.5 rounded">
+              <div className="bg-red-50 border border-red-200 text-red-700 text-[11px] p-2.5 rounded">
                 {errorMsg}
               </div>
             )}
             {successMsg && (
-              <div className="bg-emerald-950/40 border border-emerald-900/60 text-emerald-400 text-[11px] p-2.5 rounded">
+              <div className="bg-emerald-50 border border-emerald-200 text-emerald-700 text-[11px] p-2.5 rounded">
                 {successMsg}
               </div>
             )}
@@ -1311,13 +1358,13 @@ function OportunidadesTab({
                     </button>
                     <button
                       onClick={() => setActionForm('rejected')}
-                      className="px-3 py-1.5 bg-red-950/60 hover:bg-red-950/90 text-red-400 border border-red-900/40 rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-50 text-red-700 border border-red-200 rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Descartar
                     </button>
                     <button
                       onClick={() => setActionForm('deferred')}
-                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Adiar
                     </button>
@@ -1329,26 +1376,32 @@ function OportunidadesTab({
                   <>
                     <button
                       onClick={() => setActionForm('pursuing_started')}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-blue-600 hover:bg-blue-600 text-white rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Iniciar Execução
                     </button>
                     <button
-                      onClick={() => setPromptEditorOpp(selectedOpp)}
-                      disabled={isGeneratingDraft}
-                      className="px-3 py-1.5 flex items-center gap-1 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white rounded text-[12px] font-medium transition shadow-[0_0_15px_rgba(124,58,237,0.3)] disabled:opacity-50 cursor-pointer"
+                      onClick={() => !isStale && setPromptEditorOpp(selectedOpp)}
+                      disabled={isGeneratingDraft || isStale}
+                      title={isStale ? 'Autos desatualizados — faça upload dos autos novos para desbloquear' : undefined}
+                      className={[
+                        'px-3 py-1.5 flex items-center gap-1 rounded text-[12px] font-medium transition',
+                        isStale
+                          ? 'bg-red-50 border border-red-200 text-red-700 cursor-not-allowed opacity-80'
+                          : 'bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-600 text-white shadow-[0_0_15px_rgba(124,58,237,0.3)] disabled:opacity-50 cursor-pointer',
+                      ].join(' ')}
                     >
-                      ✨ {isGeneratingDraft ? 'Redigindo...' : 'Redigir Peça com Claude'}
+                      {isStale ? '🔒 Autos desatualizados' : `✨ ${isGeneratingDraft ? 'Redigindo...' : 'Redigir Peça com Claude'}`}
                     </button>
                     <button
                       onClick={() => setActionForm('rejected')}
-                      className="px-3 py-1.5 bg-red-950/60 hover:bg-red-950/90 text-red-400 border border-red-900/40 rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-50 text-red-700 border border-red-200 rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Descartar
                     </button>
                     <button
                       onClick={() => setActionForm('deferred')}
-                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Adiar
                     </button>
@@ -1366,13 +1419,13 @@ function OportunidadesTab({
                     </button>
                     <button
                       onClick={() => setActionForm('rejected')}
-                      className="px-3 py-1.5 bg-red-950/60 hover:bg-red-950/90 text-red-400 border border-red-900/40 rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-red-50 hover:bg-red-50 text-red-700 border border-red-200 rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Descartar
                     </button>
                     <button
                       onClick={() => setActionForm('deferred')}
-                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-300 rounded text-[12px] font-medium transition cursor-pointer"
+                      className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded text-[12px] font-medium transition cursor-pointer"
                     >
                       Adiar
                     </button>
@@ -1383,15 +1436,15 @@ function OportunidadesTab({
                 {(selectedOpp.status === 'realized' ||
                   selectedOpp.status === 'dismissed' ||
                   selectedOpp.status === 'expired') && (
-                  <div className="text-[12px] text-zinc-400 italic">
+                  <div className="text-[12px] text-slate-600 italic">
                     Oportunidade em estado final ({selectedOpp.status}). Nenhuma ação adicional é permitida.
                   </div>
                 )}
               </div>
             ) : (
-              <form onSubmit={handleSubmit} className="space-y-3 bg-white/[0.02] border border-white/[0.05] p-3 rounded">
+              <form onSubmit={handleSubmit} className="space-y-3 bg-slate-50 border border-slate-100 p-3 rounded">
                 <div className="flex justify-between items-center">
-                  <span className="text-[11px] font-semibold text-indigo-400">
+                  <span className="text-[11px] font-semibold text-blue-600">
                     Ação: {actionForm === 'qualified' ? 'Qualificar' : actionForm === 'rejected' ? 'Descartar' : actionForm === 'deferred' ? 'Adiar' : actionForm === 'pursuing_started' ? 'Iniciar Execução' : actionForm === 'realized' ? 'Realizar' : ''}
                   </span>
                   <button
@@ -1400,7 +1453,7 @@ function OportunidadesTab({
                       setActionForm(null)
                       setErrorMsg(null)
                     }}
-                    className="text-[10px] text-zinc-400 hover:text-white cursor-pointer"
+                    className="text-[10px] text-slate-600 hover:text-slate-900 cursor-pointer"
                   >
                     Cancelar
                   </button>
@@ -1409,11 +1462,11 @@ function OportunidadesTab({
                 {/* Conditional Fields */}
                 {actionForm === 'rejected' && (
                   <div className="space-y-1">
-                    <label className="block text-[11px] text-zinc-400">Motivo do Descarte</label>
+                    <label className="block text-[11px] text-slate-600">Motivo do Descarte</label>
                     <select
                       value={rejectionReasonCode}
                       onChange={(e: any) => setRejectionReasonCode(e.target.value)}
-                      className="w-full bg-black/40 border border-white/[0.08] text-white rounded p-1.5 text-[11px] focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded p-1.5 text-[11px] focus:outline-none focus:border-blue-600"
                     >
                       <option value="not_applicable">Não aplicável</option>
                       <option value="data_insufficient">Dados insuficientes</option>
@@ -1427,43 +1480,43 @@ function OportunidadesTab({
 
                 {actionForm === 'deferred' && (
                   <div className="space-y-1">
-                    <label className="block text-[11px] text-zinc-400">Adiar até</label>
+                    <label className="block text-[11px] text-slate-600">Adiar até</label>
                     <input
                       type="datetime-local"
                       required
                       value={deferredUntil}
                       onChange={(e) => setDeferredUntil(e.target.value)}
-                      className="w-full bg-black/40 border border-white/[0.08] text-white rounded p-1.5 text-[11px] focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded p-1.5 text-[11px] focus:outline-none focus:border-blue-600"
                     />
                   </div>
                 )}
 
                 {actionForm === 'realized' && (
                   <div className="space-y-1">
-                    <label className="block text-[11px] text-zinc-400">Rascunho de Peça (UUID)</label>
+                    <label className="block text-[11px] text-slate-600">Rascunho de Peça (UUID)</label>
                     <input
                       type="text"
                       required
                       placeholder="e.g. 123e4567-e89b-12d3-a456-426614174000"
                       value={realizedPieceDraftId}
                       onChange={(e) => setRealizedPieceDraftId(e.target.value)}
-                      className="w-full bg-black/40 border border-white/[0.08] text-white rounded p-1.5 text-[11px] font-mono focus:outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded p-1.5 text-[11px] font-mono focus:outline-none focus:border-blue-600"
                     />
                   </div>
                 )}
 
                 {/* Explanation */}
                 <div className="space-y-1">
-                  <label className="block text-[11px] text-zinc-400">Justificativa (Mínimo 10 caracteres)</label>
+                  <label className="block text-[11px] text-slate-600">Justificativa (Mínimo 10 caracteres)</label>
                   <textarea
                     required
                     rows={3}
                     placeholder="Escreva a justificativa para esta ação..."
                     value={explanation}
                     onChange={(e) => setExplanation(e.target.value)}
-                    className="w-full bg-black/40 border border-white/[0.08] text-white rounded p-1.5 text-[11px] focus:outline-none focus:border-indigo-500"
+                    className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded p-1.5 text-[11px] focus:outline-none focus:border-blue-600"
                   />
-                  <span className={`text-[10px] block text-right ${explanation.trim().length >= 10 ? 'text-emerald-400' : 'text-zinc-500'}`}>
+                  <span className={`text-[10px] block text-right ${explanation.trim().length >= 10 ? 'text-emerald-700' : 'text-slate-500'}`}>
                     {explanation.trim().length}/10 caracteres
                   </span>
                 </div>
@@ -1471,7 +1524,7 @@ function OportunidadesTab({
                 <button
                   type="submit"
                   disabled={isReviewing || isDeferring}
-                  className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:bg-indigo-800 disabled:text-zinc-400 text-white rounded text-[11px] font-medium transition cursor-pointer"
+                  className="w-full py-1.5 bg-blue-600 hover:bg-blue-600 disabled:bg-blue-800 disabled:text-slate-600 text-white rounded text-[11px] font-medium transition cursor-pointer"
                 >
                   {isReviewing || isDeferring ? 'Enviando...' : 'Confirmar Ação'}
                 </button>
@@ -1480,29 +1533,29 @@ function OportunidadesTab({
           </div>
 
           {/* Revision history */}
-          <div className="border-t border-white/[0.06] pt-4 space-y-2">
-            <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 block">
+          <div className="border-t border-slate-100 pt-4 space-y-2">
+            <span className="text-[10px] uppercase font-bold tracking-wider text-slate-600 block">
               Histórico de Revisões
             </span>
             {isLoadingReviews ? (
-              <span className="text-[11px] text-zinc-500 block">Carregando histórico...</span>
+              <span className="text-[11px] text-slate-500 block">Carregando histórico...</span>
             ) : reviewsData?.data && reviewsData.data.length > 0 ? (
               <ul className="space-y-2.5 max-h-[200px] overflow-y-auto pr-1">
                 {reviewsData.data.map((review) => (
-                  <li key={review.id} className="text-[11px] border-b border-white/[0.02] pb-2 last:border-0 last:pb-0">
-                    <div className="flex justify-between items-center text-zinc-400 font-mono text-[9px]">
+                  <li key={review.id} className="text-[11px] border-b border-slate-100 pb-2 last:border-0 last:pb-0">
+                    <div className="flex justify-between items-center text-slate-600 font-mono text-[9px]">
                       <span>AÇÃO: {review.reviewAction.toUpperCase()}</span>
                       <span>{formatDate(review.reviewedAt)}</span>
                     </div>
-                    <p className="text-white mt-0.5">{review.explanation}</p>
+                    <p className="text-slate-900 mt-0.5">{review.explanation}</p>
                     {review.rejectionReasonCode && (
-                      <span className="text-[9.5px] text-red-400">Motivo do descarte: {review.rejectionReasonCode}</span>
+                      <span className="text-[9.5px] text-red-700">Motivo do descarte: {review.rejectionReasonCode}</span>
                     )}
                   </li>
                 ))}
               </ul>
             ) : (
-              <span className="text-[11px] text-zinc-500 italic block">Nenhuma revisão registrada.</span>
+              <span className="text-[11px] text-slate-500 italic block">Nenhuma revisão registrada.</span>
             )}
           </div>
         </div>
@@ -1514,9 +1567,10 @@ function OportunidadesTab({
           opportunityId={promptEditorOpp.id}
           opportunityType={promptEditorOpp.opportunityType}
           summary={promptEditorOpp.summary}
+          organizationId={organizationId}
           onClose={() => setPromptEditorOpp(null)}
-          onConfirm={(instructions) => {
-            onGenerateDraft(promptEditorOpp.id, instructions, () => setPromptEditorOpp(null))
+          onConfirm={(payload) => {
+            onGenerateDraft(promptEditorOpp.id, payload, () => setPromptEditorOpp(null))
           }}
           isGenerating={isGeneratingDraft}
         />
@@ -1758,15 +1812,15 @@ function PrazosTab({
       {/* Left panel: List */}
       <div className="lg:col-span-2 space-y-4">
         {/* Controls Header */}
-        <div className="bg-zinc-900/60 border border-zinc-800/80 rounded-lg p-3 space-y-2">
+        <div className="bg-white border border-slate-200/80 rounded-lg p-3 space-y-2">
           <div className="flex justify-between items-center">
-            <h3 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Filtro de Prazos</h3>
+            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Filtro de Prazos</h3>
             <button
               onClick={() => {
                 setShowCreateForm(!showCreateForm)
                 setSelectedDeadlineId(null)
               }}
-              className="text-[11px] bg-zinc-800 hover:bg-zinc-700 text-white font-medium py-1 px-2.5 rounded border border-zinc-700/60 transition-colors"
+              className="text-[11px] bg-slate-100 hover:bg-slate-200 text-slate-900 font-medium py-1 px-2.5 rounded border border-slate-300/60 transition-colors"
             >
               {showCreateForm ? 'Voltar para Lista' : '+ Criar Prazo'}
             </button>
@@ -1779,12 +1833,12 @@ function PrazosTab({
                 placeholder="Buscar por título..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full text-[11px] bg-black/40 border border-zinc-800 text-white rounded px-2 py-1 focus:outline-none focus:border-zinc-700 transition-colors"
+                className="w-full text-[11px] bg-slate-50 border border-slate-200 text-slate-900 rounded px-2 py-1 focus:outline-none focus:border-slate-300 transition-colors"
               />
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full text-[11px] bg-black/40 border border-zinc-800 text-zinc-400 rounded px-2 py-1 focus:outline-none focus:border-zinc-700 transition-colors"
+                className="w-full text-[11px] bg-slate-50 border border-slate-200 text-slate-600 rounded px-2 py-1 focus:outline-none focus:border-slate-300 transition-colors"
               >
                 <option value="all_pending">Pendentes (Em aberto/Atraso)</option>
                 <option value="all">Todos os Status</option>
@@ -1803,8 +1857,8 @@ function PrazosTab({
           <div
             className={`p-2.5 rounded text-xs border ${
               feedback.type === 'success'
-                ? 'bg-emerald-950/40 text-emerald-400 border-emerald-900/50'
-                : 'bg-red-950/40 text-red-400 border-red-900/50'
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                : 'bg-red-50 text-red-700 border-red-200'
             }`}
           >
             {feedback.message}
@@ -1813,28 +1867,28 @@ function PrazosTab({
 
         {/* Create Deadline Form */}
         {showCreateForm ? (
-          <form onSubmit={handleCreateSubmit} className="bg-zinc-900/40 border border-zinc-800/80 rounded-lg p-4 space-y-3">
-            <h4 className="text-xs font-semibold text-white uppercase tracking-wider">Novo Prazo Operacional</h4>
+          <form onSubmit={handleCreateSubmit} className="bg-white backdrop-blur-sm border border-slate-100 rounded-xl p-6 space-y-5 shadow-lg">
+            <h4 className="text-[11px] font-semibold text-slate-600 uppercase tracking-[0.1em] mb-4">Novo Prazo Operacional</h4>
 
-            <div className="space-y-1">
-              <label className="text-[10px] text-zinc-400 font-medium">Título *</label>
+            <div className="space-y-1.5">
+              <label className="mb-2 block text-[12px] font-medium uppercase tracking-[0.05em] text-slate-600">Título *</label>
               <input
                 type="text"
                 required
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
                 placeholder="Ex: Manifestação sobre cálculo do Ministério Público"
-                className="w-full text-[12px] bg-black/60 border border-zinc-800 text-white rounded px-2.5 py-1.5 focus:outline-none focus:border-zinc-700 transition-colors"
+                className="w-full rounded-lg border border-slate-200 bg-white shadow-inner px-4 py-2.5 text-[14px] text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-blue-600/50 focus:ring-2 focus:ring-blue-600/20 focus:bg-white"
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-2">
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-400 font-medium">Classe *</label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <label className="mb-2 block text-[12px] font-medium uppercase tracking-[0.05em] text-slate-600">Classe *</label>
                 <select
                   value={newClass}
                   onChange={(e) => setNewClass(e.target.value)}
-                  className="w-full text-[11px] bg-black/60 border border-zinc-800 text-white rounded px-2 py-1.5 focus:outline-none focus:border-zinc-700"
+                  className="w-full rounded-lg border border-slate-200 bg-white shadow-inner px-4 py-2.5 text-[14px] text-slate-900 outline-none transition-all duration-200 focus:border-blue-600/50 focus:ring-2 focus:ring-blue-600/20 focus:bg-white [&>option]:bg-white [&>option]:text-slate-900"
                 >
                   <option value="legal">Legal / Judicial</option>
                   <option value="benefit">Benefício / Lapso</option>
@@ -1846,12 +1900,12 @@ function PrazosTab({
                 </select>
               </div>
 
-              <div className="space-y-1">
-                <label className="text-[10px] text-zinc-400 font-medium">Prioridade *</label>
+              <div className="space-y-1.5">
+                <label className="mb-2 block text-[12px] font-medium uppercase tracking-[0.05em] text-slate-600">Prioridade *</label>
                 <select
                   value={newPriority}
                   onChange={(e) => setNewPriority(e.target.value)}
-                  className="w-full text-[11px] bg-black/60 border border-zinc-800 text-white rounded px-2 py-1.5 focus:outline-none focus:border-zinc-700"
+                  className="w-full rounded-lg border border-slate-200 bg-white shadow-inner px-4 py-2.5 text-[14px] text-slate-900 outline-none transition-all duration-200 focus:border-blue-600/50 focus:ring-2 focus:ring-blue-600/20 focus:bg-white [&>option]:bg-white [&>option]:text-slate-900"
                 >
                   <option value="low">Baixa</option>
                   <option value="normal">Normal</option>
@@ -1861,23 +1915,23 @@ function PrazosTab({
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] text-zinc-400 font-medium">Data Limite (Legal) *</label>
+            <div className="space-y-1.5">
+              <label className="mb-2 block text-[12px] font-medium uppercase tracking-[0.05em] text-slate-600">Data Limite (Legal) *</label>
               <input
                 type="datetime-local"
                 required
                 value={newDueAt}
                 onChange={(e) => setNewDueAt(e.target.value)}
-                className="w-full text-[11px] bg-black/60 border border-zinc-800 text-white rounded px-2 py-1.5 focus:outline-none focus:border-zinc-700"
+                className="w-full rounded-lg border border-slate-200 bg-white shadow-inner px-4 py-2.5 text-[14px] text-slate-900 outline-none transition-all duration-200 focus:border-blue-600/50 focus:ring-2 focus:ring-blue-600/20 focus:bg-white"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] text-zinc-400 font-medium">Documento Vinculado</label>
+            <div className="space-y-1.5">
+              <label className="mb-2 block text-[12px] font-medium uppercase tracking-[0.05em] text-slate-600">Documento Vinculado</label>
               <select
                 value={newSourceDocId}
                 onChange={(e) => setNewSourceDocId(e.target.value)}
-                className="w-full text-[11px] bg-black/60 border border-zinc-800 text-zinc-300 rounded px-2 py-1.5 focus:outline-none focus:border-zinc-700"
+                className="w-full rounded-lg border border-slate-200 bg-white shadow-inner px-4 py-2.5 text-[14px] text-slate-900 outline-none transition-all duration-200 focus:border-blue-600/50 focus:ring-2 focus:ring-blue-600/20 focus:bg-white [&>option]:bg-white [&>option]:text-slate-900"
               >
                 <option value="">Nenhum documento</option>
                 {documents.map((doc) => (
@@ -1888,29 +1942,29 @@ function PrazosTab({
               </select>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-[10px] text-zinc-400 font-medium">Descrição / Observações</label>
+            <div className="space-y-1.5">
+              <label className="mb-2 block text-[12px] font-medium uppercase tracking-[0.05em] text-slate-600">Descrição / Observações</label>
               <textarea
                 value={newDescription}
                 onChange={(e) => setNewDescription(e.target.value)}
                 placeholder="Detalhes sobre a base legal, observações específicas..."
-                rows={2}
-                className="w-full text-[11px] bg-black/60 border border-zinc-800 text-white rounded px-2 py-1 focus:outline-none focus:border-zinc-700"
+                rows={3}
+                className="w-full rounded-lg border border-slate-200 bg-white shadow-inner px-4 py-2.5 text-[14px] text-slate-900 outline-none transition-all duration-200 placeholder:text-slate-500 focus:border-blue-600/50 focus:ring-2 focus:ring-blue-600/20 focus:bg-white"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-1.5">
+            <div className="flex justify-end gap-3 pt-4">
               <button
                 type="button"
                 onClick={() => setShowCreateForm(false)}
-                className="text-[11px] text-zinc-400 hover:text-white px-3 py-1.5 rounded transition-colors"
+                className="text-[13px] text-slate-600 hover:text-slate-900 px-4 py-2 rounded-lg transition-colors border border-transparent hover:border-slate-200 hover:bg-slate-100"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={isCreating}
-                className="text-[11px] bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-medium px-4 py-1.5 rounded border border-blue-500/30 transition-colors"
+                className="text-[13px] bg-blue-600 hover:bg-blue-600 disabled:opacity-50 text-white font-medium px-5 py-2 rounded-lg shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_15px_rgba(79,70,229,0.3)] hover:shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_0_20px_rgba(79,70,229,0.5)] transition-all duration-200"
               >
                 {isCreating ? 'Salvando...' : 'Salvar Prazo'}
               </button>
@@ -1937,8 +1991,8 @@ function PrazosTab({
                     }}
                     className={`block cursor-pointer border rounded-lg p-3 transition-all ${
                       isSelected
-                        ? 'bg-zinc-800/40 border-zinc-700 shadow-md shadow-black/30'
-                        : `bg-zinc-950/20 border-zinc-800/80 hover:bg-zinc-900/30 hover:border-zinc-700/60`
+                        ? 'bg-slate-100 border-slate-300 shadow-md shadow-black/30'
+                        : `bg-slate-50/20 border-slate-200/80 hover:bg-white hover:border-slate-300/60`
                     } ${accent}`}
                   >
                     <div className="flex flex-wrap items-center gap-2 mb-1">
@@ -1948,12 +2002,12 @@ function PrazosTab({
                         {deadlineClassLabel(deadline.deadlineClass)}
                       </span>
                       {deadline.isBlocked && (
-                        <span className="inline-flex items-center rounded border border-amber-900/40 bg-amber-950/30 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-400">
+                        <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-amber-700">
                           Bloqueado
                         </span>
                       )}
                     </div>
-                    <p className={`text-[13px] font-medium ${isSelected ? 'text-white' : text.secondary}`}>
+                    <p className={`text-[13px] font-medium ${isSelected ? 'text-slate-900' : text.secondary}`}>
                       {deadline.title}
                     </p>
                     <div className="flex justify-between items-center mt-1.5">
@@ -1977,23 +2031,23 @@ function PrazosTab({
       {/* Right panel: Details and History */}
       <div className="lg:col-span-3">
         {selectedDeadlineId && selectedDeadline ? (
-          <div className="bg-zinc-900/30 border border-zinc-800/80 rounded-lg p-4 space-y-5 animate-[fadeIn_150ms_ease-out]">
+          <div className="bg-white border border-slate-200/80 rounded-lg p-4 space-y-5 animate-[fadeIn_150ms_ease-out]">
             {isDetailLoading ? (
               <LoadingState label="Carregando detalhes do prazo..." />
             ) : (
               <>
                 {/* Header */}
-                <div className="border-b border-zinc-800 pb-3">
+                <div className="border-b border-slate-200 pb-3">
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
                     <StatusBadge variant="deadline" status={selectedDeadline.status} />
                     <PriorityBadge variant="deadline" priority={selectedDeadline.priority} />
-                    <span className="text-[11px] text-zinc-400 bg-zinc-950 px-2 py-0.5 rounded border border-zinc-800">
+                    <span className="text-[11px] text-slate-600 bg-slate-50 px-2 py-0.5 rounded border border-slate-200">
                       {deadlineClassLabel(selectedDeadline.deadlineClass)}
                     </span>
                   </div>
-                  <h3 className="text-sm font-semibold text-white">{selectedDeadline.title}</h3>
+                  <h3 className="text-sm font-semibold text-slate-900">{selectedDeadline.title}</h3>
                   {selectedDeadline.description && (
-                    <p className="mt-2 text-xs text-zinc-400 leading-relaxed bg-black/25 p-2 rounded border border-zinc-900">
+                    <p className="mt-2 text-xs text-slate-600 leading-relaxed bg-slate-50 p-2 rounded border border-slate-200">
                       {selectedDeadline.description}
                     </p>
                   )}
@@ -2001,33 +2055,33 @@ function PrazosTab({
 
                 {/* Metadata details */}
                 <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="bg-black/10 p-2.5 rounded border border-zinc-800/40">
-                    <span className="text-[10px] text-zinc-500 block uppercase font-mono">Data Limite (Legal)</span>
-                    <span className="text-zinc-300 font-mono font-medium">{formatDate(selectedDeadline.dueAt)}</span>
+                  <div className="bg-slate-50 p-2.5 rounded border border-slate-200/40">
+                    <span className="text-[10px] text-slate-500 block uppercase font-mono">Data Limite (Legal)</span>
+                    <span className="text-slate-700 font-mono font-medium">{formatDate(selectedDeadline.dueAt)}</span>
                   </div>
-                  <div className="bg-black/10 p-2.5 rounded border border-zinc-800/40">
-                    <span className="text-[10px] text-zinc-500 block uppercase font-mono">Origem</span>
-                    <span className="text-zinc-300 capitalize">{selectedDeadline.origin}</span>
+                  <div className="bg-slate-50 p-2.5 rounded border border-slate-200/40">
+                    <span className="text-[10px] text-slate-500 block uppercase font-mono">Origem</span>
+                    <span className="text-slate-700 capitalize">{selectedDeadline.origin}</span>
                   </div>
                   {selectedDeadline.legalBasis && (
-                    <div className="col-span-2 bg-black/10 p-2.5 rounded border border-zinc-800/40">
-                      <span className="text-[10px] text-zinc-500 block uppercase font-mono">Fundamentação Legal</span>
-                      <span className="text-zinc-300 italic">{selectedDeadline.legalBasis}</span>
+                    <div className="col-span-2 bg-slate-50 p-2.5 rounded border border-slate-200/40">
+                      <span className="text-[10px] text-slate-500 block uppercase font-mono">Fundamentação Legal</span>
+                      <span className="text-slate-700 italic">{selectedDeadline.legalBasis}</span>
                     </div>
                   )}
 
                   {/* Linked Document link */}
                   {selectedDeadline.sourceDocumentId && (
-                    <div className="col-span-2 bg-blue-950/20 border border-blue-900/30 p-2.5 rounded flex justify-between items-center">
+                    <div className="col-span-2 bg-blue-50 border border-blue-200 p-2.5 rounded flex justify-between items-center">
                       <div>
-                        <span className="text-[10px] text-blue-400 block uppercase font-mono">Documento de Origem</span>
-                        <span className="text-zinc-300 text-[11px] truncate max-w-[250px] inline-block">
+                        <span className="text-[10px] text-blue-700 block uppercase font-mono">Documento de Origem</span>
+                        <span className="text-slate-700 text-[11px] truncate max-w-[250px] inline-block">
                           {documents.find((d) => d.id === selectedDeadline.sourceDocumentId)?.fileName || 'Ver arquivo associado'}
                         </span>
                       </div>
                       <button
                         onClick={() => onNavigateToDoc(selectedDeadline.sourceDocumentId!)}
-                        className="text-[11px] bg-blue-900/50 hover:bg-blue-800 text-blue-300 px-2.5 py-1 rounded border border-blue-800/60 transition-colors"
+                        className="text-[11px] bg-blue-100 hover:bg-blue-800 text-blue-700 px-2.5 py-1 rounded border border-blue-200 transition-colors"
                       >
                         Visualizar
                       </button>
@@ -2037,26 +2091,26 @@ function PrazosTab({
 
                 {/* Terminal states details */}
                 {selectedDeadline.status === 'completed' && (
-                  <div className="bg-emerald-950/15 border border-emerald-900/30 p-3 rounded-lg text-xs space-y-1.5">
-                    <div className="flex items-center gap-1.5 text-emerald-400 font-semibold">
+                  <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-lg text-xs space-y-1.5">
+                    <div className="flex items-center gap-1.5 text-emerald-700 font-semibold">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                       Prazo Cumprido
                     </div>
                     {selectedDeadline.completedAt && (
-                      <p className="text-zinc-400 text-[11px]">
-                        Concluído em <span className="text-zinc-300 font-mono">{formatDateTime(selectedDeadline.completedAt)}</span>
+                      <p className="text-slate-600 text-[11px]">
+                        Concluído em <span className="text-slate-700 font-mono">{formatDateTime(selectedDeadline.completedAt)}</span>
                       </p>
                     )}
                     {selectedDeadline.completionEvidenceType && (
-                      <div className="mt-1 pt-1.5 border-t border-emerald-950 flex justify-between items-center text-[11px]">
+                      <div className="mt-1 pt-1.5 border-t border-emerald-200 flex justify-between items-center text-[11px]">
                         <div>
-                          <span className="text-zinc-500">Evidência:</span>{' '}
-                          <span className="text-zinc-300 font-mono capitalize">{selectedDeadline.completionEvidenceType}</span>
+                          <span className="text-slate-500">Evidência:</span>{' '}
+                          <span className="text-slate-700 font-mono capitalize">{selectedDeadline.completionEvidenceType}</span>
                         </div>
                         {['document', 'filing'].includes(selectedDeadline.completionEvidenceType) && selectedDeadline.completionEvidenceId && (
                           <button
                             onClick={() => onNavigateToDoc(selectedDeadline.completionEvidenceId!)}
-                            className="text-[10px] bg-emerald-900/40 hover:bg-emerald-800/50 text-emerald-300 px-2 py-0.5 rounded border border-emerald-800/50"
+                            className="text-[10px] bg-emerald-100 hover:bg-emerald-800/50 text-emerald-700 px-2 py-0.5 rounded border border-emerald-200"
                           >
                             Visualizar Documento
                           </button>
@@ -2067,24 +2121,24 @@ function PrazosTab({
                 )}
 
                 {selectedDeadline.status === 'dismissed' && (
-                  <div className="bg-zinc-800/20 border border-zinc-700/30 p-3 rounded-lg text-xs space-y-1">
-                    <div className="flex items-center gap-1.5 text-zinc-400 font-semibold">
-                      <span className="w-1.5 h-1.5 rounded-full bg-zinc-500" />
+                  <div className="bg-slate-100 border border-slate-300/30 p-3 rounded-lg text-xs space-y-1">
+                    <div className="flex items-center gap-1.5 text-slate-600 font-semibold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
                       Prazo Descartado / Não Aplicável
                     </div>
                     {selectedDeadline.dismissedAt && (
-                      <p className="text-zinc-500 text-[11px]">
-                        Descartado em <span className="text-zinc-400 font-mono">{formatDateTime(selectedDeadline.dismissedAt)}</span>
+                      <p className="text-slate-500 text-[11px]">
+                        Descartado em <span className="text-slate-600 font-mono">{formatDateTime(selectedDeadline.dismissedAt)}</span>
                       </p>
                     )}
                     {selectedDeadline.dismissedReason && (
-                      <p className="text-zinc-300 mt-1 italic">
+                      <p className="text-slate-700 mt-1 italic">
                         &ldquo;{selectedDeadline.dismissedReason}&rdquo;
                       </p>
                     )}
                     {selectedDeadline.dismissedReasonCode && (
-                      <p className="text-[10px] text-zinc-500">
-                        Motivo: <span className="font-mono bg-black/30 px-1 py-0.5 rounded border border-zinc-900">{selectedDeadline.dismissedReasonCode}</span>
+                      <p className="text-[10px] text-slate-500">
+                        Motivo: <span className="font-mono bg-slate-50 px-1 py-0.5 rounded border border-slate-200">{selectedDeadline.dismissedReasonCode}</span>
                       </p>
                     )}
                   </div>
@@ -2092,13 +2146,13 @@ function PrazosTab({
 
                 {/* Interactive Action Buttons */}
                 {!['completed', 'dismissed'].includes(selectedDeadline.status) && (
-                  <div className="border-t border-zinc-800/60 pt-4 space-y-3">
+                  <div className="border-t border-slate-200/60 pt-4 space-y-3">
                     <div className="flex gap-2">
                       {['open', 'overdue'].includes(selectedDeadline.status) && !selectedDeadline.acknowledgedAt && (
                         <button
                           onClick={handleAcknowledge}
                           disabled={isAcknowledging}
-                          className="flex-1 text-xs bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-white font-medium py-2 px-3 rounded border border-zinc-700/60 transition-colors"
+                          className="flex-1 text-xs bg-slate-100 hover:bg-slate-200 disabled:opacity-50 text-slate-900 font-medium py-2 px-3 rounded border border-slate-300/60 transition-colors"
                         >
                           {isAcknowledging ? 'Processando...' : 'Reconhecer Prazo'}
                         </button>
@@ -2119,7 +2173,7 @@ function PrazosTab({
                           setShowDismissForm(!showDismissForm)
                           setShowCompleteForm(false)
                         }}
-                        className="flex-1 text-xs bg-zinc-950 hover:bg-zinc-900 text-zinc-400 hover:text-zinc-300 font-medium py-2 px-3 rounded border border-zinc-800 transition-colors"
+                        className="flex-1 text-xs bg-slate-50 hover:bg-white text-slate-600 hover:text-slate-700 font-medium py-2 px-3 rounded border border-slate-200 transition-colors"
                       >
                         Descartar
                       </button>
@@ -2127,31 +2181,31 @@ function PrazosTab({
 
                     {/* Complete Form View */}
                     {showCompleteForm && (
-                      <form onSubmit={handleCompleteSubmit} className="bg-emerald-950/10 border border-emerald-900/30 rounded-lg p-3 space-y-3 animate-[slideDown_150ms_ease-out]">
-                        <h4 className="text-[11px] font-semibold text-emerald-400 uppercase tracking-wider">Conclusão de Prazo</h4>
+                      <form onSubmit={handleCompleteSubmit} className="bg-emerald-50 border border-emerald-200 rounded-lg p-3 space-y-3 animate-[slideDown_150ms_ease-out]">
+                        <h4 className="text-[11px] font-semibold text-emerald-700 uppercase tracking-wider">Conclusão de Prazo</h4>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] text-zinc-400 block font-medium">Justificativa *</label>
+                          <label className="text-[10px] text-slate-600 block font-medium">Justificativa *</label>
                           <textarea
                             required
                             rows={2}
                             value={compReason}
                             onChange={(e) => setCompReason(e.target.value)}
                             placeholder="Descreva o ato realizado para conclusão do prazo..."
-                            className="w-full text-[11px] bg-black/60 border border-zinc-800 text-white rounded px-2.5 py-1.5 focus:outline-none focus:border-zinc-700"
+                            className="w-full text-[11px] bg-slate-50 border border-slate-200 text-slate-900 rounded px-2.5 py-1.5 focus:outline-none focus:border-slate-300"
                           />
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
                           <div className="space-y-1">
-                            <label className="text-[10px] text-zinc-400 block font-medium">Tipo de Evidência</label>
+                            <label className="text-[10px] text-slate-600 block font-medium">Tipo de Evidência</label>
                             <select
                               value={compEvidenceType}
                               onChange={(e) => {
                                 setCompEvidenceType(e.target.value as any)
                                 setCompEvidenceId('')
                               }}
-                              className="w-full text-[10px] bg-black/60 border border-zinc-800 text-white rounded px-2 py-1 focus:outline-none"
+                              className="w-full text-[10px] bg-slate-50 border border-slate-200 text-slate-900 rounded px-2 py-1 focus:outline-none"
                             >
                               <option value="document">Documento do Caso</option>
                               <option value="filing">Protocolo / Petição</option>
@@ -2163,11 +2217,11 @@ function PrazosTab({
 
                           {['document', 'filing'].includes(compEvidenceType) && (
                             <div className="space-y-1">
-                              <label className="text-[10px] text-zinc-400 block font-medium">Selecionar Documento</label>
+                              <label className="text-[10px] text-slate-600 block font-medium">Selecionar Documento</label>
                               <select
                                 value={compEvidenceId}
                                 onChange={(e) => setCompEvidenceId(e.target.value)}
-                                className="w-full text-[10px] bg-black/60 border border-zinc-800 text-zinc-300 rounded px-2 py-1 focus:outline-none"
+                                className="w-full text-[10px] bg-slate-50 border border-slate-200 text-slate-700 rounded px-2 py-1 focus:outline-none"
                               >
                                 <option value="">Sem vínculo físico</option>
                                 {documents.map((doc) => (
@@ -2180,11 +2234,11 @@ function PrazosTab({
                           )}
                         </div>
 
-                        <div className="flex justify-end gap-2 pt-1 border-t border-emerald-950/60">
+                        <div className="flex justify-end gap-2 pt-1 border-t border-emerald-200">
                           <button
                             type="button"
                             onClick={() => setShowCompleteForm(false)}
-                            className="text-[10px] text-zinc-400 hover:text-white px-2 py-1 rounded"
+                            className="text-[10px] text-slate-600 hover:text-slate-900 px-2 py-1 rounded"
                           >
                             Cancelar
                           </button>
@@ -2201,28 +2255,28 @@ function PrazosTab({
 
                     {/* Dismiss Form View */}
                     {showDismissForm && (
-                      <form onSubmit={handleDismissSubmit} className="bg-zinc-950 border border-zinc-800 rounded-lg p-3 space-y-3 animate-[slideDown_150ms_ease-out]">
-                        <h4 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">Descarte de Prazo</h4>
+                      <form onSubmit={handleDismissSubmit} className="bg-slate-50 border border-slate-200 rounded-lg p-3 space-y-3 animate-[slideDown_150ms_ease-out]">
+                        <h4 className="text-[11px] font-semibold text-slate-600 uppercase tracking-wider">Descarte de Prazo</h4>
 
                         <div className="space-y-1">
-                          <label className="text-[10px] text-zinc-400 block font-medium">Justificativa *</label>
+                          <label className="text-[10px] text-slate-600 block font-medium">Justificativa *</label>
                           <textarea
                             required
                             rows={2}
                             value={dismissReason}
                             onChange={(e) => setDismissReason(e.target.value)}
                             placeholder="Motivo pelo qual este prazo está sendo arquivado/descartado..."
-                            className="w-full text-[11px] bg-black/60 border border-zinc-800 text-white rounded px-2.5 py-1.5 focus:outline-none focus:border-zinc-700"
+                            className="w-full text-[11px] bg-slate-50 border border-slate-200 text-slate-900 rounded px-2.5 py-1.5 focus:outline-none focus:border-slate-300"
                           />
                         </div>
 
                         {selectedDeadline.status === 'overdue' && (
                           <div className="space-y-1">
-                            <label className="text-[10px] text-zinc-400 block font-medium">Motivo (Obrigatório p/ Atraso)</label>
+                            <label className="text-[10px] text-slate-600 block font-medium">Motivo (Obrigatório p/ Atraso)</label>
                             <select
                               value={dismissReasonCode}
                               onChange={(e) => setDismissReasonCode(e.target.value)}
-                              className="w-full text-[10px] bg-black/60 border border-zinc-800 text-white rounded px-2 py-1 focus:outline-none"
+                              className="w-full text-[10px] bg-slate-50 border border-slate-200 text-slate-900 rounded px-2 py-1 focus:outline-none"
                             >
                               <option value="completed_elsewhere">Cumprido fora do sistema</option>
                               <option value="superseded">Substituído por novo cálculo</option>
@@ -2234,18 +2288,18 @@ function PrazosTab({
                           </div>
                         )}
 
-                        <div className="flex justify-end gap-2 pt-1 border-t border-zinc-900">
+                        <div className="flex justify-end gap-2 pt-1 border-t border-slate-200">
                           <button
                             type="button"
                             onClick={() => setShowDismissForm(false)}
-                            className="text-[10px] text-zinc-400 hover:text-white px-2 py-1 rounded"
+                            className="text-[10px] text-slate-600 hover:text-slate-900 px-2 py-1 rounded"
                           >
                             Cancelar
                           </button>
                           <button
                             type="submit"
                             disabled={isDismissing}
-                            className="text-[10px] bg-red-900 hover:bg-red-800 disabled:opacity-50 text-white font-medium px-3.5 py-1.5 rounded transition-colors"
+                            className="text-[10px] bg-red-100 hover:bg-red-800 disabled:opacity-50 text-white font-medium px-3.5 py-1.5 rounded transition-colors"
                           >
                             {isDismissing ? 'Processando...' : 'Confirmar Descarte'}
                           </button>
@@ -2256,12 +2310,12 @@ function PrazosTab({
                 )}
 
                 {/* History Log Panel */}
-                <div className="border-t border-zinc-800/80 pt-4 space-y-3">
-                  <h4 className="text-xs font-semibold text-zinc-300 uppercase tracking-wider">Histórico de Alterações</h4>
+                <div className="border-t border-slate-200/80 pt-4 space-y-3">
+                  <h4 className="text-xs font-semibold text-slate-700 uppercase tracking-wider">Histórico de Alterações</h4>
                   {isHistoryLoading ? (
                     <LoadingState label="Carregando trilha auditável..." />
                   ) : historyList.length === 0 ? (
-                    <span className="text-[11px] text-zinc-500 italic block">Nenhum evento registrado no histórico.</span>
+                    <span className="text-[11px] text-slate-500 italic block">Nenhum evento registrado no histórico.</span>
                   ) : (
                     <ul className="space-y-3 font-mono text-[10px]">
                       {historyList.map((hist) => {
@@ -2272,31 +2326,31 @@ function PrazosTab({
                         if (hist.changeType === 'created') actionLabel = 'CRIADO'
 
                         return (
-                          <li key={hist.id} className="border-b border-zinc-900 pb-2 last:border-0 last:pb-0">
-                            <div className="flex justify-between text-zinc-500 text-[9px] mb-0.5">
-                              <span className="font-bold text-zinc-400">AÇÃO: {actionLabel}</span>
+                          <li key={hist.id} className="border-b border-slate-200 pb-2 last:border-0 last:pb-0">
+                            <div className="flex justify-between text-slate-500 text-[9px] mb-0.5">
+                              <span className="font-bold text-slate-600">AÇÃO: {actionLabel}</span>
                               <span>{formatDateTime(hist.changedAt)}</span>
                             </div>
-                            <div className="text-zinc-300">
+                            <div className="text-slate-700">
                               <span>Por: </span>
-                              <span className="text-white">{hist.changedByActorId} ({hist.changedByActorType})</span>
+                              <span className="text-slate-900">{hist.changedByActorId} ({hist.changedByActorType})</span>
                             </div>
                             {hist.reason && (
-                              <p className="text-zinc-400 mt-1 italic bg-black/10 p-1.5 rounded border border-zinc-900">
+                              <p className="text-slate-600 mt-1 italic bg-slate-50 p-1.5 rounded border border-slate-200">
                                 Justificativa: &ldquo;{hist.reason}&rdquo;
                               </p>
                             )}
 
                             {/* Completion Evidence in History */}
                             {hist.changeType === 'completed' && hist.newValue && (
-                              <div className="mt-1 text-zinc-500 text-[9px] flex justify-between items-center">
+                              <div className="mt-1 text-slate-500 text-[9px] flex justify-between items-center">
                                 <span>
                                   Evidência: {(hist.newValue as any).completionEvidenceType || 'manual'}
                                 </span>
                                 {(hist.newValue as any).completionEvidenceId && (
                                   <button
                                     onClick={() => onNavigateToDoc((hist.newValue as any).completionEvidenceId)}
-                                    className="text-[9px] text-blue-400 hover:text-blue-300 font-bold"
+                                    className="text-[9px] text-blue-700 hover:text-blue-700 font-bold"
                                   >
                                     Ver documento
                                   </button>
@@ -2313,7 +2367,7 @@ function PrazosTab({
             )}
           </div>
         ) : (
-          <div className="bg-zinc-900/10 border border-zinc-800/40 rounded-lg p-8 text-center text-zinc-500 text-xs">
+          <div className="bg-white border border-slate-200/40 rounded-lg p-8 text-center text-slate-500 text-xs">
             Selecione um prazo da listagem à esquerda para visualizar seus detalhes, executar ações operacionais e auditar o histórico de alterações.
           </div>
         )}
@@ -2372,7 +2426,7 @@ function MotorTab({
         <button
           onClick={onEvaluate}
           disabled={isEvaluating}
-          className="text-[11px] bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-medium py-1.5 px-3 rounded transition-colors"
+          className="text-[11px] bg-blue-600 hover:bg-blue-600 disabled:opacity-50 text-white font-medium py-1.5 px-3 rounded transition-colors"
         >
           {isEvaluating ? 'Avaliando...' : '▶ Rodar Motor'}
         </button>
@@ -2383,14 +2437,14 @@ function MotorTab({
         <li key={run.id}>
           <ListCard variant="static">
             <div className="flex flex-wrap items-center gap-2 mb-1">
-              <StatusBadge>{run.trigger}</StatusBadge>
+              <StatusBadge>{engineTriggerLabel(run.trigger)}</StatusBadge>
               {/* 4.9 — badge "Replay" quando isReplay === true (campo tipado) */}
               {run.isReplay && (
-                <span className="inline-flex items-center rounded border border-zinc-700 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
+                <span className="inline-flex items-center rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">
                   Replay
                 </span>
               )}
-              <span className={`text-[11px] ${text.faint}`}>{run.status}</span>
+              <span className={`text-[11px] ${text.faint}`}>{engineStatusLabel(run.status)}</span>
               {run.uncertaintyLevel !== null && (
                 <span className={`text-[11px] ${text.faint}`}>
                   Incerteza: {run.uncertaintyLevel}
@@ -2556,7 +2610,7 @@ function CalculosTab({
         {!showForm && (
           <button
             onClick={handleStartProposeNew}
-            className="rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-950 px-3 py-1.5 text-[12px] font-medium transition-colors"
+            className="rounded bg-slate-100 hover:bg-slate-200 text-slate-900 px-3 py-1.5 text-[12px] font-medium transition-colors"
           >
             Propor Novo Cálculo
           </button>
@@ -2566,14 +2620,14 @@ function CalculosTab({
       {showForm && (
         <form
           onSubmit={handleSubmit}
-          className={`border ${borders.default} rounded-lg bg-zinc-950/20 p-4 space-y-4 max-w-xl`}
+          className={`border ${borders.default} rounded-lg bg-slate-50/20 p-4 space-y-4 max-w-xl`}
         >
           <h4 className={`text-[12px] font-bold uppercase tracking-wider ${text.secondary}`}>
             {supersedeTarget !== null ? 'Propor Substituição de Cálculo' : 'Inserir Novo Cálculo Proposto'}
           </h4>
 
           {supersedeTarget !== null && (
-            <div className="text-[11px] text-amber-400 bg-amber-950/20 border border-amber-900/30 rounded p-2.5">
+            <div className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2.5">
               ⚠️ O cálculo atual confirmado ficará arquivado como <strong>Substituído (superseded)</strong>,
               e um novo rascunho <strong>Proposto (proposed)</strong> será criado no histórico para revisão e posterior confirmação.
             </div>
@@ -2586,7 +2640,7 @@ function CalculosTab({
                 type="datetime-local"
                 value={effectiveAt}
                 onChange={(e) => setEffectiveAt(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 required
               />
             </div>
@@ -2597,7 +2651,7 @@ function CalculosTab({
                 type="text"
                 value={calculationMethod}
                 onChange={(e) => setCalculationMethod(e.target.value)}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 required
               />
             </div>
@@ -2608,7 +2662,7 @@ function CalculosTab({
                 type="number"
                 value={totalSentenceDays}
                 onChange={(e) => setTotalSentenceDays(Number(e.target.value))}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 min={1}
                 required
               />
@@ -2620,7 +2674,7 @@ function CalculosTab({
                 type="number"
                 value={servedDays}
                 onChange={(e) => setServedDays(Number(e.target.value))}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 min={0}
                 required
               />
@@ -2632,7 +2686,7 @@ function CalculosTab({
                 type="number"
                 value={remissionDays}
                 onChange={(e) => setRemissionDays(Number(e.target.value))}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 min={0}
                 required
               />
@@ -2644,7 +2698,7 @@ function CalculosTab({
                 type="number"
                 value={detractionDays}
                 onChange={(e) => setDetractionDays(Number(e.target.value))}
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500"
                 min={0}
                 required
               />
@@ -2652,7 +2706,7 @@ function CalculosTab({
           </div>
 
           {/* Composição Penal (Crimes) */}
-          <div className="pt-2 border-t border-zinc-800">
+          <div className="pt-2 border-t border-slate-200">
             <CrimeBreakdownForm
               crimes={crimesBreakdown}
               onChange={(newCrimes) => {
@@ -2664,17 +2718,17 @@ function CalculosTab({
           </div>
 
           {/* Dados do Apenado (Impacto) */}
-          <div className="pt-2 border-t border-zinc-800">
-            <label className="flex items-center gap-2 text-[12px] font-semibold text-zinc-300 mb-1">
+          <div className="pt-2 border-t border-slate-200">
+            <label className="flex items-center gap-2 text-[12px] font-semibold text-slate-700 mb-1">
               <input
                 type="checkbox"
                 checked={isGenericRecidivist}
                 onChange={(e) => setIsGenericRecidivist(e.target.checked)}
-                className="accent-indigo-500 w-4 h-4"
+                className="accent-blue-600 w-4 h-4"
               />
               Apenado é Reincidente Genérico?
             </label>
-            <p className="text-[10px] text-zinc-500 ml-6">
+            <p className="text-[10px] text-slate-500 ml-6">
               Esta opção impacta as frações de progressão e livramento para os crimes registrados.
             </p>
           </div>
@@ -2686,7 +2740,7 @@ function CalculosTab({
                 value={reason}
                 onChange={(e) => setReason(e.target.value)}
                 placeholder="Ex: Correção de erro de digitação / Inclusão de novos dias remidos concedidos pelo Juiz..."
-                className="w-full bg-zinc-950 border border-zinc-800 rounded px-2.5 py-1.5 text-[12px] text-zinc-100 focus:outline-none focus:ring-1 focus:ring-zinc-500 min-h-[60px]"
+                className="w-full bg-slate-50 border border-slate-200 rounded px-2.5 py-1.5 text-[12px] text-slate-900 focus:outline-none focus:ring-1 focus:ring-blue-500 min-h-[60px]"
                 required
               />
             </div>
@@ -2696,14 +2750,14 @@ function CalculosTab({
             <button
               type="submit"
               disabled={isProposing || isSuperseding}
-              className="rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-950 px-3.5 py-1.5 text-[12px] font-medium transition-colors"
+              className="rounded bg-slate-100 hover:bg-slate-200 text-slate-900 px-3.5 py-1.5 text-[12px] font-medium transition-colors"
             >
               {isProposing || isSuperseding ? 'Salvando…' : 'Salvar Rascunho'}
             </button>
             <button
               type="button"
               onClick={() => setShowForm(false)}
-              className="rounded border border-zinc-800 hover:bg-white/[0.02] text-zinc-300 px-3.5 py-1.5 text-[12px] font-medium transition-colors"
+              className="rounded border border-slate-200 hover:bg-slate-50 text-slate-700 px-3.5 py-1.5 text-[12px] font-medium transition-colors"
             >
               Cancelar
             </button>
@@ -2717,11 +2771,11 @@ function CalculosTab({
           Cálculo Ativo
         </h4>
         {activeConfirmed ? (
-          <ListCard variant="static" accentClassName="border-emerald-900/50 bg-emerald-950/10">
+          <ListCard variant="static" accentClassName="border-emerald-200 bg-emerald-50">
             <div className="flex items-start justify-between gap-4">
               <div className="space-y-2 flex-1">
                 <div className="flex items-center gap-2">
-                  <span className="inline-flex items-center rounded border border-emerald-900/40 bg-emerald-950/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-400">
+                  <span className="inline-flex items-center rounded border border-emerald-200 bg-emerald-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-emerald-700">
                     Confirmado / Operacional
                   </span>
                   <span className={`text-[11px] ${text.faint}`}>
@@ -2746,14 +2800,14 @@ function CalculosTab({
                   </div>
                   <div>
                     <span className={`block text-[10px] ${text.faint} uppercase`}>Pena Restante</span>
-                    <strong className="text-[13px] text-amber-400">{activeConfirmed.remainingDays} dias</strong>
+                    <strong className="text-[13px] text-amber-700">{activeConfirmed.remainingDays} dias</strong>
                   </div>
                 </div>
 
                 <div className="text-[11px] flex gap-4 pt-1">
                   <span>
                     <span className={text.faint}>Percentual Cumprido:</span>{' '}
-                    <strong className="text-emerald-400">{(Number(activeConfirmed.percentServed) * 100).toFixed(1)}%</strong>
+                    <strong className="text-emerald-700">{(Number(activeConfirmed.percentServed) * 100).toFixed(1)}%</strong>
                   </span>
                   {activeConfirmed.calculationMethod && (
                     <span>
@@ -2765,7 +2819,7 @@ function CalculosTab({
 
               <button
                 onClick={() => handleStartSupersede(activeConfirmed)}
-                className="shrink-0 rounded border border-zinc-800 hover:bg-white/[0.02] text-zinc-300 px-3 py-1.5 text-[11px] font-medium transition-colors"
+                className="shrink-0 rounded border border-slate-200 hover:bg-slate-50 text-slate-700 px-3 py-1.5 text-[11px] font-medium transition-colors"
               >
                 Substituir Cálculo
               </button>
@@ -2788,11 +2842,11 @@ function CalculosTab({
           <ul className="space-y-2">
             {proposedDrafts.map((snap) => (
               <li key={snap.id}>
-                <ListCard variant="static" accentClassName="border-amber-900/30 bg-amber-950/5">
+                <ListCard variant="static" accentClassName="border-amber-200 bg-amber-50">
                   <div className="flex items-start justify-between gap-4">
                     <div className="space-y-2 flex-1">
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded border border-amber-900/40 bg-amber-950/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-400">
+                        <span className="inline-flex items-center rounded border border-amber-200 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-700">
                           Proposto / Rascunho
                         </span>
                         <span className={`text-[11px] ${text.faint}`}>
@@ -2817,7 +2871,7 @@ function CalculosTab({
                         </div>
                         <div>
                           <span className={`block text-[10px] ${text.faint} uppercase`}>Pena Restante</span>
-                          <strong className="text-[12px] text-amber-400">{snap.remainingDays} dias</strong>
+                          <strong className="text-[12px] text-amber-700">{snap.remainingDays} dias</strong>
                         </div>
                       </div>
                     </div>
@@ -2825,7 +2879,7 @@ function CalculosTab({
                     <button
                       onClick={() => onConfirm(snap.id)}
                       disabled={isConfirming}
-                      className="shrink-0 rounded bg-zinc-100 hover:bg-zinc-200 text-zinc-950 px-3 py-1.5 text-[11px] font-semibold transition-colors"
+                      className="shrink-0 rounded bg-slate-100 hover:bg-slate-200 text-slate-900 px-3 py-1.5 text-[11px] font-semibold transition-colors"
                     >
                       {isConfirming ? 'Confirmando…' : 'Confirmar Cálculo'}
                     </button>
@@ -2846,10 +2900,10 @@ function CalculosTab({
           <ul className="space-y-2">
             {historical.map((snap) => (
               <li key={snap.id}>
-                <ListCard variant="static" accentClassName="border-zinc-800/40 bg-zinc-950/5">
+                <ListCard variant="static" accentClassName="border-slate-200/40 bg-slate-50/5">
                   <div className="space-y-1.5 text-[11px]">
                     <div className="flex items-center gap-2">
-                      <span className="inline-flex items-center rounded border border-zinc-700 bg-white/[0.04] px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-zinc-400">
+                      <span className="inline-flex items-center rounded border border-slate-300 bg-slate-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-slate-600">
                         Substituído / Inativo
                       </span>
                       <span className={`text-[11px] ${text.faint}`}>

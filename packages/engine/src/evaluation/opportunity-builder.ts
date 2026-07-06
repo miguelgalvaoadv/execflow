@@ -37,7 +37,7 @@ export class OpportunityBuilder {
         id: randomUUID(),
         organizationId,
         executionCaseId: evaluation.executionCaseId,
-        opportunityType: evaluation.benefitType,
+        opportunityType: evaluation.benefitType as any,
         status,
         detectedAt: new Date(),
         summary,

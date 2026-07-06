@@ -26,6 +26,7 @@ export type ClientDetail = {
   updatedAt: string
   cpf?: string | null
   rg?: string | null
+  matricula?: string | null
   birthDate?: string | null
   contactChannels?: ClientContactChannel[]
 }

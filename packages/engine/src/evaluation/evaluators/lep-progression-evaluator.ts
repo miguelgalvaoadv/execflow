@@ -98,7 +98,58 @@ export function lepProgressionFractionEvaluator(input: RuleEvaluatorInput): Rule
   let fractionalDaysNeeded: number
   const calculationSteps: CalculationStep[] = []
 
-  if (fractionTable !== undefined && fractionTable.length > 0) {
+  // Dynamic Multi-Crime Advanced Math
+  if (sentence.crimesBreakdown && sentence.crimesBreakdown.length > 0) {
+    fractionalDaysNeeded = 0
+    
+    // Check if user is generic recidivist
+    // Se isGenericRecidivist for true, todos os crimes comuns sofrem agravo (20% ou 1/2)
+    // Mas reincidência específica hedionda é flag por crime
+    
+    for (const crime of sentence.crimesBreakdown) {
+      let fraction = 0.16 // default comum primário
+      let legalBasis = 'Art. 112, I, LEP'
+      
+      const isHeinousOrEquated = crime.isHediondo || crime.isEquiparado
+      const hasDeath = crime.hasResultingDeath
+      const isSpecificRecidivist = crime.isSpecificRecidivist
+      const isRecidivist = crime.isRecidivist || crime.isSpecificRecidivist // fallback
+      
+      if (crime.crimeCode?.startsWith('ORG_CRIM_ARMADA')) {
+        if (isSpecificRecidivist && hasDeath) {
+          fraction = 0.70; legalBasis = 'Art. 112, VIII, LEP'
+        } else {
+          fraction = 0.60; legalBasis = 'Art. 112, VII, LEP'
+        }
+      } else if (isHeinousOrEquated && isSpecificRecidivist) {
+        if (hasDeath) {
+          fraction = 0.50; legalBasis = 'Art. 112, VI, LEP'
+        } else {
+          fraction = 0.40; legalBasis = 'Art. 112, V, LEP'
+        }
+      } else if (isHeinousOrEquated) {
+        if (hasDeath) {
+          fraction = 0.30; legalBasis = 'Art. 112, IV, LEP'
+        } else {
+          fraction = 0.25; legalBasis = 'Art. 112, III, LEP'
+        }
+      } else if (isRecidivist) {
+        fraction = 0.20; legalBasis = 'Art. 112, II, LEP'
+      }
+      
+      const daysForThisCrime = crime.sentenceDays * fraction
+      fractionalDaysNeeded += daysForThisCrime
+      
+      calculationSteps.push({
+        crime: crime.crimeName || crime.crimeCode || 'N/A',
+        sentenceDays: crime.sentenceDays,
+        fraction,
+        fractionLabel: `${(fraction * 100).toFixed(0)}%`,
+        legalBasis,
+        daysNeeded: Math.ceil(daysForThisCrime),
+      })
+    }
+  } else if (fractionTable !== undefined && fractionTable.length > 0) {
     fractionalDaysNeeded = 0
 
     for (const entry of fractionTable) {

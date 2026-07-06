@@ -19,6 +19,7 @@ import {
   ProfileSection,
 } from '@/components/ui'
 import { borders, text } from '@/components/dashboard/surfaces'
+import { downloadBlob, viewBlob } from '@/lib/api-client'
 import {
   documentStatusLabel,
   ocrStatusLabel,
@@ -79,7 +80,7 @@ export default function DocumentDetailPage() {
           <div className="mb-5">
             <Link
               href="/documents"
-              className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.faint} hover:text-zinc-300 transition-colors`}
+              className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.faint} hover:text-slate-700 transition-colors`}
             >
               ← Peças
             </Link>
@@ -96,6 +97,21 @@ export default function DocumentDetailPage() {
               .filter(Boolean)
               .join(' · ')}
           />
+
+          <div className="mt-4 flex gap-2">
+            <button
+              onClick={() => { void viewBlob(`/api/v1/documents/${doc.id}/download`, { organizationId: orgId }) }}
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 bg-white border border-slate-200 hover:bg-slate-100 text-slate-800 rounded text-[12px] font-medium transition cursor-pointer"
+            >
+              👁 Visualizar
+            </button>
+            <button
+              onClick={() => { void downloadBlob(`/api/v1/documents/${doc.id}/download?download=true`, { organizationId: orgId, fileName: doc.fileName }) }}
+              className="inline-flex items-center gap-1.5 py-1.5 px-3 bg-blue-600 hover:bg-blue-700 text-white rounded text-[12px] font-medium transition cursor-pointer"
+            >
+              📥 Baixar
+            </button>
+          </div>
 
           <div className="mt-6 space-y-4">
             <ProfileSection title="Metadados">
@@ -123,7 +139,7 @@ export default function DocumentDetailPage() {
                   value={ocrStatusLabel(doc.ocrStatus)}
                   debug={doc.ocrStatus}
                 />
-                <FieldRow label="Actualizado em" value={formatDateTime(doc.updatedAt)} />
+                <FieldRow label="Atualizado em" value={formatDateTime(doc.updatedAt)} />
               </dl>
             </ProfileSection>
 
@@ -173,7 +189,7 @@ export default function DocumentDetailPage() {
                   <FieldRow label="Extraído em" value={formatDateTime(doc.extraction.extractedAt)} />
                 </dl>
                 {doc.extraction.reviewHistory.length > 0 && (
-                  <div className="mt-4 pt-3 border-t border-white/[0.04]">
+                  <div className="mt-4 pt-3 border-t border-slate-100">
                     <h3 className={`text-[11px] font-medium uppercase tracking-[0.08em] ${text.faint} mb-2`}>
                       Histórico de revisão
                     </h3>

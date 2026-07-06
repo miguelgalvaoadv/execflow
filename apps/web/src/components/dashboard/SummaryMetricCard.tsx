@@ -1,5 +1,4 @@
 import Link from 'next/link'
-import { borders, surfaces, text } from './surfaces'
 
 type SummaryMetricCardProps = {
   title: string
@@ -28,25 +27,16 @@ export function SummaryMetricCard({
   return (
     <Link
       href={href}
-      className={[
-        'group block rounded-xl border px-4 py-4 transition-colors',
-        borders.default,
-        surfaces.panel,
-        `hover:${surfaces.panelRaised}`,
-      ].join(' ')}
+      className="group flex flex-col justify-between rounded-xl border border-slate-200 bg-white px-4 py-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-md"
     >
-      <p
-        className={`text-[10px] font-semibold uppercase tracking-[0.12em] ${text.muted}`}
-      >
+      <p className="text-[11px] font-medium uppercase tracking-[0.06em] text-slate-500">
         {title}
       </p>
-      <p
-        className={`mt-2 text-[28px] font-semibold leading-none tabular-nums tracking-[-0.02em] ${text.primary}`}
-      >
+      <p className="mt-2 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em] text-slate-900">
         {display}
       </p>
       {description !== undefined && (
-        <p className={`mt-1.5 text-[11px] ${text.faint}`}>{description}</p>
+        <p className="mt-1.5 text-[11px] text-slate-400">{description}</p>
       )}
     </Link>
   )

@@ -124,6 +124,30 @@ export async function handleOpportunityCreated(
       causingEventId: eventId,
     })
   }
+
+  // Publish notification event (consumed by the email/WhatsApp notifier)
+  if (executionCaseId) {
+    const { domainEvents } = await import('@execflow/db/schema')
+    const crypto = await import('crypto')
+    await db.insert(domainEvents).values({
+      id: crypto.randomUUID(),
+      organizationId,
+      eventType: 'whatsapp.notification.requested',
+      aggregateType: 'ExecutionCase',
+      aggregateId: executionCaseId,
+      actorType: 'system',
+      actorId: 'worker.opportunity-consumer',
+      payload: {
+        notificationType: 'opportunity_detected',
+        executionCaseId,
+        opportunityType,
+        summary: summary ?? 'Uma nova oportunidade foi detectada no caso.',
+      },
+      correlationId: job.data.correlationId,
+      causationId: eventId,
+      occurredAt: new Date(),
+    })
+  }
 }
 
 /**

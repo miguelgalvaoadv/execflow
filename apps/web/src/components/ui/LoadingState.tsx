@@ -20,7 +20,7 @@ function LoadingStateInline({ label }: { label: string }) {
       aria-label={label}
     >
       <span
-        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-indigo-500"
+        className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600"
         aria-hidden
       />
       <span className={`text-[13px] ${text.muted}`}>{label}</span>

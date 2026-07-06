@@ -1,9 +1,15 @@
 import type { Job } from 'pg-boss'
 import type { WorkersDb } from '../lib/db.ts'
-import { crawlerSyncLogs, executionCases, documents, domainEvents, timelineEvents } from '@execflow/db/schema'
+import { crawlerSyncLogs, executionCases, timelineEvents } from '@execflow/db/schema'
 import { eq, and } from '@execflow/db/client'
-import { QUEUE_CRAWLER_SYNC_REQUESTED } from '../queues/names.ts'
-import { createJuditClient } from '../integrations/judit-client.ts'
+import {
+  createJusbrasilClient,
+  extractProcessSummary,
+  extractMovements,
+  type JusbrasilClient,
+} from '../integrations/jusbrasil-client.ts'
+import { hasAutosDocument, ingestAutosFromLinks } from '../integrations/autos-ingestion.ts'
+import { upsertTimelineEvent, emitMovementsReceived } from '../integrations/timeline-sync-helpers.ts'
 
 /**
  * Payload expected by the crawler.sync.requested job.
@@ -16,240 +22,226 @@ export type CrawlerSyncRequestedEvent = {
 }
 
 /**
- * Court Crawler Worker
+ * Court Sync Worker — motor ÚNICO: JUSBRASIL.
  *
- * Se JUDIT_API_KEY estiver configurada:
- * 1. Busca o processo no datalake JUDIT pelo CNJ
- * 2. Compara as movimentações com o que já existe no ExecFlow
- * 3. Registra novas movimentações na timeline
- * 4. Emite evento de domínio para acionar avaliação do motor
+ * Ao cadastrar um caso (ou no "Sincronizar Tribunal" / varredura diária), este
+ * worker:
+ *   1. Consulta a capa do processo (tribunal, classe, partes) no Jusbrasil;
+ *   2. Importa as movimentações para a timeline;
+ *   3. Baixa os autos em PDF quando há links disponíveis na resposta;
+ *   4. Cria o monitoramento contínuo apontando o callback para
+ *      /api/v1/webhooks/jusbrasil (atualizações em tempo real).
  *
- * Se não estiver configurada:
- * Executa em modo simulado (mesmo comportamento antigo)
+ * Sem JUSBRASIL_API_KEY o caso é marcado como 'manual_review' (nada de dados
+ * falsos) — basta configurar a chave para os dados reais entrarem.
  */
-export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<CrawlerSyncRequestedEvent>) {
-  const { logId, organizationId, executionCaseId, requestedByUserId } = job.data
+export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<any>) {
+  const raw: any = job.data
+  const data = (raw?.payload && raw.payload.executionCaseId ? raw.payload : raw) as CrawlerSyncRequestedEvent
+  const { logId, organizationId, executionCaseId, requestedByUserId } = data
 
-  console.log(`[Crawler Worker] Starting sync for case ${executionCaseId} (Log ID: ${logId})`)
+  console.log(`[Jusbrasil Sync] Iniciando sync do caso ${executionCaseId} (Log ID: ${logId})`)
 
-  // 1. Mark as running
-  await db
-    .update(crawlerSyncLogs)
-    .set({ status: 'running', startedAt: new Date() })
-    .where(and(eq(crawlerSyncLogs.id, logId), eq(crawlerSyncLogs.organizationId, organizationId)))
+  if (logId) {
+    await db
+      .update(crawlerSyncLogs)
+      .set({ status: 'running', startedAt: new Date() })
+      .where(and(eq(crawlerSyncLogs.id, logId), eq(crawlerSyncLogs.organizationId, organizationId)))
+  }
 
   try {
-    // 2. Fetch case info
     const [execCase] = await db
       .select()
       .from(executionCases)
       .where(and(eq(executionCases.id, executionCaseId), eq(executionCases.organizationId, organizationId)))
 
-    if (!execCase) throw new Error('Case not found')
+    if (!execCase) throw new Error('Caso não encontrado')
 
     const cnj = execCase.executionProcessNumber
     if (!cnj) throw new Error('Caso sem número de processo (CNJ)')
 
-    // 3. Tenta usar JUDIT API real
-    const juditClient = createJuditClient()
+    const jusbrasil = createJusbrasilClient()
 
-    if (juditClient) {
-      await syncViaJudit(db, juditClient, execCase, logId, organizationId, requestedByUserId)
+    if (!jusbrasil) {
+      console.warn('[Jusbrasil Sync] JUSBRASIL_API_KEY ausente — marcando caso para conferência manual.')
+      await db
+        .update(executionCases)
+        .set({ monitoringStatus: 'manual_review', lastSyncedAt: new Date() })
+        .where(eq(executionCases.id, execCase.id))
     } else {
-      await syncSimulated(db, execCase, logId, organizationId, requestedByUserId)
+      await syncViaJusbrasil(db, jusbrasil, execCase, organizationId, requestedByUserId)
     }
 
-    // 4. Mark sync as successful
-    await db
-      .update(crawlerSyncLogs)
-      .set({ status: 'success', completedAt: new Date() })
-      .where(eq(crawlerSyncLogs.id, logId))
+    if (logId) {
+      await db
+        .update(crawlerSyncLogs)
+        .set({ status: 'success', completedAt: new Date() })
+        .where(eq(crawlerSyncLogs.id, logId))
+    }
 
-    console.log(`[Crawler Worker] ✅ Sync completed for case ${executionCaseId}`)
-
+    console.log(`[Jusbrasil Sync] ✅ Sync concluído para ${executionCaseId}`)
   } catch (err: any) {
-    console.error(`[Crawler Worker] ❌ Error syncing case ${executionCaseId}:`, err)
-
-    await db
-      .update(crawlerSyncLogs)
-      .set({ status: 'failed', completedAt: new Date(), errorDetails: err.message })
-      .where(eq(crawlerSyncLogs.id, logId))
-
+    console.error(`[Jusbrasil Sync] ❌ Erro no caso ${executionCaseId}:`, err)
+    if (logId) {
+      await db
+        .update(crawlerSyncLogs)
+        .set({ status: 'failed', completedAt: new Date(), errorDetails: err.message })
+        .where(eq(crawlerSyncLogs.id, logId))
+    }
     throw err
   }
 }
 
 /**
- * Sincronização real via JUDIT API.
+ * Sincronização real via JUSBRASIL: capa + partes + movimentações + autos + monitoramento.
  */
-async function syncViaJudit(
+async function syncViaJusbrasil(
   db: WorkersDb,
-  juditClient: any,
-  execCase: any,
-  logId: string,
+  jusbrasil: JusbrasilClient,
+  execCase: typeof executionCases.$inferSelect,
   organizationId: string,
   requestedByUserId?: string
 ) {
-  const cnj = execCase.executionProcessNumber
+  const cnj = execCase.executionProcessNumber!
+  console.log(`[Jusbrasil Sync] 🏛️ Consultando CNJ: ${cnj}`)
 
-  console.log(`[Crawler Worker] 🏛️ Consultando JUDIT API para CNJ: ${cnj}`)
+  // 1. CAPA + PARTES — consulta o processo e registra os dados de capa.
+  let segredoJustica: boolean | null = null
+  let autosLinks: string[] = []
+  try {
+    const { data: processData } = await jusbrasil.getProcessByCnj(cnj)
+    const summary = extractProcessSummary(processData)
+    segredoJustica = summary.segredoJustica
+    autosLinks = summary.autosLinks
 
-  // Cria uma consulta assíncrona no JUDIT
-  const request = await juditClient.createRequest({
-    searchType: 'lawsuit_cnj',
-    searchValue: cnj,
-  })
-
-  console.log(`[Crawler Worker] JUDIT request criada: ${request.id}`)
-
-  // Aguarda o resultado (polling simples - em produção usaria webhook)
-  let attempts = 0
-  let result: any = null
-  const maxAttempts = 30 // 30 tentativas = ~60 segundos
-
-  while (attempts < maxAttempts) {
-    await new Promise(resolve => setTimeout(resolve, 2000))
-    attempts++
-
-    try {
-      result = await juditClient.getRequestResult(request.id)
-      if (result.status === 'completed' || result.status === 'done') {
-        break
-      }
-    } catch (e) {
-      // JUDIT pode retornar 404 enquanto processa
-      if (attempts >= maxAttempts) throw e
+    const patch: Partial<typeof executionCases.$inferInsert> = {}
+    if (!execCase.courtName && summary.tribunal) patch.courtName = summary.tribunal
+    if (Object.keys(patch).length > 0) {
+      await db.update(executionCases).set(patch).where(eq(executionCases.id, execCase.id))
     }
-  }
 
-  // Tenta também buscar direto do datalake (cache)
-  if (!result || !result.lawsuit) {
-    try {
-      result = { lawsuit: await juditClient.getLawsuitByCNJ(cnj) }
-    } catch (e) {
-      console.warn(`[Crawler Worker] Datalake JUDIT sem cache para ${cnj}`)
+    if (summary.poloAtivo || summary.poloPassivo || summary.classe) {
+      await upsertTimelineEvent(db, organizationId, execCase.id, {
+        eventCategory: 'court',
+        eventType: 'court.capa',
+        occurredAt: new Date(),
+        summary: `Capa: ${summary.classe ?? 'processo'} — ${summary.poloAtivo ?? '—'} x ${summary.poloPassivo ?? '—'}`.substring(0, 255),
+        actorId: 'jusbrasil-api',
+      })
     }
+  } catch (e) {
+    console.warn(`[Jusbrasil Sync] Falha ao consultar capa de ${cnj}:`, e)
   }
 
-  if (!result?.lawsuit?.steps || result.lawsuit.steps.length === 0) {
-    console.log(`[Crawler Worker] Nenhuma movimentação encontrada para ${cnj}`)
-    return
+  // 2. MOVIMENTAÇÕES
+  let movements: Array<{ data?: string; tipo?: string; descricao?: string; conteudo?: string; complemento?: string }> = []
+  try {
+    const { data } = await jusbrasil.getProcessMovements(cnj)
+    movements = extractMovements(data)
+  } catch (e) {
+    console.warn(`[Jusbrasil Sync] Sem movimentações disponíveis para ${cnj}:`, e)
   }
 
-  // Registra movimentações na timeline
-  const steps = result.lawsuit.steps
   let newEventsCount = 0
-
-  for (const step of steps) {
-    // Verifica se o evento já existe (para evitar duplicatas)
-    const existingEvents = await db
-      .select()
-      .from(timelineEvents)
-      .where(
-        and(
-          eq(timelineEvents.executionCaseId, execCase.id),
-          eq(timelineEvents.summary, `Movimentação: ${step.type || 'Atualização'} - ${step.description}`),
-          eq(timelineEvents.source, 'integration'),
-        )
-      )
-
-    if (existingEvents.length > 0) continue // Já existe, pula
-
-    await db.insert(timelineEvents).values({
-      organizationId,
-      executionCaseId: execCase.id,
+  for (const mov of movements) {
+    const desc = mov.descricao || mov.complemento || mov.conteudo || mov.tipo || 'Atualização'
+    const summary = `Movimentação: ${mov.tipo || 'Andamento'} - ${desc}`.substring(0, 255)
+    const created = await upsertTimelineEvent(db, organizationId, execCase.id, {
       eventCategory: 'court',
       eventType: 'process_movement',
-      occurredAt: new Date(step.date),
-      summary: `Movimentação: ${step.type || 'Atualização'} - ${step.description}`,
-      source: 'integration',
-      actorType: 'system',
-      actorId: 'judit-api',
+      occurredAt: mov.data ? new Date(mov.data) : new Date(),
+      summary,
+      actorId: 'jusbrasil-api',
     })
-
-    newEventsCount++
+    if (created) newEventsCount++
   }
+  console.log(`[Jusbrasil Sync] 📋 ${newEventsCount} novas movimentações para ${cnj}`)
 
-  console.log(`[Crawler Worker] 📋 ${newEventsCount} novas movimentações registradas para ${cnj}`)
+  // 3. STATUS DE MONITORAMENTO
+  await db
+    .update(executionCases)
+    .set({ monitoringStatus: segredoJustica ? 'sealed' : 'monitored', lastSyncedAt: new Date() })
+    .where(eq(executionCases.id, execCase.id))
 
-  // Emite evento de domínio se houve novidades
   if (newEventsCount > 0) {
-    await db.insert(domainEvents).values({
-      id: crypto.randomUUID(),
-      organizationId,
-      eventType: 'case.movements.received',
-      aggregateId: execCase.id,
-      aggregateType: 'execution_case',
-      correlationId: crypto.randomUUID(),
-      actorType: 'system',
-      actorId: requestedByUserId || 'crawler-judit',
-      occurredAt: new Date(),
-      recordedAt: new Date(),
-      payload: {
-        executionCaseId: execCase.id,
-        cnj,
-        newEventsCount,
-        source: 'judit_api',
-      },
-      metadata: { source: 'crawler_judit' },
-      causationId: null,
-      processingStatus: 'pending',
-      replayable: true,
-    })
+    await emitMovementsReceived(db, execCase, organizationId, newEventsCount, 'jusbrasil_api', requestedByUserId)
   }
+
+  // 4. AUTOS — baixa PDFs se a resposta trouxer links.
+  if (autosLinks.length > 0 && !(await hasAutosDocument(db, organizationId, execCase.id))) {
+    try {
+      const ids = await ingestAutosFromLinks({
+        db,
+        jusbrasil,
+        organizationId,
+        executionCaseId: execCase.id,
+        clientId: execCase.clientId,
+        cnj,
+        uploadedByUserId: requestedByUserId ?? 'system',
+        autosLinks,
+      })
+      if (ids.length > 0) {
+        await upsertTimelineEvent(db, organizationId, execCase.id, {
+          eventCategory: 'court',
+          eventType: 'autos_requested',
+          occurredAt: new Date(),
+          summary: `Autos baixados do Jusbrasil (${ids.length} documento(s) ingerido(s)).`,
+          actorId: 'jusbrasil-api',
+        })
+      }
+    } catch (e) {
+      console.warn(`[Jusbrasil Sync] Não foi possível ingerir autos para ${cnj}:`, e)
+    }
+  }
+
+  // 5. MONITORAMENTO contínuo (callback em tempo real), uma única vez por caso.
+  await ensureMonitoring(db, jusbrasil, execCase, organizationId, cnj)
 }
 
 /**
- * Sincronização simulada (modo desenvolvimento sem JUDIT API).
+ * Cria o monitoramento contínuo no Jusbrasil (uma vez por caso).
+ * Idempotente via marcador na timeline.
  */
-async function syncSimulated(
+async function ensureMonitoring(
   db: WorkersDb,
-  execCase: any,
-  logId: string,
+  jusbrasil: JusbrasilClient,
+  execCase: typeof executionCases.$inferSelect,
   organizationId: string,
-  requestedByUserId?: string
+  cnj: string
 ) {
-  console.log(`[Crawler Worker] 🔧 Modo simulado — sem JUDIT_API_KEY configurada`)
+  const already = await db
+    .select({ id: timelineEvents.id })
+    .from(timelineEvents)
+    .where(
+      and(
+        eq(timelineEvents.executionCaseId, execCase.id),
+        eq(timelineEvents.eventType, 'monitoring.created')
+      )
+    )
+    .limit(1)
+  if (already.length > 0) return
 
-  // Simula delay de crawling
-  await new Promise(resolve => setTimeout(resolve, 3000))
+  const callbackUrl =
+    process.env['JUSBRASIL_WEBHOOK_URL'] ||
+    (process.env['PUBLIC_API_URL']
+      ? `${process.env['PUBLIC_API_URL'].replace(/\/$/, '')}/api/v1/webhooks/jusbrasil`
+      : undefined)
 
-  // Registra uma movimentação simulada na timeline
-  await db.insert(timelineEvents).values({
-    organizationId,
-    executionCaseId: execCase.id,
-    eventCategory: 'court',
-    eventType: 'process_movement',
-    occurredAt: new Date(),
-    summary: 'Movimentação Simulada: Decisão Interlocutória - Simulação de movimentação processual. Configure JUDIT_API_KEY para dados reais.',
-    source: 'integration',
-    actorType: 'system',
-    actorId: 'simulated',
-  })
-
-  // Emite evento de domínio
-  await db.insert(domainEvents).values({
-    id: crypto.randomUUID(),
-    organizationId,
-    eventType: 'case.movements.received',
-    aggregateId: execCase.id,
-    aggregateType: 'execution_case',
-    correlationId: logId,
-    actorType: requestedByUserId ? 'user' : 'system',
-    actorId: requestedByUserId || 'crawler-simulated',
-    occurredAt: new Date(),
-    recordedAt: new Date(),
-    payload: {
+  try {
+    const mon = await jusbrasil.createMonitoring(cnj, callbackUrl)
+    await db.insert(timelineEvents).values({
+      organizationId,
       executionCaseId: execCase.id,
-      cnj: execCase.executionProcessNumber,
-      newEventsCount: 1,
-      source: 'simulated',
-    },
-    metadata: { source: 'crawler_simulated' },
-    causationId: null,
-    processingStatus: 'pending',
-    replayable: true,
-  })
-
-  console.log(`[Crawler Worker] ✅ Sincronização simulada concluída`)
+      eventCategory: 'system',
+      eventType: 'monitoring.created',
+      occurredAt: new Date(),
+      summary: `Monitoramento contínuo ativado no Jusbrasil (#${mon.id}). Atualizações chegam em tempo real.`,
+      source: 'integration',
+      actorType: 'system',
+      actorId: 'jusbrasil-api',
+    })
+    console.log(`[Jusbrasil Sync] 🔔 Monitoramento #${mon.id} criado para ${cnj} (callback: ${callbackUrl ?? 'painel'})`)
+  } catch (e) {
+    console.warn(`[Jusbrasil Sync] Não foi possível criar monitoramento para ${cnj}:`, e)
+  }
 }

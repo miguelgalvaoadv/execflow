@@ -109,6 +109,8 @@ export const opportunityTypeEnum = pgEnum('opportunity_type', [
   'recalculation',    // Sentence arithmetic recalculation
   'excess_execution', // Excesso de execução (served more than sentence)
   'rights_violation', // Direito violado (rights violation)
+  'parole',           // Livramento condicional (parole)
+  'indult',           // Indulto (indult)
   'manual',           // Manually created opportunity not covered by above types
 ])
 

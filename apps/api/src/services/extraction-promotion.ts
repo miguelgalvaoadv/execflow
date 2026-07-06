@@ -159,7 +159,7 @@ export async function promoteExtractionToSnapshot(
     .where(eq(snapshotPromotions.extractionRunId, run.id))
     .limit(1)
 
-  if (existingPromotion !== undefined && existingPromotion.status === 'completed') {
+  if (existingPromotion !== undefined && existingPromotion.status === 'confirmed') {
     return conflictError(
       `Extraction run already promoted to snapshot (snapshotId: ${existingPromotion.snapshotId}).`
     )

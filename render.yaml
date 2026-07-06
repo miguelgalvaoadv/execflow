@@ -7,25 +7,100 @@ services:
     envVars:
       - key: DATABASE_URL
         sync: false
+      - key: BETTER_AUTH_SECRET
+        sync: false
+      - key: BETTER_AUTH_URL
+        sync: false
+      - key: BETTER_AUTH_TRUSTED_ORIGINS
+        sync: false
+      - key: UPLOAD_TOKEN_SECRET
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Segredo compartilhado worker→API (endpoint interno de reanálise).
+      # Gere um valor forte e use o MESMO aqui e no worker.
+      - key: INTERNAL_API_TOKEN
+        sync: false
+      # DataJud (CNJ) — chave pública gratuita; usada no enriquecimento do inventário.
+      - key: DATAJUD_API_KEY
+        sync: false
+      # AASP — API de Intimações (webhook push), se registrado.
+      - key: AASP_WEBHOOK_TOKEN
+        sync: false
+      - key: AASP_WEBHOOK_ENABLED
+        value: 'true'
+      - key: PUBLIC_API_URL
+        sync: false
+      # Storage (Cloudflare R2 / S3)
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: STORAGE_S3_BUCKET
+        sync: false
+      - key: STORAGE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: STORAGE_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: STORAGE_S3_ENDPOINT
+        sync: false
+      # E-mail
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: OFFICE_EMAIL
+        sync: false
+
   - type: worker
     name: execflow-workers
     env: node
-    buildCommand: pnpm install --prod=false && pnpm -F @execflow/workers exec playwright install chromium
+    buildCommand: pnpm install --prod=false
     startCommand: cd packages/workers && pnpm start
     envVars:
       - key: DATABASE_URL
         sync: false
-      - key: COURT_CPF
-        sync: false
-      - key: COURT_PASSWORD
-        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false
-      - key: WHATSAPP_TOKEN
+      # ── Endpoint interno de reanálise: o worker chama a API para rodar a
+      #    cadeia de IA (tier/oportunidades/stale/prazo). MESMO token da API.
+      - key: EXECFLOW_API_URL
+        sync: false            # ex.: https://execflow-api.onrender.com
+      - key: INTERNAL_API_TOKEN
+        sync: false            # o MESMO valor definido no serviço execflow-api
+      # ── InfoSimples — descoberta+monitoramento por OAB (TJSP e-SAJ). PAGO.
+      - key: INFOSIMPLES_TOKEN
         sync: false
-      - key: WHATSAPP_PHONE_NUMBER_ID
+      - key: INFOSIMPLES_OABS
+        sync: false            # ex.: 206292/SP  (várias separadas por vírgula)
+      # ── DJEN / Comunica — intimações oficiais por OAB (grátis, sem CNPJ).
+      - key: DJEN_ENABLED
+        value: 'true'
+      - key: DJEN_OABS
+        sync: false            # ex.: 206292/SP
+      # ── DataJud (CNJ) — enriquecimento do inventário (grátis). Case-sync OFF.
+      - key: DATAJUD_API_KEY
         sync: false
-      - key: WHATSAPP_VERIFY_TOKEN
+      - key: DATAJUD_CASE_SYNC_ENABLED
+        value: 'false'         # InfoSimples é a fonte de movimentação; evita duplicar
+      # ── Astrea (IMAP) — PAUSADO (contingência, sem apagar código)
+      - key: ASTREA_EMAIL_POLL_ENABLED
+        value: 'false'
+      - key: ASTREA_HEALTH_ALERT_EMAIL
         sync: false
-      - key: JUDIT_API_KEY
+      # Storage (Cloudflare R2 / S3) — para gravar autos
+      - key: STORAGE_PROVIDER
+        value: s3
+      - key: STORAGE_S3_BUCKET
+        sync: false
+      - key: STORAGE_S3_ACCESS_KEY_ID
+        sync: false
+      - key: STORAGE_S3_SECRET_ACCESS_KEY
+        sync: false
+      - key: STORAGE_S3_ENDPOINT
+        sync: false
+      # E-mail
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: OFFICE_EMAIL
         sync: false

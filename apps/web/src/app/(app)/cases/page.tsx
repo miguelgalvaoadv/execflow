@@ -8,9 +8,11 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { useSession } from '@/lib/hooks/use-session'
 import { useCases } from '@/lib/hooks/use-cases'
 import { DashboardPageHeader } from '@/components/dashboard'
+import { CaseCard } from '@/components/dashboard/CaseCard'
 import { text } from '@/components/dashboard/surfaces'
 import {
   Button,
@@ -31,7 +33,7 @@ import { CreateCaseModal } from '@/components/modals/CreateCaseModal'
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
   { value: 'intake', label: 'Triagem' },
-  { value: 'active', label: 'Activo' },
+  { value: 'active', label: 'Ativo' },
   { value: 'suspended', label: 'Suspenso' },
   { value: 'closed', label: 'Encerrado' },
   { value: 'archived', label: 'Arquivado' },
@@ -39,7 +41,7 @@ const STATUS_OPTIONS = [
 
 const STATUS_LABELS: Record<string, string> = {
   intake: 'Triagem',
-  active: 'Activo',
+  active: 'Ativo',
   suspended: 'Suspenso',
   closed: 'Encerrado',
   archived: 'Arquivado',
@@ -47,20 +49,20 @@ const STATUS_LABELS: Record<string, string> = {
 
 /** Accent visual por status — helper local, não altera ListCard. */
 function caseStatusAccentClass(status: string): string {
-  if (status === 'active') return 'border-emerald-900/30 bg-emerald-950/10'
-  if (status === 'intake') return 'border-blue-900/30 bg-blue-950/10'
-  if (status === 'suspended') return 'border-amber-900/30 bg-amber-950/10'
+  if (status === 'active') return 'border-emerald-200 bg-emerald-50'
+  if (status === 'intake') return 'border-blue-200 bg-blue-50'
+  if (status === 'suspended') return 'border-amber-200 bg-amber-50'
   return ''
 }
 
 /** Badge class semântica por status de caso. */
 function caseStatusBadgeClass(status: string): string {
-  if (status === 'active') return 'text-emerald-400 bg-emerald-950/40 border-emerald-900/40'
-  if (status === 'intake') return 'text-blue-400 bg-blue-950/40 border-blue-900/40'
-  if (status === 'suspended') return 'text-amber-400 bg-amber-950/40 border-amber-900/40'
-  if (status === 'closed') return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
-  if (status === 'archived') return 'text-zinc-500 bg-white/[0.02] border-white/[0.04]'
-  return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
+  if (status === 'active') return 'text-emerald-700 bg-emerald-50 border-emerald-200'
+  if (status === 'intake') return 'text-blue-700 bg-blue-50 border-blue-200'
+  if (status === 'suspended') return 'text-amber-700 bg-amber-50 border-amber-200'
+  if (status === 'closed') return 'text-slate-600 bg-slate-50 border-slate-100'
+  if (status === 'archived') return 'text-slate-500 bg-slate-50 border-slate-100'
+  return 'text-slate-600 bg-slate-50 border-slate-100'
 }
 
 function formatDateTime(iso: string): string {
@@ -79,12 +81,21 @@ function clientDisplayName(item: {
   return item.clientSummary.displayName ?? item.clientSummary.fullName
 }
 
+const MONITORING_OPTIONS = [
+  { value: '', label: 'Todo monitoramento' },
+  { value: 'monitored', label: 'Monitorado' },
+  { value: 'manual_review', label: 'Conferência manual' },
+  { value: 'sealed', label: 'Segredo de justiça' },
+] as const
+
 export default function CasesPage() {
+  const router = useRouter()
   const { data: session, isLoading: sessionLoading } = useSession()
   const [searchInput, setSearchInput] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [jurisdictionFilter, setJurisdictionFilter] = useState('')
+  const [monitoringFilter, setMonitoringFilter] = useState('')
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list')
   const [showCreateModal, setShowCreateModal] = useState(false)
 
@@ -122,24 +133,25 @@ export default function CasesPage() {
   })
 
   const items = data?.pages.flatMap((page) => page.data) ?? []
+  const visibleItems =
+    monitoringFilter !== ''
+      ? items.filter((i) => i.monitoringStatus === monitoringFilter)
+      : items
   const hasActiveFilters =
     debouncedQ !== '' || statusFilter !== '' || jurisdictionFilter.trim() !== ''
 
   return (
     <div>
-      <div className="flex items-start justify-between">
-        <DashboardPageHeader
-          eyebrow="Operacional"
-          title="Execuções"
-          description="Casos em execução penal da sua organização."
-        />
-        <Button
-          variant="primary"
-          onClick={() => setShowCreateModal(true)}
-        >
-          + Novo Caso
-        </Button>
-      </div>
+      <DashboardPageHeader
+        eyebrow="Operacional"
+        title="Execuções"
+        description="Casos em execução penal da sua organização."
+        actions={
+          <Button variant="primary" onClick={() => setShowCreateModal(true)}>
+            <span className="text-[15px] leading-none">+</span> Novo caso
+          </Button>
+        }
+      />
 
       <CreateCaseModal
         open={showCreateModal}
@@ -184,6 +196,14 @@ export default function CasesPage() {
             onChange={setStatusFilter}
             options={STATUS_OPTIONS}
           />
+          <FilterSelect
+            id="case-monitoring"
+            label="Monitoramento"
+            value={monitoringFilter}
+            onChange={setMonitoringFilter}
+            options={MONITORING_OPTIONS}
+            width="select-md"
+          />
           <FilterTextField
             id="case-jurisdiction"
             label="Comarca / UF"
@@ -210,7 +230,7 @@ export default function CasesPage() {
             title={hasActiveFilters ? 'Nenhum caso encontrado' : 'Nenhuma execução'}
             description={
               hasActiveFilters
-                ? 'Nenhum caso corresponde aos filtros actuais.'
+                ? 'Nenhum caso corresponde aos filtros atuais.'
                 : 'Os casos de execução penal da organização aparecerão aqui.'
             }
           />
@@ -223,44 +243,24 @@ export default function CasesPage() {
 
             {viewMode === 'list' ? (
               <>
-                <ul className="space-y-2" aria-label="Execuções">
-                  {items.map((item) => (
-                    <li key={item.id}>
-                      <ListCard
-                        href={`/cases/${item.id}`}
-                        accentClassName={caseStatusAccentClass(item.status)}
-                      >
-                        <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
-                          <p className={`text-[13px] font-medium ${text.secondary}`}>
-                            {clientDisplayName(item)}
-                          </p>
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span
-                              className={[
-                                'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]',
-                                caseStatusBadgeClass(item.status),
-                              ].join(' ')}
-                            >
-                              {STATUS_LABELS[item.status] ?? item.status}
-                            </span>
-                            <span className={`text-[11px] ${text.faint} tabular-nums`}>
-                              {formatDateTime(item.updatedAt)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className={`flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] ${text.faint}`}>
-                          <span>Ref. {item.internalRef}</span>
-                          <span>
-                            {item.executionProcessNumber !== null
-                              ? item.executionProcessNumber
-                              : 'Processo pendente'}
-                          </span>
-                          {item.courtName !== null && <span>{item.courtName}</span>}
-                        </div>
-                      </ListCard>
-                    </li>
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {visibleItems.map((item) => (
+                    <CaseCard
+                      key={item.id}
+                      id={item.id}
+                      clientName={clientDisplayName(item)}
+                      internalRef={item.internalRef}
+                      processNumber={item.executionProcessNumber}
+                      courtName={item.courtName}
+                      jurisdiction={item.courtJurisdiction}
+                      statusLabel={STATUS_LABELS[item.status] ?? item.status}
+                      statusBadgeClass={caseStatusBadgeClass(item.status)}
+                      updatedAt={item.updatedAt}
+                      monitoringStatus={item.monitoringStatus}
+                      documentFreshnessStatus={item.documentFreshnessStatus}
+                    />
                   ))}
-                </ul>
+                </div>
                 {hasNextPage ? (
                   <div className="pt-2">
                     <Button

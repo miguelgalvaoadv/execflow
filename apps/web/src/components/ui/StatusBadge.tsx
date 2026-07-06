@@ -1,12 +1,11 @@
 import type { ReactNode } from 'react'
-import { text } from '@/components/dashboard/surfaces'
 import {
   deadlineStatusBadgeClass,
   deadlineStatusLabel,
 } from '@/lib/operational/deadline-display'
 
 const BASE_CLASS =
-  'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]'
+  'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium uppercase tracking-[0.04em]'
 
 type StatusBadgeNeutralProps = {
   variant?: 'neutral'
@@ -39,7 +38,7 @@ export function StatusBadge(props: StatusBadgeProps) {
     <span
       className={[
         BASE_CLASS,
-        `border-white/[0.08] bg-white/[0.04] ${text.secondary}`,
+        'border-slate-200 bg-slate-100 text-slate-600',
         props.className,
       ]
         .filter(Boolean)

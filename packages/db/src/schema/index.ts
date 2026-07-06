@@ -44,6 +44,7 @@ export {
 
 // Foundation entities (Phase 1)
 export { organizations } from './organization.ts'
+export { crawlerSyncLogs } from './crawler-sync-log.ts'
 export { users } from './user.ts'
 export { memberships } from './membership.ts'
 
@@ -109,7 +110,23 @@ export { workflowTasks } from './workflow-task.ts'
 export { queueAssignments } from './queue-assignment.ts'
 export { queueEscalations } from './queue-escalation.ts'
 export { pieceDrafts, pieceDraftStatusEnum } from './piece-draft.ts'
-export { crawlerSyncLogs, crawlerSyncStatusEnum } from './crawler-sync-log.ts'
+export { crawlerSyncStatusEnum } from './crawler-sync-log.ts'
+
+// Astrea e-mail ingestion + system health (court monitoring via IMAP)
+export { astreaEmailLogs, astreaEmailStatusEnum, astreaExtractionMethodEnum } from './astrea-email-log.ts'
+export { systemHealthChecks, healthCheckTypeEnum, healthCheckStatusEnum } from './system-health-check.ts'
+
+// Painel jurídico — inventário OAB, partes, intimações, integrações, histórico IA (Phase 8)
+export { oabProfiles, inventoryItems } from './oab-inventory.ts'
+export { caseParties } from './case-party.ts'
+export { courtCommunications } from './court-communication.ts'
+export { integrationConnectors } from './integration-connector.ts'
+export { aiInteractionLogs } from './ai-interaction-log.ts'
+export type { OabProfile, NewOabProfile, InventoryItem, NewInventoryItem } from './oab-inventory.ts'
+export type { CaseParty, NewCaseParty } from './case-party.ts'
+export type { CourtCommunication, NewCourtCommunication } from './court-communication.ts'
+export type { IntegrationConnector, NewIntegrationConnector } from './integration-connector.ts'
+export type { AiInteractionLog, NewAiInteractionLog } from './ai-interaction-log.ts'
 
 // Re-export inferred types — Phase 1
 export type { Organization, NewOrganization } from './organization.ts'

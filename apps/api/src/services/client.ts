@@ -41,6 +41,9 @@ export type CreateClientInput = {
   /** RG — secondary identity document. LGPD sensitive. */
   rg?: string | undefined
 
+  /** Matrícula do réu no sistema penitenciário (ex.: matrícula SAP). */
+  matricula?: string | undefined
+
   /** Date of birth (ISO 8601 date string: "YYYY-MM-DD"). LGPD sensitive. */
   birthDate?: string | undefined
 
@@ -68,6 +71,8 @@ export type CreateClientInput = {
   /** Free-text operational notes. */
   notes?: string | undefined
 }
+
+export type UpdateClientInput = Partial<CreateClientInput>
 
 // ---------------------------------------------------------------------------
 // Service operations
@@ -148,6 +153,7 @@ export async function createClient(
           fullName: input.fullName.trim(),
           cpf: normalizedCpf,
           rg: input.rg?.trim(),
+          matricula: input.matricula?.trim(),
           birthDate: input.birthDate,
           displayName: input.displayName?.trim(),
           aliases: input.aliases ?? [],
@@ -196,5 +202,94 @@ export async function createClient(
 
     console.error('[client.service] createClient failed:', err)
     return internalServiceError('Failed to create client.', err)
+  }
+}
+
+/**
+ * Update an existing client.
+ */
+export async function updateClient(
+  ctx: WriteContext,
+  clientId: string,
+  input: UpdateClientInput
+): Promise<ServiceResult<Client>> {
+  if (input.fullName !== undefined && !input.fullName.trim()) {
+    return validationError('Full name is required.', 'fullName')
+  }
+
+  let normalizedCpf: string | undefined
+  if (input.cpf) {
+    const cpfResult = validateAndNormalizeCpf(input.cpf)
+    if (!cpfResult.valid) {
+      return validationError(
+        cpfResult.reason === 'invalid_format'
+          ? 'CPF must be 11 digits.'
+          : 'CPF checksum is invalid. Please verify the number.',
+        'cpf'
+      )
+    }
+    normalizedCpf = cpfResult.normalized
+  }
+
+  try {
+    const client = await withTx(ctx.db, async (tx) => {
+      // Import updateClient locally or from top
+      const { updateClient: repoUpdateClient } = await import('../repositories/client.ts')
+
+      const updateData: any = {}
+      if (input.fullName !== undefined) updateData.fullName = input.fullName.trim()
+      if (normalizedCpf !== undefined) updateData.cpf = normalizedCpf
+      if (input.rg !== undefined) updateData.rg = input.rg.trim()
+      if (input.matricula !== undefined) updateData.matricula = input.matricula.trim()
+      if (input.birthDate !== undefined) updateData.birthDate = input.birthDate
+      if (input.displayName !== undefined) updateData.displayName = input.displayName.trim()
+      if (input.aliases !== undefined) updateData.aliases = input.aliases
+      if (input.internalRef !== undefined) updateData.internalRef = input.internalRef.trim()
+      if (input.responsibleLawyerUserId !== undefined) updateData.responsibleLawyerUserId = input.responsibleLawyerUserId
+      if (input.contactChannels !== undefined) updateData.contactChannels = input.contactChannels
+      if (input.notes !== undefined) updateData.notes = input.notes.trim()
+
+      const now = new Date()
+      updateData.updatedAt = now
+
+      const updateResult = unwrapOrThrow(
+        await repoUpdateClient(tx, ctx.organizationId, clientId, updateData)
+      )
+
+      await writeAuditAndEvent({
+        tx,
+        actor: ctx.actor,
+        organizationId: ctx.organizationId,
+        requestId: ctx.requestId,
+        correlationId: ctx.correlationId,
+        action: 'updated',
+        entityType: 'Client',
+        entityId: clientId,
+        changes: { type: 'field_update' as const, fields: Object.fromEntries(
+          Object.entries(updateData).map(([k, v]) => [k, { previous: null, next: v }])
+        ) },
+        eventType: 'client.updated',
+        aggregateType: 'Client',
+        aggregateId: clientId,
+        occurredAt: now,
+        eventPayload: {
+          clientId,
+          organizationId: ctx.organizationId,
+        },
+      })
+
+      return updateResult
+    })
+
+    return ok(client)
+  } catch (err) {
+    if (err instanceof Error && err.message.includes('clients_org_cpf_unique')) {
+      return conflictError('A client with this CPF already exists in the organization.')
+    }
+    if (err instanceof Error && err.message === 'NOT_FOUND') {
+       return validationError('Client not found')
+    }
+    console.error('[client.service] updateClient failed:', err)
+    return internalServiceError('Failed to update client.', err)
   }
 }

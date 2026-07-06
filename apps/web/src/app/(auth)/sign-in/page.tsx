@@ -70,8 +70,7 @@ function SignInForm() {
       className={[
         'w-full max-w-[400px] rounded-2xl border p-10',
         borders.default,
-        surfaces.panel,
-        'shadow-[0_0_0_1px_rgba(255,255,255,0.03),0_24px_48px_rgba(0,0,0,0.4)]',
+        'bg-white shadow-xl',
       ].join(' ')}
     >
       {/* Marca EXECFLOW — mesmo logótipo do SidebarBrand */}
@@ -84,14 +83,14 @@ function SignInForm() {
           aria-hidden="true"
           className="shrink-0"
         >
-          <rect x="7" y="7" width="3" height="18" rx="1.5" fill="#f4f4f5" />
-          <rect x="7" y="7" width="14" height="3" rx="1.5" fill="#f4f4f5" />
-          <rect x="7" y="14.5" width="11" height="3" rx="1.5" fill="#f4f4f5" />
-          <rect x="7" y="22" width="14" height="3" rx="1.5" fill="#f4f4f5" />
-          <rect x="22" y="7" width="3" height="3" rx="1.5" fill="#71717a" />
+          <rect x="7" y="7" width="3" height="18" rx="1.5" fill="#0f172a" />
+          <rect x="7" y="7" width="14" height="3" rx="1.5" fill="#0f172a" />
+          <rect x="7" y="14.5" width="11" height="3" rx="1.5" fill="#0f172a" />
+          <rect x="7" y="22" width="14" height="3" rx="1.5" fill="#0f172a" />
+          <rect x="22" y="7" width="3" height="3" rx="1.5" fill="#2563eb" />
         </svg>
         <div>
-          <p className="text-[13px] font-semibold tracking-[-0.02em] text-zinc-100">
+          <p className="text-[13px] font-semibold tracking-[-0.02em] text-slate-900">
             EXECFLOW
           </p>
           <p className={`text-[11px] ${text.faint}`}>
@@ -128,9 +127,9 @@ function SignInForm() {
             onChange={(e) => setEmail(e.target.value)}
             className={[
               'w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none transition-colors',
-              `${borders.default} bg-white/[0.03] ${text.primary}`,
-              'placeholder:text-zinc-600',
-              'focus:border-white/[0.18] focus:bg-white/[0.05]',
+              `${borders.default} bg-white ${text.primary}`,
+              'placeholder:text-slate-400',
+              'focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20',
             ].join(' ')}
             placeholder="advogado@escritorio.com"
             disabled={pending}
@@ -153,9 +152,9 @@ function SignInForm() {
             onChange={(e) => setPassword(e.target.value)}
             className={[
               'w-full rounded-lg border px-3 py-2.5 text-[13px] outline-none transition-colors',
-              `${borders.default} bg-white/[0.03] ${text.primary}`,
-              'placeholder:text-zinc-600',
-              'focus:border-white/[0.18] focus:bg-white/[0.05]',
+              `${borders.default} bg-white ${text.primary}`,
+              'placeholder:text-slate-400',
+              'focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20',
             ].join(' ')}
             placeholder="••••••••"
             disabled={pending}
@@ -164,7 +163,7 @@ function SignInForm() {
 
         {error !== null && (
           <p
-            className="rounded-lg border border-red-900/40 bg-red-950/30 px-3 py-2.5 text-[13px] text-red-400"
+            className="rounded-lg border border-red-200 bg-red-50 px-3 py-2.5 text-[13px] text-red-700"
             role="alert"
           >
             {error}

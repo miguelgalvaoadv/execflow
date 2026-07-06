@@ -7,22 +7,25 @@
  * Data: GET /api/v1/clients/:id (LGPD fields filtered server-side by role).
  */
 
+import { useState } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from '@/lib/hooks/use-session'
 import { useClient } from '@/lib/hooks/use-client'
 import { DashboardPageHeader } from '@/components/dashboard'
+import { EditClientModal } from '@/components/modals/EditClientModal'
 import {
   ErrorState,
   FieldRow,
   LoadingState,
   ProfileSection,
+  Button,
 } from '@/components/ui'
 import { text } from '@/components/dashboard/surfaces'
 
 const STATUS_LABELS: Record<string, string> = {
-  active: 'Activo',
-  inactive: 'Inactivo',
+  active: 'Ativo',
+  inactive: 'Inativo',
   merged: 'Fundido',
   archived: 'Arquivado',
 }
@@ -56,6 +59,7 @@ export default function ClientProfilePage() {
   const client = clientQuery.data?.data
 
   const headerTitle = client?.displayName ?? client?.fullName ?? 'Cliente'
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
 
   return (
     <div>
@@ -79,7 +83,7 @@ export default function ClientProfilePage() {
         <div className="mb-5">
             <Link
               href="/clients"
-              className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.muted} hover:text-zinc-300 transition-colors`}
+              className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.muted} hover:text-slate-700 transition-colors`}
             >
               ← Clientes
             </Link>
@@ -88,13 +92,24 @@ export default function ClientProfilePage() {
           <DashboardPageHeader
             eyebrow="Cliente"
             title={headerTitle}
+            actions={
+              <Button variant="secondary" onClick={() => setIsEditModalOpen(true)}>
+                Editar Cliente
+              </Button>
+            }
             description={[
               client.internalRef !== null ? `Ref. ${client.internalRef}` : null,
               `Status: ${STATUS_LABELS[client.status] ?? client.status}`,
-              `Actualizado em ${formatDateTime(client.updatedAt)}`,
+              `Atualizado em ${formatDateTime(client.updatedAt)}`,
             ]
               .filter(Boolean)
               .join(' · ')}
+          />
+
+          <EditClientModal
+            open={isEditModalOpen}
+            onClose={() => setIsEditModalOpen(false)}
+            client={client}
           />
 
           <div className="mt-6 space-y-4">
@@ -129,6 +144,7 @@ export default function ClientProfilePage() {
 
             {(client.cpf !== undefined ||
               client.rg !== undefined ||
+              client.matricula !== undefined ||
               client.birthDate !== undefined ||
               (client.contactChannels !== undefined && client.contactChannels.length > 0)) && (
               <ProfileSection title="Dados sensíveis (LGPD)">
@@ -139,13 +155,16 @@ export default function ClientProfilePage() {
                   {client.rg !== undefined && client.rg !== null && (
                     <FieldRow labelWidth="40" label="RG" value={client.rg} />
                   )}
+                  {client.matricula !== undefined && client.matricula !== null && (
+                    <FieldRow labelWidth="40" label="Matrícula (réu)" value={client.matricula} />
+                  )}
                   {client.birthDate !== undefined && client.birthDate !== null && (
                     <FieldRow labelWidth="40" label="Data de nascimento" value={formatDate(client.birthDate)} />
                   )}
                   {client.contactChannels !== undefined && client.contactChannels.length > 0 && (
                     <FieldRow
                       labelWidth="40"
-                      label="Contactos"
+                      label="Contatos"
                       value={
                         <ul className="space-y-1">
                           {client.contactChannels.map((ch, i) => (
@@ -168,7 +187,7 @@ export default function ClientProfilePage() {
             <ProfileSection title="Datas">
               <dl>
                 <FieldRow labelWidth="40" label="Criado em" value={formatDateTime(client.createdAt)} />
-                <FieldRow labelWidth="40" label="Actualizado em" value={formatDateTime(client.updatedAt)} />
+                <FieldRow labelWidth="40" label="Atualizado em" value={formatDateTime(client.updatedAt)} />
               </dl>
             </ProfileSection>
           </div>

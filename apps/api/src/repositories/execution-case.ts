@@ -67,6 +67,10 @@ export type ExecutionCaseListItem = {
   courtName: string | null
   courtJurisdiction: string | null
   updatedAt: Date
+  monitoringStatus: string | null
+  documentFreshnessStatus: string | null
+  pendingCriticalMovementType: string | null
+  pendingCriticalMovementSince: Date | null
   clientSummary: CaseClientSummary
 }
 
@@ -159,6 +163,10 @@ export async function listExecutionCases(
         courtName: executionCases.courtName,
         courtJurisdiction: executionCases.courtJurisdiction,
         updatedAt: executionCases.updatedAt,
+        monitoringStatus: executionCases.monitoringStatus,
+        documentFreshnessStatus: (executionCases as any).documentFreshnessStatus,
+        pendingCriticalMovementType: (executionCases as any).pendingCriticalMovementType,
+        pendingCriticalMovementSince: (executionCases as any).pendingCriticalMovementSince,
         clientId: clients.id,
         clientFullName: clients.fullName,
         clientDisplayName: clients.displayName,
@@ -180,6 +188,10 @@ export async function listExecutionCases(
       courtName: row.courtName,
       courtJurisdiction: row.courtJurisdiction,
       updatedAt: row.updatedAt,
+      monitoringStatus: row.monitoringStatus,
+      documentFreshnessStatus: row.documentFreshnessStatus ?? null,
+      pendingCriticalMovementType: row.pendingCriticalMovementType ?? null,
+      pendingCriticalMovementSince: row.pendingCriticalMovementSince ?? null,
       clientSummary: {
         id: row.clientId,
         fullName: row.clientFullName,
@@ -337,6 +349,57 @@ export async function insertCase(
     return {
       success: false,
       error: { code: 'UNKNOWN', message: 'Failed to insert execution case.', cause: err },
+    }
+  }
+}
+
+/**
+ * Update an existing execution case.
+ */
+export async function updateExecutionCase(
+  tx: DbTransaction,
+  organizationId: string,
+  caseId: string,
+  data: Partial<Omit<ExecutionCase, 'id' | 'organizationId' | 'clientId' | 'createdAt' | 'createdByUserId' | 'deletedAt'>>
+): Promise<RepositoryResult<ExecutionCase>> {
+  try {
+    const [row] = await tx
+      .update(executionCases)
+      .set(data)
+      .where(and(eq(executionCases.id, caseId), eq(executionCases.organizationId, organizationId)))
+      .returning()
+
+    if (!row) {
+      return { success: false, error: { code: 'NOT_FOUND', message: 'Case not found.' } }
+    }
+
+    return { success: true, data: row }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err)
+    if (message.includes('execution_cases_process_number_unique')) {
+      return {
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'An execution case with this process number already exists in the organization.',
+          cause: err,
+        },
+      }
+    }
+    if (message.includes('execution_cases_internal_ref_unique')) {
+      return {
+        success: false,
+        error: {
+          code: 'CONFLICT',
+          message: 'An execution case with this internal reference already exists.',
+          cause: err,
+        },
+      }
+    }
+
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to update execution case.', cause: err },
     }
   }
 }

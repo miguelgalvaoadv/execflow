@@ -25,7 +25,7 @@ export function SidebarBrand({ compact = false }: SidebarBrandProps) {
         {/* Barra inferior */}
         <rect x="7" y="22" width="14" height="3" rx="1.5" fill="#0f172a" />
         {/* Ponto de acento — detalhe premium */}
-        <rect x="22" y="7" width="3" height="3" rx="1.5" fill="#4f46e5" />
+        <rect x="22" y="7" width="3" height="3" rx="1.5" fill="#2563eb" />
       </svg>
 
       {!compact && (

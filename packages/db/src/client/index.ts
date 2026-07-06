@@ -57,8 +57,12 @@ function isLocalhostDatabaseUrl(connectionString: string): boolean {
  * Does NOT support long-running connections or full transaction isolation.
  */
 export function createDbClient(connectionString: string) {
-  const pool = new pg.Pool({ connectionString, max: 10 })
-  return drizzlePg(pool, { schema }) as any
+  // max conservador: a Supabase (session pooler) limita o total a ~15 conexões
+  // compartilhadas entre API + worker. Mantemos folga.
+  const pool = new pg.Pool({ connectionString, max: 4 })
+  // Evita derrubar o processo quando o pooler da Supabase encerra uma conexão ociosa.
+  pool.on('error', (err) => console.error('[db] idle client error (ignorado):', err.message))
+  return drizzlePg(pool, { schema })
 }
 
 export type DbClient = ReturnType<typeof createDbClient>
@@ -86,8 +90,11 @@ export type DbClient = ReturnType<typeof createDbClient>
  *   neonConfig.webSocketConstructor = ws
  */
 export function createPoolDbClient(connectionString: string) {
-  const pool = new pg.Pool({ connectionString, max: 5 })
-  return drizzlePg(pool, { schema }) as any
+  // max baixo: divide o limite de ~15 da Supabase com pg-boss e a API.
+  const pool = new pg.Pool({ connectionString, max: 3 })
+  // Evita derrubar o worker quando o pooler da Supabase encerra uma conexão ociosa.
+  pool.on('error', (err) => console.error('[db] idle client error (ignorado):', err.message))
+  return drizzlePg(pool, { schema })
 }
 
 export type PoolDbClient = ReturnType<typeof createPoolDbClient>

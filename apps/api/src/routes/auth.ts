@@ -36,7 +36,7 @@ const authRouter = new Hono<{ Variables: HonoVariables }>()
 // Better Auth core handler — delegates all auth protocol requests
 // -------------------------------------------------------------------------
 
-authRouter.on(['GET', 'POST'], '/auth/**', authHandler)
+authRouter.on(['GET', 'POST'], '/auth/*', authHandler)
 
 // -------------------------------------------------------------------------
 // Session active-org management

@@ -173,19 +173,51 @@ export type PieceDraftItem = {
   finalizedAt: string | null
 }
 
+export type GeneratePieceDraftInput = {
+  opportunityId: string
+  instructions?: string
+  /** Override completo do prompt (edição do advogado na tela). */
+  systemPrompt?: string
+  userPrompt?: string
+}
+
 export function useGeneratePieceDraft(organizationId: string, caseId: string) {
   const queryClient = useQueryClient()
 
-  return useMutation<{ data: PieceDraftItem }, ApiError, { opportunityId: string; instructions?: string }>({
-    mutationFn: ({ opportunityId, instructions }) =>
+  return useMutation<{ data: PieceDraftItem }, ApiError, GeneratePieceDraftInput>({
+    mutationFn: ({ opportunityId, instructions, systemPrompt, userPrompt }) =>
       apiPost<{ data: PieceDraftItem }>(
         `/api/v1/piece-drafts/generate/${opportunityId}`,
-        { instructions },
+        { instructions, systemPrompt, userPrompt },
         { organizationId }
       ),
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.caseOpportunities(organizationId, caseId) })
+      void queryClient.invalidateQueries({ queryKey: ['case-piece-drafts', organizationId, caseId] })
     },
+  })
+}
+
+export type PiecePromptPreview = { systemPrompt: string; userPrompt: string }
+
+/**
+ * Busca o prompt padrão (system + user) que seria enviado ao Claude, para o
+ * advogado ver e editar antes de gerar. Só dispara quando enabled (modal aberto).
+ */
+export function usePiecePromptPreview(
+  organizationId: string,
+  opportunityId: string | null,
+  enabled = true
+) {
+  return useQuery<{ data: PiecePromptPreview }, ApiError>({
+    queryKey: ['piece-prompt-preview', organizationId, opportunityId],
+    queryFn: ({ signal }) =>
+      apiGet<{ data: PiecePromptPreview }>(
+        `/api/v1/piece-drafts/preview-prompt/${opportunityId}`,
+        { organizationId, signal }
+      ),
+    staleTime: 60 * 1000,
+    enabled: organizationId !== '' && !!opportunityId && enabled,
   })
 }
 

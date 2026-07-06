@@ -1,281 +1,176 @@
 'use client'
 
+import Link from 'next/link'
 import { DashboardPageHeader } from '@/components/dashboard'
-import { useState } from 'react'
+import {
+  Bot,
+  Landmark,
+  FolderArchive,
+  Mail,
+  CheckCircle2,
+  CircleDashed,
+  ListChecks,
+  Lock,
+  type LucideIcon,
+} from 'lucide-react'
 
-type IntegrationStatus = 'connected' | 'disconnected' | 'partial'
-
-interface IntegrationCard {
+type Integration = {
   id: string
   name: string
   description: string
-  icon: string
-  status: IntegrationStatus
-  statusLabel: string
-  fields: Array<{
-    key: string
-    label: string
-    placeholder: string
-    type: 'text' | 'password'
-    value: string
-    helpText?: string
-  }>
-  docs?: string
-  cost?: string
+  Icon: LucideIcon
+  required: boolean
+  envVar: string
+  note: string
 }
 
+const INTEGRATIONS: Integration[] = [
+  {
+    id: 'claude',
+    name: 'Claude (Anthropic)',
+    description: 'Inteligência que lê os autos, detecta oportunidades e redige as peças.',
+    Icon: Bot,
+    required: true,
+    envVar: 'ANTHROPIC_API_KEY',
+    note: 'Obtida em console.anthropic.com. Configurada no servidor (Render) e no .env.local.',
+  },
+  {
+    id: 'astrea',
+    name: 'Astrea (tribunais, por e-mail)',
+    description: 'Monitora os processos públicos do escritório no Astrea e lê os alertas de andamento por e-mail (IMAP) a cada 10 minutos. Segredo de justiça exige cadastro manual de credencial por tribunal dentro do Astrea.',
+    Icon: Landmark,
+    required: true,
+    envVar: 'ASTREA_IMAP_HOST / USER / PASS',
+    note: 'Conta de Gmail dedicada com senha de app. Configurada no servidor (Render → execflow-workers).',
+  },
+  {
+    id: 'storage',
+    name: 'Armazenamento de documentos',
+    description: 'Guarda os autos em PDF e as peças geradas, com download seguro.',
+    Icon: FolderArchive,
+    required: true,
+    envVar: 'STORAGE_S3_*',
+    note: 'Cloudflare R2 / S3 em produção; armazenamento local em desenvolvimento.',
+  },
+  {
+    id: 'email',
+    name: 'E-mail de alertas',
+    description: 'Avisa o escritório sobre novas movimentações, prazos e oportunidades.',
+    Icon: Mail,
+    required: false,
+    envVar: 'SMTP_USER / SMTP_PASS',
+    note: 'Use uma "senha de app" do Gmail. Opcional.',
+  },
+]
+
 export default function SettingsPage() {
-  const [integrations, setIntegrations] = useState<IntegrationCard[]>([
-    {
-      id: 'anthropic',
-      name: 'Claude (Anthropic)',
-      description: 'IA para redação automática de petições e análise de documentos.',
-      icon: '🤖',
-      status: 'connected',
-      statusLabel: 'Conectado',
-      fields: [
-        {
-          key: 'ANTHROPIC_API_KEY',
-          label: 'API Key',
-          placeholder: 'sk-ant-...',
-          type: 'password',
-          value: '••••••••••••••••',
-          helpText: 'Obtenha em console.anthropic.com',
-        },
-      ],
-      docs: 'https://console.anthropic.com/',
-      cost: '~US$3/1M tokens de entrada',
-    },
-    {
-      id: 'judit',
-      name: 'JUDIT API',
-      description: 'Monitoramento automatizado de processos nos tribunais brasileiros. Recebe webhooks com novas movimentações.',
-      icon: '🏛️',
-      status: 'disconnected',
-      statusLabel: 'Não configurado',
-      fields: [
-        {
-          key: 'JUDIT_API_KEY',
-          label: 'API Key',
-          placeholder: 'Sua chave de API da JUDIT',
-          type: 'password',
-          value: '',
-          helpText: 'Solicite via WhatsApp: +55 21 98528-4143',
-        },
-      ],
-      docs: 'https://docs.judit.io',
-      cost: 'A partir de R$249/mês ou pay-as-you-go',
-    },
-    {
-      id: 'whatsapp',
-      name: 'WhatsApp Business (Meta)',
-      description: 'Notificações automáticas para o escritório via WhatsApp Business API.',
-      icon: '📱',
-      status: 'disconnected',
-      statusLabel: 'Não configurado',
-      fields: [
-        {
-          key: 'WHATSAPP_API_TOKEN',
-          label: 'Access Token',
-          placeholder: 'Token do System User (Meta Business)',
-          type: 'password',
-          value: '',
-          helpText: 'Configure no Meta for Developers',
-        },
-        {
-          key: 'WHATSAPP_PHONE_NUMBER_ID',
-          label: 'Phone Number ID',
-          placeholder: 'ID do número registrado no WhatsApp Business',
-          type: 'text',
-          value: '',
-          helpText: 'Encontre no painel do WhatsApp Manager',
-        },
-        {
-          key: 'OFFICE_PHONE_NUMBER',
-          label: 'Telefone do Escritório',
-          placeholder: '+5511999999999',
-          type: 'text',
-          value: '',
-          helpText: 'Número que receberá as notificações',
-        },
-      ],
-      docs: 'https://developers.facebook.com/docs/whatsapp/cloud-api',
-      cost: 'Grátis (serviço 24h) / ~R$0,25/msg template',
-    },
-  ])
-
-  const [savingId, setSavingId] = useState<string | null>(null)
-  const [savedId, setSavedId] = useState<string | null>(null)
-
-  const handleFieldChange = (integrationId: string, fieldKey: string, value: string) => {
-    setIntegrations((prev) =>
-      prev.map((integration) => {
-        if (integration.id !== integrationId) return integration
-        return {
-          ...integration,
-          fields: integration.fields.map((f) => (f.key === fieldKey ? { ...f, value } : f)),
-        }
-      })
-    )
-  }
-
-  const handleSave = async (integrationId: string) => {
-    setSavingId(integrationId)
-    // Simula salvamento (em produção, salvaria via API no banco)
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    setIntegrations((prev) =>
-      prev.map((integration) => {
-        if (integration.id !== integrationId) return integration
-        const hasValues = integration.fields.every((f) => f.value.trim() !== '' && f.value !== '••••••••••••••••')
-        return {
-          ...integration,
-          status: hasValues ? ('connected' as IntegrationStatus) : ('disconnected' as IntegrationStatus),
-          statusLabel: hasValues ? 'Conectado' : 'Não configurado',
-        }
-      })
-    )
-
-    setSavingId(null)
-    setSavedId(integrationId)
-    setTimeout(() => setSavedId(null), 3000)
-  }
-
-  const statusColors: Record<IntegrationStatus, string> = {
-    connected: 'bg-emerald-100 text-emerald-700 border-emerald-200',
-    disconnected: 'bg-gray-100 text-gray-500 border-gray-200',
-    partial: 'bg-amber-100 text-amber-700 border-amber-200',
-  }
-
-  const statusDot: Record<IntegrationStatus, string> = {
-    connected: 'bg-emerald-500',
-    disconnected: 'bg-gray-400',
-    partial: 'bg-amber-500',
-  }
-
   return (
     <div>
       <DashboardPageHeader
         eyebrow="Sistema"
-        title="Configurações & Integrações"
-        description="Configure as APIs externas que o ExecFlow utiliza para monitorar tribunais, enviar notificações e redigir petições."
+        title="Configurações e integrações"
+        description="As integrações do ExecFlow são configuradas com segurança no servidor (variáveis de ambiente). Esta tela mostra o que o sistema usa."
       />
 
-      <div className="mt-8 space-y-6">
-        {/* Status geral */}
-        <div className="bg-gradient-to-r from-indigo-500/10 to-purple-500/10 rounded-xl border border-indigo-200/50 p-4">
-          <div className="flex items-center gap-3">
-            <span className="text-2xl">⚡</span>
-            <div>
-              <h3 className="text-sm font-semibold text-gray-900">Status das Integrações</h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {integrations.filter((i) => i.status === 'connected').length} de{' '}
-                {integrations.length} integrações configuradas
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Cards de integração */}
-        {integrations.map((integration) => (
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {INTEGRATIONS.map((it) => (
           <div
-            key={integration.id}
-            className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden hover:shadow-md transition-shadow"
+            key={it.id}
+            className="flex flex-col rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
           >
-            {/* Card header */}
-            <div className="px-6 py-4 flex items-center justify-between border-b border-gray-100">
-              <div className="flex items-center gap-3">
-                <span className="text-2xl">{integration.icon}</span>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{integration.name}</h3>
-                  <p className="text-sm text-gray-500">{integration.description}</p>
-                </div>
-              </div>
-              <div className="flex items-center gap-3">
-                {integration.cost && (
-                  <span className="text-xs text-gray-400 bg-gray-50 px-2 py-1 rounded-md">
-                    💰 {integration.cost}
-                  </span>
-                )}
-                <span
-                  className={`px-3 py-1 text-xs font-medium rounded-full border flex items-center gap-1.5 ${statusColors[integration.status]}`}
-                >
-                  <span className={`w-2 h-2 rounded-full ${statusDot[integration.status]}`} />
-                  {integration.statusLabel}
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                  <it.Icon className="h-5 w-5" />
                 </span>
-              </div>
-            </div>
-
-            {/* Card body - fields */}
-            <div className="px-6 py-4 space-y-4">
-              {integration.fields.map((field) => (
-                <div key={field.key}>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    {field.label}
-                  </label>
-                  <input
-                    type={field.type}
-                    value={field.value}
-                    onChange={(e) => handleFieldChange(integration.id, field.key, e.target.value)}
-                    placeholder={field.placeholder}
-                    className="w-full px-3 py-2 rounded-lg border border-gray-300 text-sm focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-colors bg-gray-50 focus:bg-white"
-                  />
-                  {field.helpText && (
-                    <p className="text-xs text-gray-400 mt-1">{field.helpText}</p>
-                  )}
+                <div className="min-w-0">
+                  <p className="text-[14px] font-semibold text-slate-900">{it.name}</p>
+                  <p className="text-[11px] text-slate-500">
+                    {it.required ? 'Essencial' : 'Opcional'}
+                  </p>
                 </div>
-              ))}
+              </div>
+              {it.required ? (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700">
+                  <CheckCircle2 className="h-3.5 w-3.5" /> Em uso
+                </span>
+              ) : (
+                <span className="inline-flex shrink-0 items-center gap-1 rounded-md border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                  <CircleDashed className="h-3.5 w-3.5" /> Opcional
+                </span>
+              )}
             </div>
 
-            {/* Card footer */}
-            <div className="px-6 py-3 bg-gray-50 border-t border-gray-100 flex items-center justify-between">
-              <div>
-                {integration.docs && (
-                  <a
-                    href={integration.docs}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-xs text-indigo-600 hover:text-indigo-700 underline"
-                  >
-                    📄 Ver documentação
-                  </a>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {savedId === integration.id && (
-                  <span className="text-xs text-emerald-600 flex items-center gap-1">
-                    ✅ Salvo com sucesso
-                  </span>
-                )}
-                <button
-                  onClick={() => handleSave(integration.id)}
-                  disabled={savingId === integration.id}
-                  className="px-4 py-2 text-sm font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-colors"
-                >
-                  {savingId === integration.id ? 'Salvando...' : 'Salvar Configuração'}
-                </button>
-              </div>
+            <p className="mt-3 text-[13px] leading-relaxed text-slate-600">{it.description}</p>
+
+            <div className="mt-3 rounded-lg border border-slate-100 bg-slate-50 px-3 py-2.5">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.06em] text-slate-400">
+                Variável de ambiente
+              </p>
+              <p className="mt-0.5 font-mono text-[12px] text-slate-800">{it.envVar}</p>
+              <p className="mt-1.5 text-[11px] text-slate-500">{it.note}</p>
             </div>
           </div>
         ))}
+      </div>
 
-        {/* Instruções */}
-        <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mt-6">
-          <h4 className="text-sm font-semibold text-amber-800 flex items-center gap-2">
-            ⚠️ Importante
-          </h4>
-          <ul className="text-sm text-amber-700 mt-2 space-y-1 list-disc list-inside">
-            <li>
-              As configurações salvas aqui são armazenadas localmente. Para produção, configure as variáveis de ambiente no servidor.
-            </li>
-            <li>
-              A JUDIT API requer contrato comercial. Entre em contato via WhatsApp para solicitar.
-            </li>
-            <li>
-              O WhatsApp Business API requer verificação de empresa no Meta Business Manager.
-            </li>
-          </ul>
-        </div>
+      <div className="mt-6 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <p className="text-[13px] text-blue-800">
+          As chaves são guardadas com segurança nas variáveis de ambiente do servidor (Render) — nunca
+          no navegador. Para alterá-las, edite o serviço no Render ou o arquivo <code className="font-mono">.env.local</code> em
+          desenvolvimento.
+        </p>
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
+        <Link
+          href="/settings/astrea-triage"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+            <ListChecks className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[13px] font-semibold text-slate-900">Movimentações não identificadas</p>
+            <p className="text-[12px] text-slate-500">E-mails do Astrea que precisam de triagem manual.</p>
+          </div>
+        </Link>
+        <Link
+          href="/settings/astrea-sigilosos"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600">
+            <Lock className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[13px] font-semibold text-slate-900">Processos em segredo de justiça</p>
+            <p className="text-[12px] text-slate-500">Lembrete de revisão de credenciais por tribunal.</p>
+          </div>
+        </Link>
+        <Link
+          href="/settings/integracoes"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+            <ListChecks className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[13px] font-semibold text-slate-900">Integrações</p>
+            <p className="text-[12px] text-slate-500">Estado real de cada fonte: AASP, DataJud, tribunais, e-mail.</p>
+          </div>
+        </Link>
+        <Link
+          href="/settings/ia-historico"
+          className="flex items-center gap-3 rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+        >
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-violet-50 text-violet-600">
+            <ListChecks className="h-5 w-5" />
+          </span>
+          <div>
+            <p className="text-[13px] font-semibold text-slate-900">Histórico da IA</p>
+            <p className="text-[12px] text-slate-500">Auditoria: prompt, resposta, modelo, tokens e custo por chamada.</p>
+          </div>
+        </Link>
       </div>
     </div>
   )

@@ -36,7 +36,7 @@ export function CrawlerSyncButton({ organizationId, caseId }: CrawlerSyncButtonP
 
   if (isRunning) {
     return (
-      <Button variant="secondary" size="sm" disabled className="border-blue-500/50 bg-blue-500/10 text-blue-400">
+      <Button variant="secondary" size="sm" disabled className="border-blue-500/50 bg-blue-500/10 text-blue-700">
         <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
         Robô Sincronizando...
       </Button>
@@ -46,13 +46,13 @@ export function CrawlerSyncButton({ organizationId, caseId }: CrawlerSyncButtonP
   return (
     <div className="flex items-center gap-3">
       {log?.status === 'success' && (
-        <span className="flex items-center text-xs text-emerald-400 gap-1.5">
+        <span className="flex items-center text-xs text-emerald-700 gap-1.5">
           <CheckCircle2 className="h-3.5 w-3.5" />
           Sincronizado {new Date(log.completedAt!).toLocaleDateString('pt-BR')}
         </span>
       )}
       {log?.status === 'failed' && (
-        <span className="flex items-center text-xs text-red-400 gap-1.5" title={log.errorDetails ?? 'Erro interno'}>
+        <span className="flex items-center text-xs text-red-700 gap-1.5" title={log.errorDetails ?? 'Erro interno'}>
           <AlertCircle className="h-3.5 w-3.5" />
           Falha na última busca
         </span>
@@ -62,7 +62,7 @@ export function CrawlerSyncButton({ organizationId, caseId }: CrawlerSyncButtonP
         variant="secondary"
         size="sm"
         onClick={handleSync}
-        className="hover:border-blue-500 hover:text-blue-400 transition-colors"
+        className="hover:border-blue-500 hover:text-blue-700 transition-colors"
       >
         <RefreshCw className="mr-2 h-4 w-4" />
         Sincronizar Tribunal

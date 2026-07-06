@@ -24,7 +24,7 @@ export type SessionOrg = {
   slug: string
 }
 
-export type UserRole = 'admin' | 'lawyer' | 'assistant'
+export type UserRole = 'admin' | 'lawyer' | 'assistant' | 'client'
 
 export type SessionData = {
   user: SessionUser

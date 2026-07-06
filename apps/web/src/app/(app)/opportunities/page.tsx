@@ -21,10 +21,11 @@ import { useSession } from '@/lib/hooks/use-session'
 import { useQueueProjections } from '@/lib/hooks/use-queue-projections'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
+import Link from 'next/link'
+import { ChevronRight } from 'lucide-react'
 import {
   EmptyState,
   ErrorState,
-  ListCard,
   LoadingState,
 } from '@/components/ui'
 
@@ -47,18 +48,18 @@ const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
 function opportunityTypeBadgeClass(type: string): string {
   // Liberdade / direitos
   if (['hc', 'prescription', 'excess_execution', 'rights_violation'].includes(type))
-    return 'text-red-400 bg-red-950/40 border-red-900/40'
+    return 'text-red-700 bg-red-50 border-red-200'
   // Benefício penal
   if (['progression', 'remission', 'detraction', 'amnesty', 'commutation'].includes(type))
-    return 'text-emerald-400 bg-emerald-950/40 border-emerald-900/40'
+    return 'text-emerald-700 bg-emerald-50 border-emerald-200'
   // Disciplinar
   if (type === 'pad_challenge')
-    return 'text-amber-400 bg-amber-950/40 border-amber-900/40'
+    return 'text-amber-700 bg-amber-50 border-amber-200'
   // Cálculo / motor
   if (type === 'recalculation')
-    return 'text-indigo-400 bg-indigo-950/30 border-indigo-900/30'
+    return 'text-blue-600 bg-blue-100 border-blue-200'
   // Manual / genérico
-  return 'text-zinc-400 bg-white/[0.03] border-white/[0.06]'
+  return 'text-slate-600 bg-slate-50 border-slate-100'
 }
 
 export default function OpportunitiesPage() {
@@ -119,59 +120,62 @@ export default function OpportunitiesPage() {
               {allOpportunities.length}{' '}
               {allOpportunities.length === 1 ? 'oportunidade' : 'oportunidades'} aguardando revisão
             </p>
-            <ul className="space-y-2" aria-label="Oportunidades pendentes">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
               {allOpportunities.map((item) => {
                 const meta = item.metadata as Record<string, string> | null
                 const opportunityType = meta?.['opportunityType'] ?? 'manual'
                 const confidenceLevel = meta?.['confidenceLevel']
                 const source = meta?.['source']
+                const confidenceText =
+                  confidenceLevel === 'high'
+                    ? 'Alta confiança'
+                    : confidenceLevel === 'medium'
+                      ? 'Confiança média'
+                      : confidenceLevel === 'low'
+                        ? 'Baixa confiança'
+                        : null
                 return (
-                  <li key={item.id}>
-                    <ListCard variant="link" href={item.executionCaseId ? `/cases/${item.executionCaseId}?tab=opportunities` : '#'}>
-                      <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-1.5 mb-1">
-                          <span
-                            className={[
-                              'inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em]',
-                              opportunityTypeBadgeClass(opportunityType),
-                            ].join(' ')}
-                          >
-                            {OPPORTUNITY_TYPE_LABELS[opportunityType] ?? opportunityType}
-                          </span>
-                          {source === 'engine' && (
-                            <span
-                              className={`inline-flex items-center rounded border border-indigo-900/40 bg-indigo-950/30 px-1.5 py-0.5 text-[10px] font-medium text-indigo-400`}
-                            >
-                              Motor
-                            </span>
-                          )}
-                          {confidenceLevel !== undefined && (
-                            <span className={`text-[11px] ${text.faint}`}>
-                              {confidenceLevel === 'high'
-                                ? 'alta confiança'
-                                : confidenceLevel === 'medium'
-                                  ? 'confiança média'
-                                  : 'baixa confiança'}
-                            </span>
-                          )}
-                        </div>
-                        <p className={`text-[13px] ${text.secondary} font-medium`}>
-                          {item.displayTitle}
-                        </p>
-                        {item.keyDate !== null && (
-                          <p className={`mt-0.5 text-[11px] ${text.faint}`}>
-                            Janela:{' '}
-                            {new Intl.DateTimeFormat('pt-BR').format(new Date(item.keyDate))}
-                          </p>
-                        )}
-                      </div>
-                      </div>
-                    </ListCard>
-                  </li>
+                  <Link
+                    key={item.id}
+                    href={item.executionCaseId ? `/cases/${item.executionCaseId}?tab=opportunities` : '#'}
+                    className="group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
+                  >
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span
+                        className={[
+                          'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium',
+                          opportunityTypeBadgeClass(opportunityType),
+                        ].join(' ')}
+                      >
+                        {OPPORTUNITY_TYPE_LABELS[opportunityType] ?? opportunityType}
+                      </span>
+                      {source === 'engine' && (
+                        <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
+                          Motor
+                        </span>
+                      )}
+                    </div>
+                    <p className="mt-2.5 text-[14px] font-semibold leading-snug text-slate-900 group-hover:text-blue-700">
+                      {item.displayTitle}
+                    </p>
+                    {confidenceText !== null && (
+                      <p className="mt-1 text-[12px] text-slate-500">{confidenceText}</p>
+                    )}
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px]">
+                      <span className="text-slate-500">
+                        {item.keyDate !== null
+                          ? `Janela: ${new Intl.DateTimeFormat('pt-BR').format(new Date(item.keyDate))}`
+                          : 'Sem janela definida'}
+                      </span>
+                      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600">
+                        Ver no caso
+                        <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                      </span>
+                    </div>
+                  </Link>
                 )
               })}
-            </ul>
+            </div>
           </div>
         )}
       </div>

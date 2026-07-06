@@ -62,3 +62,13 @@ export const SLA_SWEEP_SCHEDULES = {
   /** Stale task sweep: find tasks with no activity every 30 minutes */
   staleTaskSweep: '*/30 * * * *',
 } as const
+
+/**
+ * Cron schedules for the Astrea e-mail ingestion pipeline.
+ */
+export const ASTREA_SCHEDULES = {
+  /** IMAP poll: read unread e-mails every 10 minutes (Astrea's own update lag is ~12h, so this is for same-day detection, not real-time). */
+  emailPoll: '*/10 * * * *',
+  /** Health sweep: verify the pipeline once a day, mid-morning Brasília time. */
+  healthSweep: '0 12 * * *',
+} as const

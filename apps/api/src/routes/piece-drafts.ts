@@ -3,16 +3,45 @@ import type { HonoVariables } from '../context/types.ts'
 import type { HonoContext } from '../context/types.ts'
 import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
-import { ClaudeDrafterService } from '../services/claude-drafter.ts'
+import { requireMinRole } from '../middleware/rbac.ts'
+import { ClaudeDrafterService, FreshnessGateError } from '../services/claude-drafter.ts'
 import { markdownToDocx } from '../services/docx-exporter.ts'
+import { db } from '../lib/db.ts'
+import { pieceDrafts } from '@execflow/db/schema'
+import { eq, and, desc } from 'drizzle-orm'
 import { z } from 'zod'
 import { parseBody } from '../lib/zod-helpers.ts'
 
 export const pieceDraftsRouter = new Hono<{ Variables: HonoVariables }>()
 
-pieceDraftsRouter.use('*', authMiddleware, orgMiddleware)
+// Piso de role: minutas são trabalho jurídico interno — nunca 'client'.
+pieceDraftsRouter.use('*', authMiddleware, orgMiddleware, requireMinRole('assistant'))
 
 const drafterService = new ClaudeDrafterService()
+
+/**
+ * GET /api/v1/piece-drafts/by-case/:caseId
+ * Lista as peças geradas pelo Claude para um caso (mais recentes primeiro).
+ * Usado para exibi-las junto dos documentos do caso.
+ */
+pieceDraftsRouter.get('/by-case/:caseId', async (c) => {
+  const caseId = c.req.param('caseId')
+  const { organization } = c.get('org')
+  const rows = await db
+    .select({
+      id: pieceDrafts.id,
+      status: pieceDrafts.status,
+      modelUsed: pieceDrafts.modelUsed,
+      createdAt: pieceDrafts.createdAt,
+      updatedAt: pieceDrafts.updatedAt,
+      finalizedAt: pieceDrafts.finalizedAt,
+      opportunityId: pieceDrafts.opportunityId,
+    })
+    .from(pieceDrafts)
+    .where(and(eq(pieceDrafts.executionCaseId, caseId), eq(pieceDrafts.organizationId, organization.id)))
+    .orderBy(desc(pieceDrafts.createdAt))
+  return c.json({ data: rows })
+})
 
 /**
  * POST /api/v1/piece-drafts/generate/:opportunityId
@@ -23,11 +52,50 @@ pieceDraftsRouter.post(
   async (c) => {
     const oppId = c.req.param('opportunityId')
     const body = await c.req.json().catch(() => ({}))
-    const { instructions } = z.object({ instructions: z.string().optional() }).parse(body)
-    
+    const { instructions, systemPrompt, userPrompt } = z
+      .object({
+        instructions: z.string().optional(),
+        systemPrompt: z.string().optional(),
+        userPrompt: z.string().optional(),
+      })
+      .parse(body)
+
     try {
-      const draft = await drafterService.generateDraftForOpportunity(c, oppId, instructions)
+      const options: { instructions?: string; systemPrompt?: string; userPrompt?: string } = {}
+      if (instructions !== undefined) options.instructions = instructions
+      if (systemPrompt !== undefined) options.systemPrompt = systemPrompt
+      if (userPrompt !== undefined) options.userPrompt = userPrompt
+      const draft = await drafterService.generateDraftForOpportunity(c, oppId, options)
       return c.json(draft, 201)
+    } catch (err: any) {
+      if (err instanceof FreshnessGateError) {
+        return c.json(
+          {
+            error: 'FRESHNESS_GATE_BLOCKED',
+            message: err.message,
+            pendingCriticalMovementType: err.pendingCriticalMovementType,
+            pendingCriticalMovementSince: err.pendingCriticalMovementSince,
+          },
+          409
+        )
+      }
+      return c.json({ error: err.message }, 400)
+    }
+  }
+)
+
+/**
+ * GET /api/v1/piece-drafts/preview-prompt/:opportunityId
+ * Retorna o prompt padrão (system + user) que SERIA enviado ao Claude, para a
+ * tela exibir e o advogado editar antes de gerar a peça.
+ */
+pieceDraftsRouter.get(
+  '/preview-prompt/:opportunityId',
+  async (c) => {
+    const oppId = c.req.param('opportunityId')
+    try {
+      const prompts = await drafterService.previewPrompt(c, oppId)
+      return c.json({ data: prompts }, 200)
     } catch (err: any) {
       return c.json({ error: err.message }, 400)
     }
@@ -86,7 +154,7 @@ pieceDraftsRouter.get(
     try {
       const draft = await drafterService.getDraft(c, draftId)
 
-      if (!draft.contentMarkdown) {
+      if (!draft || !draft.contentMarkdown) {
         return c.json({ error: 'Rascunho sem conteúdo para exportar.' }, 400)
       }
 

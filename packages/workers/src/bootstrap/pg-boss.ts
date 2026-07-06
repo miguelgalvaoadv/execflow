@@ -35,8 +35,12 @@ export async function createPgBoss(connectionString: string): Promise<PgBoss> {
      * Maximum concurrent connections in the pg-boss internal pool.
      * Conservative: the bottleneck is database writes (audit + domain events),
      * not CPU. Increase when queue throughput requires it.
+     * A Supabase (session pooler) limita o total a ~15 conexões. O pg-boss
+     * precisa de algumas para suas filas internas; mantemos 8 e deixamos o
+     * pool do worker e a API enxutos. Em produção, a API deve usar o
+     * transaction pooler (porta 6543) para não disputar essas 15.
      */
-    max: 10,
+    max: 8,
 
     /**
      * Monitoring interval for scheduled jobs (pg-boss cron).

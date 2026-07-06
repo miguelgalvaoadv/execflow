@@ -3,8 +3,10 @@ import { z } from 'zod'
 import { eq, and, desc } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
+import { requireMinRole } from '../middleware/rbac.ts'
 import { db } from '../lib/db.ts'
 import { crawlerSyncLogs, domainEvents } from '@execflow/db/schema'
+import { analyzeAutosForCase } from '../services/case-analysis.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 /**
@@ -13,7 +15,8 @@ import type { HonoVariables } from '../context/types.ts'
  */
 export const crawlersRouter = new Hono<{ Variables: HonoVariables }>()
 
-crawlersRouter.use('*', authMiddleware, orgMiddleware)
+// Piso de role: sync/análise são ações internas do escritório — nunca 'client'.
+crawlersRouter.use('*', authMiddleware, orgMiddleware, requireMinRole('assistant'))
 
 /**
  * GET /api/v1/cases/:caseId/sync-status
@@ -62,6 +65,10 @@ crawlersRouter.post('/:caseId/sync-tribunal', async (c) => {
     })
     .returning()
 
+  if (!log) {
+    return c.json({ error: { code: 'INTERNAL', message: 'Failed to create sync log.' } }, 500)
+  }
+
   // 2. Enviar para a Fila do Crawler (Pg-boss via Outbox)
   await db.insert(domainEvents).values({
     id: crypto.randomUUID(),
@@ -87,4 +94,22 @@ crawlersRouter.post('/:caseId/sync-tribunal', async (c) => {
   })
 
   return c.json({ data: log }, 202) // 202 Accepted
+})
+
+/**
+ * POST /api/v1/cases/:caseId/analyze
+ * Analisa os autos confirmados do caso com IA (Claude) e grava o cálculo de
+ * pena (snapshot proposto), oportunidades sugeridas e prazos. Síncrono.
+ */
+crawlersRouter.post('/:caseId/analyze', async (c) => {
+  const caseId = c.req.param('caseId')
+  const { organization, domainUserId } = c.get('org')
+
+  try {
+    const result = await analyzeAutosForCase(organization.id, caseId, domainUserId)
+    return c.json({ data: result })
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Falha ao analisar os autos.'
+    return c.json({ error: { code: 'ANALYSIS_FAILED', message } }, 400)
+  }
 })

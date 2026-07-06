@@ -142,6 +142,20 @@ export type SentenceFacts = {
   confidenceLevel: 'high' | 'medium' | 'low' | 'unknown'
   missingDataFlags: Array<{ field: string; impact: 'high' | 'medium'; description: string }>
   playbookVersionId: string | null
+  crimesBreakdown?: Array<{
+    crimeCode: string
+    crimeName: string
+    article: string
+    law: string
+    sentenceDays: number
+    isHediondo: boolean
+    isEquiparado: boolean
+    hasResultingDeath: boolean
+    isAttempted: boolean
+    isPrimary?: boolean
+    isRecidivist?: boolean
+    isSpecificRecidivist?: boolean
+  }>
 }
 
 /**

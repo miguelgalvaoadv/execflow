@@ -49,6 +49,33 @@ async function main(): Promise<void> {
   process.on('SIGTERM', () => { void shutdown('SIGTERM') })
   process.on('SIGINT', () => { void shutdown('SIGINT') })
 
+  // RESILIÊNCIA A OSCILAÇÃO DE REDE (03/07/2026): uma queda momentânea da
+  // conexão com o Supabase emitia 'error' num Client interno do pg fora do
+  // alcance dos handlers de pool/boss e DERRUBAVA o processo inteiro
+  // ("Connection terminated unexpectedly"). Erros de conexão são transitórios —
+  // pg-boss e o pool reconectam sozinhos; logamos e seguimos. Qualquer outro
+  // erro continua fail-fast (exit 1) para não mascarar bugs.
+  const isTransientDbError = (err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err)
+    return /Connection terminated|ECONNRESET|ECONNREFUSED|ETIMEDOUT|EPIPE|socket hang up|Client has encountered a connection error/i.test(msg)
+  }
+  process.on('uncaughtException', (err) => {
+    if (isTransientDbError(err)) {
+      console.error('[workers] Erro transitório de conexão (processo segue; reconexão automática):', err.message)
+      return
+    }
+    console.error('[workers] Uncaught exception (fatal):', err)
+    process.exit(1)
+  })
+  process.on('unhandledRejection', (reason) => {
+    if (isTransientDbError(reason)) {
+      console.error('[workers] Rejeição transitória de conexão (processo segue):', reason instanceof Error ? reason.message : reason)
+      return
+    }
+    console.error('[workers] Unhandled rejection (fatal):', reason)
+    process.exit(1)
+  })
+
   console.info('[workers] EXECFLOW workers running')
 }
 

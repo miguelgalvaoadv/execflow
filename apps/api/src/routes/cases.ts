@@ -156,6 +156,45 @@ router.post(
 )
 
 // -------------------------------------------------------------------------
+// PATCH /api/v1/cases/:id — Update an execution case
+// -------------------------------------------------------------------------
+
+const UpdateCaseSchema = CreateCaseSchema.omit({ clientId: true, openedAt: true }).partial()
+
+router.patch(
+  '/:id',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('lawyer'),
+  async (c) => {
+    const parsedParams = CaseIdParamSchema.safeParse({ id: c.req.param('id') })
+    if (!parsedParams.success) {
+      return unprocessable(c, 'Invalid case ID.', { issues: parsedParams.error.issues })
+    }
+
+    const body = await safeJsonBody(c)
+    if (body === null) {
+      return unprocessable(c, 'Request body must be valid JSON.')
+    }
+
+    const parsed = parseBody(UpdateCaseSchema, body)
+    if (!parsed.success) {
+      return unprocessable(c, parsed.message, parsed.issues)
+    }
+
+    const ctx = buildWriteContext(c, db)
+    const { updateCase } = await import('../services/case.ts')
+    const result = await updateCase(ctx, parsedParams.data.id, parsed.data as import('../services/case.ts').UpdateCaseInput)
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data }, 200)
+  }
+)
+
+// -------------------------------------------------------------------------
 // POST /api/v1/cases/:id/force-scraping — Dispara o robô navegador para o caso
 // -------------------------------------------------------------------------
 
@@ -187,28 +226,41 @@ router.post(
       return unprocessable(c, 'Case not found')
     }
     
-    // Dispara o job via outbox relay inserindo um domainEvent
-    const { domainEvents } = await import('@execflow/db/schema')
+    // Dispara a sincronização via Jusbrasil: cria o log e emite o evento de domínio
+    // (mesma fila usada por POST /:caseId/sync-tribunal).
+    const { domainEvents, crawlerSyncLogs } = await import('@execflow/db/schema')
     const crypto = await import('crypto')
-    
+
+    const [log] = await db
+      .insert(crawlerSyncLogs)
+      .values({
+        organizationId: ctx.organizationId,
+        executionCaseId: execCase.id,
+        status: 'pending',
+        tribunalName: 'Jusbrasil',
+        createdByUserId: ctx.userId,
+      })
+      .returning()
+
     await db.insert(domainEvents).values({
       id: crypto.randomUUID(),
       organizationId: ctx.organizationId,
-      eventType: 'court.scraper.requested',
-      aggregateId: execCase.id,
-      aggregateType: 'execution_case',
+      eventType: 'crawler.sync.requested',
+      aggregateId: log?.id ?? execCase.id,
+      aggregateType: 'CrawlerSyncLog',
       correlationId: crypto.randomUUID(),
       actorType: 'user',
       actorId: ctx.userId,
       occurredAt: new Date(),
       payload: {
+        logId: log?.id,
         executionCaseId: execCase.id,
         organizationId: ctx.organizationId,
-        url: 'https://esaj.tjsp.jus.br/esaj/portal.do?servico=190090'
-      }
+        requestedByUserId: ctx.userId,
+      },
     })
 
-    return c.json({ success: true, message: 'Scraping request queued' }, 202)
+    return c.json({ success: true, message: 'Sincronização com o Jusbrasil enfileirada.' }, 202)
   }
 )
 

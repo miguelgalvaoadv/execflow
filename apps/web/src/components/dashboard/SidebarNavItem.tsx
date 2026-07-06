@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { NavIcon } from './NavIcon'
 import type { NavItem } from './nav-items'
-import { borders, text } from './surfaces'
 
 type SidebarNavItemProps = {
   item: NavItem
@@ -21,31 +20,21 @@ export function SidebarNavItem({ item, onNavigate }: SidebarNavItemProps) {
       onClick={onNavigate}
       aria-current={active ? 'page' : undefined}
       className={[
-        'group relative flex w-full items-center gap-2.5 rounded-[10px] px-2.5 py-2 transition-colors',
+        'group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-[13px] font-medium transition-colors duration-150',
         active
-          ? `bg-slate-100/60 ${text.primary} shadow-sm border border-slate-200/60`
-          : `${text.muted} hover:bg-slate-50 hover:text-slate-800 border border-transparent`,
+          ? 'bg-blue-50 text-blue-700'
+          : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
       ].join(' ')}
     >
-      {active ? (
-        <span
-          className="absolute top-1/2 left-0 h-4 w-[3px] -translate-y-1/2 rounded-full bg-indigo-500"
-          aria-hidden
-        />
-      ) : null}
       <span
         className={[
-          'flex h-7 w-7 shrink-0 items-center justify-center rounded-[8px] border transition-colors',
-          active
-            ? `border-slate-200 bg-white text-indigo-600 shadow-sm`
-            : `border-transparent bg-transparent text-slate-500 group-hover:border-slate-200 group-hover:bg-white group-hover:text-slate-600 group-hover:shadow-sm`,
+          'flex h-5 w-5 shrink-0 items-center justify-center transition-colors duration-150',
+          active ? 'text-blue-600' : 'text-slate-700 group-hover:text-slate-600',
         ].join(' ')}
       >
-        <NavIcon name={item.icon} className="h-4 w-4" />
+        <NavIcon name={item.icon} className="h-[18px] w-[18px]" />
       </span>
-      <span className="truncate text-[13px] font-medium tracking-[-0.01em]">
-        {item.label}
-      </span>
+      <span className="truncate tracking-[-0.01em]">{item.label}</span>
     </Link>
   )
 }

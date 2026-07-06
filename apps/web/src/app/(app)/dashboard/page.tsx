@@ -36,6 +36,11 @@ import {
   deadlineClassLabel,
 } from '@/lib/operational/deadline-display'
 import { documentStatusLabel } from '@/lib/operational/document-display'
+import {
+  engineTriggerLabel,
+  engineStatusLabel,
+  uncertaintyLevelLabel,
+} from '@/lib/operational/labels'
 
 const COUNT_LIMIT = 50
 
@@ -48,7 +53,7 @@ const DOCUMENT_PIPELINE_GROUPS = [
 
 const QUICK_LINKS = [
   { href: '/cases', label: 'Execuções', description: 'Casos e workspace' },
-  { href: '/clients', label: 'Clientes', description: 'Registo de clientes' },
+  { href: '/clients', label: 'Clientes', description: 'Registro de clientes' },
   { href: '/documents', label: 'Peças', description: 'Central documental' },
   { href: '/deadlines', label: 'Prazos', description: 'Central de prazos' },
   { href: '/queues', label: 'Filas', description: 'Fila de trabalho completa' },
@@ -86,7 +91,7 @@ function PanelFooterLink({ href, label }: { href: string; label: string }) {
     <div className={`mt-4 border-t ${borders.subtle} pt-3`}>
       <Link
         href={href}
-        className={`text-[12px] ${text.faint} hover:text-zinc-300 transition-colors`}
+        className={`text-[12px] ${text.faint} hover:text-slate-700 transition-colors`}
       >
         {label} →
       </Link>
@@ -333,7 +338,7 @@ export default function DashboardPage() {
               description="Status vencido"
             />
             <SummaryMetricCard
-              title="Casos activos"
+              title="Casos ativos"
               count={activeCases.data?.pages[0]?.data.length ?? null}
               countLimit={COUNT_LIMIT}
               href="/cases"
@@ -365,7 +370,7 @@ export default function DashboardPage() {
           ) : priorityItems.length === 0 ? (
             <EmptyState
               title="Sem itens prioritários"
-              description="Nenhum item nas filas críticas seleccionadas."
+              description="Nenhum item nas filas críticas selecionadas."
             />
           ) : (
             <>
@@ -395,7 +400,7 @@ export default function DashboardPage() {
             ) : weekDeadlines.length === 0 ? (
               <EmptyState
                 title="Sem prazos esta semana"
-                description="Nenhum prazo activo vence nos próximos 7 dias."
+                description="Nenhum prazo ativo vence nos próximos 7 dias."
               />
             ) : (
               <>
@@ -436,7 +441,7 @@ export default function DashboardPage() {
           {/* Section 4 — Pipeline documental */}
           <WorkspacePanel
             title="Pipeline documental"
-            description="Peças por estado do pipeline de extracção."
+            description="Peças por estado do pipeline de extração."
           >
             {pipelineLoading ? (
               <LoadingState label="Carregando peças…" />
@@ -495,7 +500,7 @@ export default function DashboardPage() {
 
           {/* Section 5 — Motor */}
           <WorkspacePanel
-            title="Actividade recente"
+            title="Atividade recente"
             description="Últimas avaliações do motor de cálculo."
           >
             {engineRuns.isLoading ? (
@@ -512,16 +517,16 @@ export default function DashboardPage() {
               />
             ) : (
               <>
-                <ul className="space-y-2" aria-label="Actividade do motor">
+                <ul className="space-y-2" aria-label="Atividade do motor">
                   {engineRuns.data.data.map((run) => (
                     <li key={run.id}>
                       <ListCard href={`/cases/${run.executionCaseId}`}>
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <StatusBadge>{run.trigger}</StatusBadge>
-                          <span className={`text-[11px] ${text.faint}`}>{run.status}</span>
+                          <StatusBadge>{engineTriggerLabel(run.trigger)}</StatusBadge>
+                          <span className={`text-[11px] ${text.faint}`}>{engineStatusLabel(run.status)}</span>
                           {run.uncertaintyLevel !== null && (
                             <span className={`text-[11px] ${text.faint}`}>
-                              Incerteza: {run.uncertaintyLevel}
+                              Incerteza: {uncertaintyLevelLabel(run.uncertaintyLevel)}
                             </span>
                           )}
                         </div>
@@ -552,7 +557,7 @@ export default function DashboardPage() {
                   <Link
                     href={link.href}
                     className={[
-                      'block rounded-lg border px-4 py-3 transition-colors hover:bg-white/[0.02]',
+                      'block rounded-lg border px-4 py-3 transition-colors hover:bg-slate-50',
                       borders.subtle,
                       surfaces.panelInset,
                     ].join(' ')}

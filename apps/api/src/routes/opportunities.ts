@@ -243,4 +243,85 @@ router.get(
   }
 )
 
+// -------------------------------------------------------------------------
+// POST /api/v1/opportunities/:id/create-task — transformar em tarefa
+// -------------------------------------------------------------------------
+//
+// REGRA (spec §4): oportunidade NUNCA vira tarefa automaticamente.
+// Só oportunidade já VALIDADA pelo advogado (qualified/pursuing) pode virar
+// tarefa — 'suggested' é rejeitada com instrução explícita de validar antes.
+
+const CreateTaskFromOpportunitySchema = z.object({
+  title: z.string().min(1).max(300).optional(),
+  description: z.string().max(2000).optional(),
+  dueAt: z.string().optional(),
+  priority: z.enum(['critical', 'high', 'normal', 'low']).optional(),
+  assignedToUserId: z.string().uuid().optional(),
+})
+
+router.post(
+  '/:id/create-task',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('lawyer'),
+  async (c) => {
+    const opportunityId = c.req.param('id')
+    if (!opportunityId?.match(/^[0-9a-f-]{36}$/i)) {
+      return unprocessable(c, 'Invalid opportunity ID format.')
+    }
+
+    const body = await safeJsonBody(c)
+    const parsed = parseBody(CreateTaskFromOpportunitySchema, body ?? {})
+    if (!parsed.success) return unprocessable(c, parsed.message, parsed.issues)
+
+    const ctx = buildWriteContext(c, db)
+    const oppResult = await findOpportunityById(db, ctx.organizationId, opportunityId)
+    if (!oppResult.success) {
+      return c.json({ error: 'Opportunity not found.' }, 404)
+    }
+    const opp = oppResult.data
+
+    if (opp.status === 'suggested') {
+      return unprocessable(
+        c,
+        'Oportunidade ainda não validada. Valide (qualifique) a oportunidade antes de transformá-la em tarefa — sugestões da IA não viram tarefa automaticamente.'
+      )
+    }
+    if (opp.status === 'dismissed' || opp.status === 'expired' || opp.status === 'realized') {
+      return unprocessable(
+        c,
+        `Oportunidade em estado terminal ('${opp.status}') não pode virar tarefa.`
+      )
+    }
+
+    const { workflowTasks } = await import('@execflow/db/schema')
+    const dueAt = parsed.data.dueAt ? new Date(parsed.data.dueAt) : (opp.windowEndAt ?? null)
+
+    const [task] = await db
+      .insert(workflowTasks)
+      .values({
+        organizationId: ctx.organizationId,
+        taskType: 'prepare_piece',
+        title: parsed.data.title ?? `Preparar peça: ${opp.summary.substring(0, 200)}`,
+        description:
+          parsed.data.description ??
+          `Tarefa criada a partir de oportunidade validada.\n\nFundamento: ${opp.rationale ?? opp.summary}`,
+        priority: parsed.data.priority ?? 'high',
+        executionCaseId: opp.executionCaseId,
+        sourceEntityType: 'Opportunity',
+        sourceEntityId: opp.id,
+        requiresReview: true,
+        dueAt,
+        assignedToUserId: parsed.data.assignedToUserId ?? null,
+        assignedByUserId: parsed.data.assignedToUserId ? ctx.userId : null,
+        assignedAt: parsed.data.assignedToUserId ? new Date() : null,
+        createdByUserId: ctx.userId,
+        taskMetadata: { opportunityId: opp.id, opportunityType: opp.opportunityType ?? null },
+      })
+      .returning()
+
+    return c.json({ data: task }, 201)
+  }
+)
+
 export { router as opportunitiesRouter }

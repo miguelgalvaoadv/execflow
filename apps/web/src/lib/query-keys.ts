@@ -112,4 +112,20 @@ export const queryKeys = {
 
   caseSentenceSnapshots: (orgId: string, caseId: string) =>
     ['case-sentence-snapshots', orgId, caseId] as const,
+
+  // Inventário por OAB
+  inventoryProfiles: (orgId: string) => ['inventory-profiles', orgId] as const,
+  inventoryItems: (
+    orgId: string,
+    filters?: {
+      priority?: string
+      reviewStatus?: string
+      needsAutos?: string
+      withoutClient?: string
+      q?: string
+    }
+  ) =>
+    filters !== undefined
+      ? (['inventory-items', orgId, filters] as const)
+      : (['inventory-items', orgId] as const),
 } as const

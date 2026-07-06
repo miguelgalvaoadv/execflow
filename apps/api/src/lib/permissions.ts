@@ -23,6 +23,7 @@ import type { MembershipRole } from '@execflow/db/types'
  * Higher number = more permissions.
  */
 const ROLE_HIERARCHY: Record<MembershipRole, number> = {
+  client: 0, // portal do cliente — abaixo de TODO acesso operacional interno
   assistant: 1,
   lawyer: 2,
   admin: 3,
@@ -45,7 +46,12 @@ export function hasMinRole(
 
 /** Narrows session actor role to org membership role, or null if absent/invalid. */
 export function resolveMembershipRole(actorRole: string | null): MembershipRole | null {
-  if (actorRole === 'admin' || actorRole === 'lawyer' || actorRole === 'assistant') {
+  if (
+    actorRole === 'admin' ||
+    actorRole === 'lawyer' ||
+    actorRole === 'assistant' ||
+    actorRole === 'client'
+  ) {
     return actorRole
   }
   return null

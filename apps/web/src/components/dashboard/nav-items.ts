@@ -6,7 +6,11 @@ export type NavIcon =
   | "opportunities"
   | "documents"
   | "finance"
-  | "settings";
+  | "settings"
+  | "team"
+  | "inventory"
+  | "intimations"
+  | "tasks";
 
 export type NavItem = {
   id: string;
@@ -25,9 +29,12 @@ export type NavItem = {
 export const primaryNavItems: NavItem[] = [
   { id: "dashboard", label: "Início", icon: "dashboard", href: "/dashboard", implemented: true },
   { id: "executions", label: "Execuções", icon: "executions", href: "/cases", implemented: true },
+  { id: "inventory", label: "Inventário OAB", icon: "inventory", href: "/inventory", implemented: true },
+  { id: "intimations", label: "Intimações", icon: "intimations", href: "/intimations", implemented: true },
   { id: "clients", label: "Clientes", icon: "clients", href: "/clients", implemented: true },
   { id: "deadlines", label: "Prazos", icon: "deadlines", href: "/deadlines", implemented: true },
   { id: "opportunities", label: "Oportunidades", icon: "opportunities", href: "/opportunities", implemented: true },
+  { id: "tasks", label: "Tarefas", icon: "tasks", href: "/tasks", implemented: true },
   { id: "documents", label: "Peças", icon: "documents", href: "/documents", implemented: true },
   { id: "finance", label: "Financeiro", icon: "finance", href: "/finance", implemented: false },
 ];
@@ -37,6 +44,15 @@ export const settingsNavItem: NavItem = {
   label: "Configurações",
   icon: "settings",
   href: "/settings",
-  implemented: false,
+  implemented: true,
+  pinned: true,
+};
+
+export const teamNavItem: NavItem = {
+  id: "team",
+  label: "Equipe",
+  icon: "team",
+  href: "/team",
+  implemented: true,
   pinned: true,
 };

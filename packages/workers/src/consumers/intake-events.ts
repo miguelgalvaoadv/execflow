@@ -26,6 +26,11 @@ import {
 } from '../projections/queue-projection.ts'
 import { createIntakeTriageTask } from '../projections/workflow-task.ts'
 import { handleDocumentAssociatedForEngine } from './engine-events.ts'
+import { eq, and, desc } from '@execflow/db/client'
+import { documents } from '@execflow/db/schema'
+import { clearCaseStaleness } from '../integrations/autos-ingestion.ts'
+
+const AUTOS_CLASSES = new Set(['autos_iniciais', 'autos_integral'])
 
 type DomainEventJob = Job<{
   eventId: string
@@ -140,6 +145,12 @@ export async function handleDocumentAssociated(
 /**
  * Handles document.confirmed events.
  * Document exits extraction_review queue when confirmed.
+ *
+ * If the confirmed document is an autos class (autos_iniciais / autos_integral),
+ * also:
+ *   1. Sets supersedesDocumentId on the new doc (linking to previous confirmed autos).
+ *   2. Marks the previous confirmed doc as 'superseded'.
+ *   3. Clears case documentFreshnessStatus → 'fresh' (unblocks piece generation).
  */
 export async function handleDocumentConfirmed(
   db: WorkersDb,
@@ -159,5 +170,58 @@ export async function handleDocumentConfirmed(
       entityType: 'Document',
       entityId: parsed.documentId,
     })
+  }
+
+  // ── Autos versioning + freshness gate clearing
+  try {
+    const docRows = await db
+      .select({
+        id: documents.id,
+        documentClass: documents.documentClass,
+        executionCaseId: documents.executionCaseId,
+      })
+      .from(documents)
+      .where(and(eq(documents.id, parsed.documentId), eq(documents.organizationId, organizationId)))
+      .limit(1)
+
+    const doc = docRows[0]
+    if (!doc?.documentClass || !doc.executionCaseId) return
+    if (!AUTOS_CLASSES.has(doc.documentClass)) return
+
+    // Find the most recent previous confirmed autos doc of the same class
+    const prevRows = await db
+      .select({ id: documents.id })
+      .from(documents)
+      .where(
+        and(
+          eq(documents.organizationId, organizationId),
+          eq(documents.executionCaseId, doc.executionCaseId),
+          eq(documents.documentClass, doc.documentClass),
+          eq(documents.status, 'confirmed')
+        )
+      )
+      .orderBy(desc(documents.confirmedAt))
+      .limit(2) // limit 2: first is the new one just confirmed, second is the previous
+
+    const prevDoc = prevRows.find((r) => r.id !== doc.id)
+
+    if (prevDoc) {
+      // Link new doc to previous + mark old as superseded
+      await db
+        .update(documents)
+        .set({ supersedesDocumentId: prevDoc.id } as any)
+        .where(eq(documents.id, doc.id))
+
+      await db
+        .update(documents)
+        .set({ status: 'superseded' } as any)
+        .where(eq(documents.id, prevDoc.id))
+    }
+
+    // Clear case staleness — new autos confirmed → case is fresh again
+    await clearCaseStaleness(db, doc.executionCaseId)
+  } catch (e) {
+    // Never let versioning/freshness logic break the primary queue resolution
+    console.warn('[intake-events] Falha no versioning de autos ou limpeza de frescor:', e)
   }
 }
