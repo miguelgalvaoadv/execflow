@@ -92,8 +92,11 @@ export const QUEUE_DATAJUD_CASE_SYNC = 'datajud.case-sync'
 // DJEN → intimações oficiais por OAB (Comunica/PJe) + reanálise
 export const QUEUE_DJEN_SYNC = 'djen.intimacoes-sync'
 
-// InfoSimples → descoberta+monitoramento por OAB (TJSP e-SAJ) 1x/dia
+// InfoSimples → descoberta por OAB (TJSP e-SAJ) — opt-in, desligada por padrão (ver worker-registry.ts)
 export const QUEUE_INFOSIMPLES_SYNC = 'infosimples.oab-sync'
+
+// InfoSimples → monitoramento só dos casos já cadastrados (curado), por CNJ, 1x/dia
+export const QUEUE_INFOSIMPLES_CURATED_SYNC = 'infosimples.curated-case-sync'
 
 // WhatsApp Notifier
 export const QUEUE_WHATSAPP_NOTIFICATION_REQUESTED = 'whatsapp.notification.requested'

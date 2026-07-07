@@ -10,6 +10,7 @@ import {
 } from '../integrations/jusbrasil-client.ts'
 import { hasAutosDocument, ingestAutosFromLinks } from '../integrations/autos-ingestion.ts'
 import { upsertTimelineEvent, emitMovementsReceived } from '../integrations/timeline-sync-helpers.ts'
+import { syncCaseByCnj } from './case-infosimples-sync.ts'
 
 /**
  * Payload expected by the crawler.sync.requested job.
@@ -22,25 +23,31 @@ export type CrawlerSyncRequestedEvent = {
 }
 
 /**
- * Court Sync Worker — motor ÚNICO: JUSBRASIL.
+ * Court Sync Worker — dispara no cadastro do caso (ou no botão "Sincronizar
+ * Tribunal"). MOTOR PRINCIPAL: InfoSimples, busca por CNJ específico
+ * (`case-infosimples-sync.ts`) — decisão 07/07/2026: o Miguel cadastra os
+ * casos manualmente (já sabe que é execução penal), então a busca é sempre
+ * por UM processo específico, nunca varredura ampla. Jusbrasil continua como
+ * extra opcional (capa/autos/webhook) só se `JUSBRASIL_API_KEY` estiver
+ * configurada — hoje não está, e tudo bem, o InfoSimples já traz a
+ * movimentação real.
  *
- * Ao cadastrar um caso (ou no "Sincronizar Tribunal" / varredura diária), este
- * worker:
- *   1. Consulta a capa do processo (tribunal, classe, partes) no Jusbrasil;
- *   2. Importa as movimentações para a timeline;
- *   3. Baixa os autos em PDF quando há links disponíveis na resposta;
- *   4. Cria o monitoramento contínuo apontando o callback para
- *      /api/v1/webhooks/jusbrasil (atualizações em tempo real).
- *
- * Sem JUSBRASIL_API_KEY o caso é marcado como 'manual_review' (nada de dados
- * falsos) — basta configurar a chave para os dados reais entrarem.
+ * `monitoringStatus` reflete o resultado real da busca:
+ *   'monitored'      → InfoSimples achou o processo e trouxe movimentação.
+ *   'sealed'         → InfoSimples NÃO achou (código 612) — pode ser CNJ
+ *                       digitado errado OU segredo de justiça (as duas fontes
+ *                       públicas não enxergam processo sigiloso; ver
+ *                       MANUAL_DO_SISTEMA.md). Confira o número; se estiver
+ *                       certo, a movimentação só vai entrar pelos autos que
+ *                       você subir manualmente.
+ *   'manual_review'  → falha de rede/config — tenta de novo no próximo sync.
  */
 export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<any>) {
   const raw: any = job.data
   const data = (raw?.payload && raw.payload.executionCaseId ? raw.payload : raw) as CrawlerSyncRequestedEvent
   const { logId, organizationId, executionCaseId, requestedByUserId } = data
 
-  console.log(`[Jusbrasil Sync] Iniciando sync do caso ${executionCaseId} (Log ID: ${logId})`)
+  console.log(`[Court Sync] Iniciando sync do caso ${executionCaseId} (Log ID: ${logId})`)
 
   if (logId) {
     await db
@@ -60,15 +67,30 @@ export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<any>) {
     const cnj = execCase.executionProcessNumber
     if (!cnj) throw new Error('Caso sem número de processo (CNJ)')
 
-    const jusbrasil = createJusbrasilClient()
-
-    if (!jusbrasil) {
-      console.warn('[Jusbrasil Sync] JUSBRASIL_API_KEY ausente — marcando caso para conferência manual.')
+    const infoResult = await syncCaseByCnj(cnj)
+    if (infoResult.error) {
+      console.warn(`[Court Sync] InfoSimples falhou para ${cnj}: ${infoResult.error} — marcando para conferência manual.`)
       await db
         .update(executionCases)
         .set({ monitoringStatus: 'manual_review', lastSyncedAt: new Date() })
         .where(eq(executionCases.id, execCase.id))
-    } else {
+    } else if (infoResult.notFound) {
+      console.warn(`[Court Sync] InfoSimples não localizou ${cnj} — possível segredo de justiça ou CNJ incorreto.`)
+      await db
+        .update(executionCases)
+        .set({ monitoringStatus: 'sealed', lastSyncedAt: new Date() })
+        .where(eq(executionCases.id, execCase.id))
+    } else if (infoResult.found) {
+      console.log(`[Court Sync] InfoSimples: ${infoResult.movementsFound} movimentação(ões) para ${cnj}.`)
+      await db
+        .update(executionCases)
+        .set({ monitoringStatus: 'monitored', lastSyncedAt: new Date() })
+        .where(eq(executionCases.id, execCase.id))
+    }
+
+    // Jusbrasil: extra opcional, só roda se a chave estiver configurada.
+    const jusbrasil = createJusbrasilClient()
+    if (jusbrasil) {
       await syncViaJusbrasil(db, jusbrasil, execCase, organizationId, requestedByUserId)
     }
 
@@ -79,9 +101,9 @@ export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<any>) {
         .where(eq(crawlerSyncLogs.id, logId))
     }
 
-    console.log(`[Jusbrasil Sync] ✅ Sync concluído para ${executionCaseId}`)
+    console.log(`[Court Sync] ✅ Sync concluído para ${executionCaseId}`)
   } catch (err: any) {
-    console.error(`[Jusbrasil Sync] ❌ Erro no caso ${executionCaseId}:`, err)
+    console.error(`[Court Sync] ❌ Erro no caso ${executionCaseId}:`, err)
     if (logId) {
       await db
         .update(crawlerSyncLogs)

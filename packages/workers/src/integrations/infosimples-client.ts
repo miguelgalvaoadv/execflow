@@ -76,6 +76,81 @@ export function parseBrDate(s: string): Date | null {
 }
 
 /**
+ * Busca UM processo específico por número (CNJ) no TJSP 1º grau — parâmetro
+ * `processo` (confirmado na documentação oficial InfoSimples, 07/07/2026).
+ * Usado para descoberta manual controlada: buscar exatamente o processo que o
+ * Miguel acabou de cadastrar, em vez de varrer a OAB inteira. R$0,20/consulta.
+ * Nunca lança — erros viram { networkError: true }. code 612 = não encontrado
+ * (pode ser CNJ errado OU segredo de justiça — não dá pra diferenciar por aqui).
+ */
+export async function fetchTjspByProcesso(
+  config: { token: string },
+  cnj: string
+): Promise<InfosimplesTjspResult> {
+  const empty: InfosimplesTjspResult = {
+    ok: false,
+    networkError: false,
+    code: 0,
+    message: '',
+    currentPage: 1,
+    totalPages: 0,
+    processes: [],
+  }
+
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 60_000)
+    const res = await fetch(`${BASE}/tribunal/tjsp/primeiro-grau`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ token: config.token, processo: cnj }).toString(),
+      signal: controller.signal,
+    })
+    clearTimeout(timer)
+    if (!res.ok) return { ...empty, networkError: true, code: res.status }
+
+    const body = (await res.json()) as {
+      code: number
+      code_message: string
+      data?: Array<{ processos?: Array<Record<string, unknown>> }>
+    }
+    if (body.code !== 200) {
+      return { ...empty, code: body.code, message: body.code_message }
+    }
+
+    const rawProcessos = body.data?.[0]?.processos ?? []
+    const processes: InfosimplesProcess[] = rawProcessos.map((p) => {
+      const movs = (p['ultimas_movimentacoes'] as InfosimplesMovement[] | undefined) ?? []
+      return {
+        processo: String(p['processo'] ?? '').trim(),
+        classe: (p['classe'] as string | undefined) ?? null,
+        assunto: (p['assunto'] as string | undefined) ?? null,
+        foro: (p['foro'] as string | undefined) ?? null,
+        vara: (p['vara'] as string | undefined) ?? null,
+        clientName: cleanExecutado(p['exectdo'] ?? p['indiciado'] ?? p['reqdo']),
+        executadoRaw: (p['exectdo'] as string | undefined) ?? null,
+        movimentacoes: movs
+          .filter((m) => m && m.movimento)
+          .map((m) => ({ data: String(m.data ?? ''), movimento: String(m.movimento ?? '') })),
+      }
+    })
+
+    return {
+      ok: true,
+      networkError: false,
+      code: 200,
+      message: 'ok',
+      currentPage: 1,
+      totalPages: 1,
+      processes: processes.filter((p) => p.processo !== ''),
+    }
+  } catch (err) {
+    console.warn(`[infosimples] Falha ao consultar processo ${cnj}:`, err instanceof Error ? err.message : err)
+    return { ...empty, networkError: true }
+  }
+}
+
+/**
  * Busca uma página de processos por OAB no TJSP 1º grau.
  * Nunca lança — erros viram { networkError: true }.
  */

@@ -257,16 +257,37 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
   await boss.schedule(QUEUE_DJEN_SYNC, '0 8 * * *', {})
   console.info('[worker-registry] DJEN intimações sync registered (diário 08:00 UTC, via caderno)')
 
-  // InfoSimples → descoberta+monitoramento por OAB (TJSP e-SAJ). PAGO (R$0,20/pág).
-  // 1x/dia, 07:00 UTC (~04:00 Brasília). Custo estimado ~R$72/mês (296 processos,
-  // ~12 páginas/rodada). Decisão confirmada com o usuário em 05/07/2026 — trocado
-  // de 2x/semana (~R$19/mês) para diário, priorizando atualidade. Sem token → no-op.
+  // InfoSimples → descoberta automática por OAB (TJSP e-SAJ). DESLIGADA por
+  // padrão desde 07/07/2026 — decisão do Miguel: ele já tem a lista curada dos
+  // processos reais do escritório e cadastra manualmente; a varredura cega da
+  // OAB inteira classificava processo errado (ex.: "Ação Penal" vazou como
+  // execução penal) e gastava com processo que não é do escritório. Código
+  // mantido para uso manual/opt-in futuro (ex.: conferência periódica de
+  // processo novo na OAB). Ligue com INFOSIMPLES_OAB_DISCOVERY_ENABLED=true.
   const { runInfosimplesSync } = await import('../consumers/infosimples-sync.ts')
   await boss.work(QUEUE_INFOSIMPLES_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
     await runInfosimplesSync(db)
   })
-  await boss.schedule(QUEUE_INFOSIMPLES_SYNC, '0 7 * * *', {})
-  console.info('[worker-registry] InfoSimples OAB sync registered (diário 07:00 UTC)')
+  if (process.env['INFOSIMPLES_OAB_DISCOVERY_ENABLED'] === 'true') {
+    await boss.schedule(QUEUE_INFOSIMPLES_SYNC, '0 7 * * *', {})
+    console.info('[worker-registry] InfoSimples OAB discovery registered (diário 07:00 UTC — OPT-IN ligado)')
+  } else {
+    console.info('[worker-registry] InfoSimples OAB discovery NÃO agendado (opt-in; cadastro é manual+curado pelo Miguel)')
+  }
+
+  // InfoSimples → monitoramento SÓ dos casos já cadastrados (curado). Busca por
+  // CNJ específico (não a OAB inteira) — a cada 3 dias, 07:00 UTC (decisão do
+  // Miguel em 07/07/2026: execução penal se move devagar, não precisa ser
+  // diário — troca custo ~R$240/mês por ~R$80/mês pros 40 casos iniciais).
+  // Custo: R$0,20 × nº de casos ativos com CNJ por rodada. Ver
+  // case-infosimples-sync.ts para o racional completo.
+  const { runCuratedInfosimplesSync } = await import('../consumers/case-infosimples-sync.ts')
+  const { QUEUE_INFOSIMPLES_CURATED_SYNC } = await import('../queues/names.ts')
+  await boss.work(QUEUE_INFOSIMPLES_CURATED_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runCuratedInfosimplesSync(db)
+  })
+  await boss.schedule(QUEUE_INFOSIMPLES_CURATED_SYNC, '0 7 */3 * *', {})
+  console.info('[worker-registry] InfoSimples curated case sync registered (a cada 3 dias, 07:00 UTC — só casos cadastrados)')
 
   // Astrea email poll: only registered when config is valid.
   // Kill-switch: set ASTREA_EMAIL_POLL_ENABLED=false to pause without removing credentials.

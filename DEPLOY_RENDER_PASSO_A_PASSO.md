@@ -76,8 +76,8 @@ Esse mesmo segredo tem que estar **nos dois serviços** (API e worker).
    |---|---|---|
    | `EXECFLOW_API_URL` | ⟨URL da API da Parte 3⟩ | o worker chama a API por aqui |
    | `INTERNAL_API_TOKEN` | ⟨o MESMO segredo da Parte 1⟩ | tem que ser idêntico ao da API |
-   | `INFOSIMPLES_TOKEN` | ⟨seu token InfoSimples⟩ | descoberta+monitoramento por OAB |
-   | `INFOSIMPLES_OABS` | `206292/SP` | a OAB do seu chefe |
+   | `INFOSIMPLES_TOKEN` | ⟨seu token InfoSimples⟩ | busca movimentação dos casos já cadastrados (por CNJ) |
+   | `INFOSIMPLES_OABS` | `206292/SP` | só usado se religar a descoberta automática por OAB (opt-in, desligada por padrão desde 07/07/2026 — ver MANUAL_DO_SISTEMA.md) |
    | `DJEN_ENABLED` | `true` | intimações oficiais grátis |
    | `DJEN_OABS` | `206292/SP` | mesma OAB |
    | `DATAJUD_API_KEY` | `cDZHYzlZa0JadVREZDJCendQbXY6SkJlTzNjLV9TRENyQk1RdnFKZGRQdw==` | enriquece o inventário |
@@ -146,6 +146,8 @@ Esse mesmo segredo tem que estar **nos dois serviços** (API e worker).
 
 - **execflow-api** — o site + a IA (análise de autos, minutas) + o endpoint
   interno que o worker chama.
-- **execflow-workers** — roda sozinho 24/7: InfoSimples 1x/dia (descobre e
-  monitora as execuções penais por OAB, ~R$72/mês), DJEN 2x/dia (intimações),
+- **execflow-workers** — roda sozinho 24/7: InfoSimples 1x/dia (monitora SÓ os
+  casos já cadastrados por CNJ — cadastro é manual, curado por você; custo
+  ~R$0,20 × nº de casos ativos), DJEN 1x/dia (intimações, via caderno diário),
   DataJud (enriquece inventário), OCR dos autos que você sobe, varreduras de SLA.
+  Ver MANUAL_DO_SISTEMA.md para o detalhe completo e atualizado.

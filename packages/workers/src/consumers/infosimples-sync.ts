@@ -1,7 +1,18 @@
 /**
- * InfoSimples → descoberta + monitoramento dos processos de execução penal do
- * escritório, por OAB (TJSP e-SAJ 1º grau). 1x/dia (decisão do usuário em
- * 05/07/2026, priorizando atualidade sobre custo).
+ * InfoSimples → DESCOBERTA automática de processos por OAB (TJSP e-SAJ 1º grau).
+ *
+ * DESLIGADA POR PADRÃO desde 07/07/2026 (opt-in via
+ * INFOSIMPLES_OAB_DISCOVERY_ENABLED=true — ver worker-registry.ts). Decisão do
+ * Miguel: ele já tem a lista curada dos processos reais de execução penal do
+ * escritório e cadastra manualmente (cliente + matrícula + CNJ). Varrer a OAB
+ * inteira e cadastrar automaticamente o que passa no filtro `isExecucaoPenal`
+ * classificava processo errado às vezes (ex.: "Ação Penal" vazou uma vez) e
+ * gastava consultando processo que não é do escritório.
+ *
+ * Para o monitoramento do dia a dia dos casos JÁ CADASTRADOS, use
+ * `case-infosimples-sync.ts` (busca por CNJ específico, nunca descobre caso
+ * novo). Este arquivo (`infosimples-sync.ts`) fica disponível pra religar se o
+ * Miguel quiser voltar a varrer a OAB por conta própria no futuro.
  *
  * Para cada OAB (perfis do inventário + INFOSIMPLES_OABS): pagina a busca por
  * OAB, filtra execução penal, e registra em massa via endpoint interno
