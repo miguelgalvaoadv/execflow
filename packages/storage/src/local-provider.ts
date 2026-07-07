@@ -1,4 +1,7 @@
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, writeFile, unlink } from 'node:fs/promises'
+import { createWriteStream } from 'node:fs'
+import { Readable } from 'node:stream'
+import { pipeline } from 'node:stream/promises'
 import path from 'node:path'
 import type {
   ObjectVerificationRequest,
@@ -94,6 +97,36 @@ export function createLocalStorageProvider(
       const filePath = await resolvePath(storageKey)
       await mkdir(path.dirname(filePath), { recursive: true })
       await writeFile(filePath, body)
+    },
+
+    /**
+     * Grava direto do stream de rede pro disco, sem nunca montar o arquivo
+     * inteiro em memória — importante pra autos escaneados grandes (podem
+     * passar de 100-200MB, e uma instância pequena de servidor não aguenta
+     * bufferizar isso tudo de uma vez). Conta os bytes conforme grava.
+     */
+    async putObjectStream(
+      storageKey: string,
+      body: ReadableStream<Uint8Array>,
+      _contentType: string
+    ): Promise<{ byteSize: number }> {
+      const filePath = await resolvePath(storageKey)
+      await mkdir(path.dirname(filePath), { recursive: true })
+
+      let byteSize = 0
+      const nodeReadable = Readable.fromWeb(body as never)
+      nodeReadable.on('data', (chunk: Buffer) => {
+        byteSize += chunk.length
+      })
+
+      try {
+        await pipeline(nodeReadable, createWriteStream(filePath))
+      } catch (err) {
+        await unlink(filePath).catch(() => {})
+        throw err
+      }
+
+      return { byteSize }
     },
   }
 }

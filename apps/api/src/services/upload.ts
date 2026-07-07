@@ -295,7 +295,14 @@ export async function completeUpload(
   return registerResult
 }
 
-/** Store blob bytes for local provider PUT handler. */
+function checkContentType(contentType: string | undefined, expected: string): ServiceResult<never> | null {
+  if (contentType !== undefined && contentType.split(';')[0]?.trim() !== expected) {
+    return validationError('Content-Type does not match declared mimeType.', 'mimeType')
+  }
+  return null
+}
+
+/** Store blob bytes for local provider PUT handler (buffer path — kept for tests/small files). */
 export async function storeUploadBlob(
   uploadToken: string,
   body: Buffer,
@@ -313,17 +320,68 @@ export async function storeUploadBlob(
     )
   }
 
-  if (contentType !== undefined && contentType.split(';')[0]?.trim() !== token.mimeType) {
-    return validationError('Content-Type does not match declared mimeType.', 'mimeType')
-  }
+  const ctErr = checkContentType(contentType, token.mimeType)
+  if (ctErr) return ctErr
 
   const storage = getStorageProvider()
   if (storage.putObject === undefined) {
     return validationError('Direct blob upload is not supported for this storage provider.')
   }
 
-  await storage.putObject(token.storageKey, body, token.mimeType)
+  try {
+    await storage.putObject(token.storageKey, body, token.mimeType)
+  } catch (err) {
+    // Nunca deixa erro de disco (cheio, permissão, etc.) virar 500 opaco —
+    // registra a causa real no log e devolve uma mensagem que o usuário
+    // consegue agir (achado 07/07/2026: upload de auto grande falhava com
+    // 500 genérico, sem log nenhum de causa — essa exceção subia crua).
+    console.error('[upload] Falha ao gravar blob no storage:', err)
+    return internalServiceError('Falha ao salvar o arquivo no armazenamento. Tente novamente; se persistir, avise o suporte.', err)
+  }
   return ok({ byteSize: body.byteLength })
+}
+
+/**
+ * Store blob via streaming (preferred path) — nunca bufferiza o arquivo
+ * inteiro em memória. Autos escaneados grandes (200MB+) bufferizados podem
+ * derrubar uma instância pequena por falta de memória; streaming grava
+ * direto no disco em pedaços. Valida o tamanho DEPOIS de gravar (só se sabe
+ * o total ao terminar de consumir o stream) — se não bater, apaga o arquivo.
+ */
+export async function storeUploadBlobStream(
+  uploadToken: string,
+  body: ReadableStream<Uint8Array>,
+  contentType: string | undefined
+): Promise<ServiceResult<{ byteSize: number }>> {
+  const token = verifyUploadToken(uploadToken)
+  if (token === null) {
+    return validationError('Invalid or expired upload token.', 'uploadToken')
+  }
+
+  const ctErr = checkContentType(contentType, token.mimeType)
+  if (ctErr) return ctErr
+
+  const storage = getStorageProvider()
+  if (storage.putObjectStream === undefined) {
+    return validationError('Streaming blob upload is not supported for this storage provider.')
+  }
+
+  let result: { byteSize: number }
+  try {
+    result = await storage.putObjectStream(token.storageKey, body, token.mimeType)
+  } catch (err) {
+    console.error('[upload] Falha ao gravar blob (stream) no storage:', err)
+    return internalServiceError('Falha ao salvar o arquivo no armazenamento. Tente novamente; se persistir, avise o suporte.', err)
+  }
+
+  if (result.byteSize !== token.byteSize) {
+    return validationError(
+      `Upload body size ${result.byteSize} does not match declared byteSize ${token.byteSize}.`,
+      'byteSize'
+    )
+  }
+
+  return ok({ byteSize: result.byteSize })
 }
 
 async function findDocumentByStorageKey(

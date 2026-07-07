@@ -64,6 +64,18 @@ export interface StorageProvider {
    * S3 provider throws — clients upload via presigned URL.
    */
   putObject?(storageKey: string, body: Buffer, contentType: string): Promise<void>
+
+  /**
+   * Streams bytes directly to storageKey — never buffers the whole body in
+   * memory. Preferred over putObject for the local PUT handler (large scanned
+   * autos can be hundreds of MB; buffering risks OOM on small instances).
+   * Local provider only — same scope as putObject.
+   */
+  putObjectStream?(
+    storageKey: string,
+    body: ReadableStream<Uint8Array>,
+    contentType: string
+  ): Promise<{ byteSize: number }>
 }
 
 export type StorageConfig = {

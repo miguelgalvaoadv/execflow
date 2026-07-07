@@ -753,7 +753,7 @@ function DocumentosTab({
 
   // Upload States
   const [file, setFile] = useState<File | null>(null)
-  const [docClass, setDocClass] = useState('Petição')
+  const [docClass, setDocClass] = useState('autos_integral')
   const [uploadStatus, setUploadStatus] = useState<'idle' | 'hashing' | 'requesting' | 'uploading' | 'completing' | 'success' | 'error'>('idle')
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
@@ -877,13 +877,26 @@ function DocumentosTab({
                   onChange={(e) => setDocClass(e.target.value)}
                   className="w-full bg-slate-50 border border-slate-200 text-slate-900 rounded p-1.5 text-[11px] focus:outline-none focus:border-blue-600"
                 >
-                  <option value="Petição">Petição</option>
-                  <option value="Sentença">Sentença</option>
-                  <option value="Decisão">Decisão</option>
-                  <option value="Procuração">Procuração</option>
-                  <option value="Certidão de Trabalho">Certidão de Trabalho</option>
-                  <option value="Histórico Carcerário">Histórico Carcerário</option>
-                  <option value="Outros">Outros</option>
+                  {/* Valores batem com RELEVANT_CLASSES em case-analysis.ts — "Analisar
+                      autos (IA)" só enxerga documentos com uma dessas classes exatas.
+                      Corrigido 07/07/2026: a lista antiga (Petição/Sentença com acento
+                      etc.) nunca batia com o backend, e não tinha opção de autos
+                      completo — a IA sempre dizia "sem autos" mesmo com upload feito. */}
+                  <option value="autos_integral">Autos Inteiros (processo completo)</option>
+                  <option value="autos_iniciais">Autos Iniciais (denúncia/inquérito)</option>
+                  <option value="sentenca">Sentença</option>
+                  <option value="acórdão">Acórdão</option>
+                  <option value="despacho">Despacho/Decisão</option>
+                  <option value="guia_de_execucao">Guia de Execução</option>
+                  <option value="atestado_penas">Atestado de Penas</option>
+                  <option value="atestado_medico">Atestado Médico</option>
+                  <option value="laudo_disciplinar">Laudo Disciplinar</option>
+                  <option value="pad">PAD (Proc. Adm. Disciplinar)</option>
+                  <option value="certidao_carceraria">Certidão Carcerária</option>
+                  <option value="comprovante_trabalho_estudo">Comprovante de Trabalho/Estudo</option>
+                  <option value="ficha_reu">Ficha do Réu</option>
+                  <option value="procuracao">Procuração</option>
+                  <option value="outros">Outros</option>
                 </select>
               </div>
               <div>

@@ -17,7 +17,7 @@ import { db } from '../lib/db.ts'
 import { buildWriteContext } from '../lib/write-context.ts'
 import { parseBody } from '../lib/zod-helpers.ts'
 import { serviceErrorToResponse, safeJsonBody } from '../lib/route-helpers.ts'
-import { requestUpload, completeUpload, storeUploadBlob } from '../services/upload.ts'
+import { requestUpload, completeUpload, storeUploadBlobStream } from '../services/upload.ts'
 import { unprocessable } from '../lib/respond.ts'
 import type { HonoVariables } from '../context/types.ts'
 import { getStorageProvider } from '../lib/storage.ts'
@@ -126,10 +126,17 @@ router.put('/blob', async (c) => {
     )
   }
 
-  const body = Buffer.from(await c.req.arrayBuffer())
+  const body = c.req.raw.body
+  if (body === null) {
+    return c.json({ error: { code: 'UNPROCESSABLE', message: 'Request has no body.' } }, 422)
+  }
   const contentType = c.req.header('Content-Type') ?? undefined
 
-  const result = await storeUploadBlob(uploadToken, body, contentType)
+  // Streaming: nunca bufferiza o arquivo inteiro em memória (autos escaneados
+  // grandes podem passar de 100-200MB — bufferizar arrisca OOM numa instância
+  // pequena). Achado 07/07/2026 ao investigar upload de auto grande falhando
+  // com 500 opaco.
+  const result = await storeUploadBlobStream(uploadToken, body, contentType)
   if (!result.success) {
     return serviceErrorToResponse(c, result.error)
   }

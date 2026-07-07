@@ -171,9 +171,26 @@ export async function registerDocument(
     uploadedAt = new Date()
   }
 
-  // Determine initial status based on available associations
+  // Determine initial status based on available associations.
+  //
+  // CORRIGIDO 07/07/2026: upload manual direto num caso (via tela do caso,
+  // sourceChannel='intake_manual', com executionCaseId já conhecido) ficava
+  // preso pra sempre em 'pending_extraction' — só sai daí via revisão de
+  // extração (extraction-review), que não tem NENHUMA tela no frontend. Ou
+  // seja, nenhum documento subido manualmente conseguia chegar a 'confirmed',
+  // e "Analisar autos (IA)" nunca encontrava o documento (exige status
+  // confirmed). Upload manual COM caso já é a confirmação humana — o
+  // advogado escolheu o arquivo, a classe e o caso na hora; não precisa de
+  // uma segunda rodada de revisão de extração por IA. Outros canais (e-mail,
+  // WhatsApp, scan) continuam exigindo revisão — lá o sistema está
+  // adivinhando o que chegou, faz sentido revisar.
   const hasAssociation = !!(input.clientId || input.executionCaseId)
-  const initialStatus = hasAssociation ? 'pending_extraction' : 'pending_association'
+  const isManualWithCase = input.sourceChannel === 'intake_manual' && hasAssociation
+  const initialStatus = isManualWithCase
+    ? 'confirmed'
+    : hasAssociation
+      ? 'pending_extraction'
+      : 'pending_association'
 
   // -------------------------------------------------------------------------
   // 2. Transactional write
@@ -201,6 +218,7 @@ export async function registerDocument(
           sensitivityLevel: input.sensitivityLevel ?? 'standard',
           supersedesDocumentId: input.supersedesDocumentId,
           whatsappForwardedFrom: input.whatsappForwardedFrom,
+          ...(isManualWithCase ? { confirmedAt: now, confirmedByUserId: ctx.userId } : {}),
           uploadedAt,
           uploadedByUserId: ctx.userId,
           createdAt: now,

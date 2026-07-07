@@ -103,12 +103,33 @@ Analise os autos e RESPONDA APENAS COM JSON VÁLIDO (sem nenhum texto fora do JS
 {
  "pena": { "penaTotalDias": number|null, "regimeAtual": string|null, "dataBase": "YYYY-MM-DD"|null, "diasRemidos": number|null, "diasCumpridosAprox": number|null, "resumo": string },
  "oportunidades": [ { "tipo": "progression|remission|parole|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "prazo": string, "confianca": "high|medium|low" } ],
- "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number, "descricao": string } ]
+ "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string } ]
 }
 REGRAS DAS OPORTUNIDADES (muito importante):
 - Liste APENAS o que pode ser pleiteado AGORA (dentro do prazo) ou NO FUTURO. NÃO liste oportunidades referentes a atos já passados/perdidos.
 - Em "prazo", diga SEMPRE quando cabe: "imediato — já cumpriu o requisito", ou uma data/previsão aproximada (ex.: "previsto para ~03/2027, ao atingir 2/5 da pena"). Se não der pra estimar, explique objetivamente o gatilho futuro.
-NÃO invente dados ausentes (use null). Liste apenas oportunidades realmente cabíveis com base nos autos.`
+
+CHECKLIST DE PRAZOS (percorra cada item; inclua em "prazos" só o que tiver base real nos autos — não invente data nem gatilho):
+- Recurso de agravo em execução (art. 197 LEP) — 5 dias da ciência/intimação de decisão do juízo da execução.
+- Embargos de declaração — 2 dias (prazo curto, não confundir com o do agravo).
+- Manifestação sobre cálculo de pena / PEC (planilha de execução) — prazo de vista à defesa.
+- Impugnação de excesso de execução.
+- Defesa em PAD (falta grave) e prazo pra audiência de justificação.
+- Recurso administrativo contra decisão de PAD.
+- Manifestação sobre laudo/parecer da Comissão Técnica de Classificação (CTC) ou exame criminológico, se houver.
+- Prazo de retorno de saída temporária (e renovação, se aplicável).
+- Relatório periódico de cumprimento de condições do livramento condicional.
+- Prescrição da pretensão executória (data-limite pra execução da pena, se identificável).
+- Data prevista de término da pena (vencimento) — marco de monitoramento, não é bem um "prazo processual", mas deve ser registrado se calculável.
+- Prazo pra requerer detração (tempo de prisão provisória a abater) quando há elemento nos autos sugerindo abatimento ainda não computado.
+- Prazo pra juntar comprovante de trabalho/estudo pendente de remição.
+- Prazo pra manifestação do MP sobre petição da defesa, quando essa manifestação for pré-requisito pra decisão que afeta o reeducando.
+- Unificação/soma de penas — prazo pra requerer quando há notícia de nova condenação nos autos.
+- Qualquer outro prazo com data ou termo inicial explícito no texto, mesmo que não se encaixe nas categorias acima.
+DATA DO PRAZO — use "dias" OU "dataLimite", nunca os dois:
+- "dataLimite" (YYYY-MM-DD): use quando souber ou puder calcular a data real do marco (ex.: previsão de progressão, livramento condicional, término de pena — você já calcula isso no campo "pena" e no resumo, reuse o mesmo cálculo aqui). É o caso mais comum pra prazos de benefício/cálculo.
+- "dias": use SÓ para prazos processuais contados a partir de HOJE (ex.: agravo em execução = 5, embargos de declaração = 2). Nunca use "dias" pra estimar uma data que já está anos no futuro — isso conta errado.
+NÃO invente dados ausentes (use null). Liste apenas oportunidades e prazos realmente cabíveis com base nos autos — a ausência de uma categoria do checklist nos autos não é erro, é sinal de que ela não se aplica a este caso.`
 
   blocks.push({
     type: 'text',
@@ -229,8 +250,16 @@ NÃO invente dados ausentes (use null). Liste apenas oportunidades realmente cab
       .where(and(eq(deadlines.executionCaseId, caseId), eq(deadlines.title, titulo)))
       .limit(1)
     if (existing.length > 0) continue
+    // Prefere dataLimite (data real, calculada pela IA) — "dias" só serve pra
+    // prazos processuais curtos contados de hoje. Achado 07/07/2026: usar só
+    // "dias" fazia previsão de anos no futuro (progressão, livramento) virar
+    // "vence hoje", porque a IA não tinha como expressar uma data absoluta.
+    const dataLimite = typeof p.dataLimite === 'string' ? new Date(`${p.dataLimite}T12:00:00Z`) : null
     const dias = Number(p.dias)
-    const due = new Date(Date.now() + (Number.isFinite(dias) ? dias : 15) * 86400000)
+    const due =
+      dataLimite && !isNaN(dataLimite.getTime())
+        ? dataLimite
+        : new Date(Date.now() + (Number.isFinite(dias) ? dias : 15) * 86400000)
     await db.insert(deadlines).values({
       organizationId,
       executionCaseId: caseId,
