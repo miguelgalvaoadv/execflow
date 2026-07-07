@@ -67,7 +67,7 @@ export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<any>) {
     const cnj = execCase.executionProcessNumber
     if (!cnj) throw new Error('Caso sem número de processo (CNJ)')
 
-    const infoResult = await syncCaseByCnj(cnj)
+    const infoResult = await syncCaseByCnj(db, cnj)
     if (infoResult.error) {
       console.warn(`[Court Sync] InfoSimples falhou para ${cnj}: ${infoResult.error} — marcando para conferência manual.`)
       await db
