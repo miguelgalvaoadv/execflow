@@ -99,7 +99,7 @@ Este é o inventário **completo** do que o sistema usa. Guarde esta tabela.
 
 | Serviço | Para que serve | Estado |
 |---|---|---|
-| **Anthropic (Claude)** | A IA que lê os autos e gera prazos/oportunidades/minutas. | ⚠️ **Sem créditos** (ver 7) |
+| **Anthropic (Claude)** | A IA que lê os autos e gera prazos/oportunidades/minutas. | ✅ Com crédito (recarregado 07/07) |
 | **SMTP (Gmail)** | Enviaria os alertas por e-mail. | Desligado (sua decisão) |
 
 ---
@@ -236,21 +236,22 @@ ambiente no serviço `execflow-workers` do Render (ex.: `DATAJUD_CASE_SYNC_ENABL
 | **Supabase** | US$ 0 a ~US$ 25 | Grátis até 500MB/limite; depois o plano Pro (~US$25). |
 | **InfoSimples** | ~R$ 80 (40 casos) | **Mudou em 07/07**: agora é R$0,20 × nº de casos CADASTRADOS (curados), não mais por página da OAB inteira. Roda a cada 3 dias (decisão sua, pra economizar) ≈ R$8/rodada ≈ R$80/mês pros 40 casos. Cresce devagar (só quando você cadastra caso novo), nunca gasta com processo que não é seu. |
 | **DJEN, DataJud** | R$ 0 | Grátis. |
-| **Anthropic (Claude)** | **Variável** | ⚠️ **Hoje está ZERADO** — precisa colocar crédito (ver abaixo). |
+| **Anthropic (Claude)** | **Variável** | ✅ Recarregado (US$5 em 07/07) — ver observação abaixo sobre esgotar rápido. |
 | **Total fixo aproximado** | **~R$ 160–240/mês** | Sem contar a IA. |
 
-### 7.2. ⚠️ A IA (Claude) está sem créditos — AÇÃO NECESSÁRIA
+### 7.2. ✅ IA (Claude) e InfoSimples com crédito — resolvido em 07/07/2026
 
-Testei ao vivo: a análise de autos e a geração de peças **falham** com a mensagem
-*"Your credit balance is too low"*. **O código está 100% correto** — ele chega
-até a Anthropic, só falta saldo. Para usar a análise de autos / oportunidades /
-minutas, você precisa **comprar créditos** em console.anthropic.com → Plans &
-Billing.
+Ambos estavam bloqueados (Anthropic sem saldo, InfoSimples pedindo o "primeiro
+pagamento real" da conta) — resolvido no mesmo dia: você recarregou US$5 na
+Anthropic e R$100 na InfoSimples, testei os dois ao vivo depois da recarga e
+confirmei que funcionam.
 
-**Quanto custa por uso:** cada análise de autos custa tipicamente **US$ 0,10 a
+**Atenção ao tamanho do saldo Anthropic**: US$5 é pouco pra uma rodada de 40
+análises de autos completas — cada análise custa tipicamente **US$ 0,10 a
 US$ 3** dependendo do tamanho do PDF (autos grandes custam mais). 40 casos
-analisados uma vez ≈ **US$ 10–60** (uma vez só, não recorrente). Depois, só custa
-quando você reanálisa ou gera peça nova.
+analisados uma vez ≈ **US$ 10–60** de uma vez. Se for analisar os autos dos 40
+amanhã, provavelmente vai precisar recarregar de novo antes de terminar todos
+— acompanhe o saldo em console.anthropic.com → Plans & Billing.
 
 ### 7.3. O que faz o custo subir no futuro
 
@@ -318,7 +319,8 @@ dia a dia. Mas vale saber o que olhar e o que fazer se algo travar.
 |---|---|---|
 | **Worker em "Failed service" / reiniciando** | Erro no boot (já corrigimos 1 caso: OCR). | Render → workers → Logs → ler o erro. Geralmente é uma variável faltando. |
 | **"Casos não atualizam"** | Worker caiu, ou InfoSimples sem token. | Render → workers: está "Live"? A variável `INFOSIMPLES_TOKEN` existe? |
-| **"Análise de autos falha"** | Sem créditos Anthropic. | console.anthropic.com → comprar crédito. |
+| **"Análise de autos falha"** | Saldo Anthropic esgotou (fácil de acontecer — cada análise custa até uns dólares). | console.anthropic.com → Plans & Billing → adicionar crédito. |
+| **"InfoSimples não encontra processo cadastrado"** | Pode ser segredo de justiça (caso fica `sealed`), CNJ digitado errado, ou processo não é da OAB configurada. | Confira o número; se estiver certo e for sigiloso, a movimentação só entra pelos autos que você subir. |
 | **DJEN parou** | CNJ pode ter mudado o endpoint de novo. | Ver logs `[djen-sync]`. Se voltar a dar 403, avisar o desenvolvedor. |
 | **DataJud "operation aborted"** | Backend do CNJ instável (normal). | Nada — ele tenta de novo no próximo horário. |
 | **Deploy quebrado após mudança** | Código com erro. | Render mostra o build falhando; o serviço antigo continua no ar até o novo subir. |
@@ -344,18 +346,18 @@ Validei cada objetivo original **testando de verdade** no sistema rodando.
 | **Monitorar movimentações automaticamente** | ✅ Cumprido | Timeline do caso Edison com movimentações reais `[datajud]`/`[infosimples]`. |
 | **Receber intimações oficiais (DJEN)** | ✅ Cumprido | 601 intimações reais puxadas no teste ao vivo dia 06. |
 | **Cadastro de cliente + matrícula** | ✅ Cumprido | 307 clientes no banco; campo matrícula existe e é usado. |
-| **Detectar prazos** | ✅ Parcial | 23 prazos no banco. A geração automática por IA depende de créditos. |
-| **Sugerir oportunidades por IA** | ⚠️ Bloqueado por crédito | O pipeline funciona (chega na Anthropic) mas retorna "sem saldo". 0 oportunidades geradas hoje. |
-| **Ler os autos com IA** | ⚠️ Bloqueado por crédito | Mesmo motivo. O código está correto e testado até o ponto da cobrança. |
-| **Gerar minutas (peças)** | ⚠️ Bloqueado por crédito | Idem. A tela de Peças existe e funciona; falta o saldo pra IA escrever. |
+| **Detectar prazos** | ✅ Cumprido | 23 prazos no banco. Geração automática por IA — código validado, crédito reposto 07/07. |
+| **Sugerir oportunidades por IA** | ✅ Desbloqueado 07/07 | Pipeline testado até a chamada da Anthropic; crédito reposto, pronto pra gerar de verdade nos 40 amanhã. |
+| **Ler os autos com IA** | ✅ Desbloqueado 07/07 | Mesmo motivo — crédito reposto. |
+| **Gerar minutas (peças)** | ✅ Desbloqueado 07/07 | Idem. |
 | **Fila de trabalho priorizada** | ✅ Cumprido | Dashboard mostra fila prioritária, prazos vencidos, reviews. |
 | **Pedir os autos quando faltam** | ✅ Cumprido | Casos sem autos criam tarefa "Anexar autos" automática. |
 
-**Resumo honesto:** a **espinha dorsal está de pé e testada** (descoberta,
-monitoramento, intimações, organização). Tudo que depende de **inteligência
-artificial** (análise de autos, oportunidades, prazos automáticos, minutas)
-está **pronto no código, mas parado por falta de crédito na Anthropic** —
-não é bug, é saldo. Coloque crédito e essa metade acende.
+**Resumo honesto:** a **espinha dorsal está de pé e testada** (cadastro curado,
+monitoramento por CNJ, intimações, organização). A camada de IA (análise de
+autos, oportunidades, prazos automáticos, minutas) estava bloqueada por saldo
+zerado — **resolvido em 07/07/2026** com a recarga da Anthropic. Fique de
+olho no saldo se for analisar os 40 de uma vez (ver seção 7.2).
 
 ---
 
@@ -363,14 +365,15 @@ não é bug, é saldo. Coloque crédito e essa metade acende.
 
 Sendo 100% sincero com você:
 
-1. **Créditos Anthropic zerados** → metade do valor (a IA) está desligada até você pôr saldo.
+1. ~~Créditos Anthropic zerados~~ → **Resolvido 07/07**: recarregado US$5. Fique de olho se analisar os 40 de uma vez (pode esgotar de novo, ver 7.2).
 2. **Storage local em produção** → risco de perder autos num reinício. Precisa migrar pra S3/R2.
 3. **Motor de cálculo de pena (LEP) é um esboço** → hoje quem calcula é a IA (propõe, você confirma), não uma fórmula fechada. Funciona, mas não é determinístico.
 4. **Segredo de justiça** → processos sigilosos **não aparecem** nas fontes públicas (InfoSimples/DJEN). Para esses, a movimentação só entra pelos autos que você subir. **Implementado 07/07**: quando a InfoSimples não localiza o CNJ cadastrado, o caso fica marcado `sealed` — sinal automático de "confira o número ou é sigiloso".
-5. **301 casos com monitoramento em "conferência manual"** → efeito do bug do Jusbrasil que **já rodou** antes da correção. A correção impede que aconteça de novo, mas os 301 registros existentes ficaram com esse status. Quando você mandar a lista dos 40 curados, a gente resolve isso (arquivando os que não são seus).
+5. **301 casos com monitoramento em "conferência manual"** → efeito do bug do Jusbrasil que **já rodou** antes da correção. A correção impede que aconteça de novo, mas os 301 registros existentes ficaram com esse status. Quando você mandar a lista dos 40 curados, a gente resolve isso (excluindo os que não são seus, como combinado).
 6. **Notificação só no painel** → sem SMTP ligado, nada chega no e-mail. Decisão sua, mas registre que é assim.
 7. **Sino in-app é stub** → não tem notificação dentro do app ainda.
 8. **`playwright` sobrando** → biblioteca de robô antigo ainda listada, não usada. Limpeza pendente (não atrapalha).
+9. **Parâmetro `processo` da InfoSimples é não confiável** (achado 07/07, testado ao vivo) → retorna processo errado de forma consistente. O sistema NÃO usa mais esse parâmetro — busca por OAB com filtro local em vez disso (mais lento por caso individual, mas comprovadamente correto).
 9. **Descoberta automática por OAB desligada (decisão 07/07)** → o sistema não procura mais processo novo sozinho. Cadastro é sempre manual (você informa nome/matrícula/CNJ) — a partir daí a InfoSimples e o DJEN passam a monitorar aquele processo específico. Código da descoberta ampla continua no repositório, desligado por padrão (`INFOSIMPLES_OAB_DISCOVERY_ENABLED=true` religa se você mudar de ideia).
 
 ---
@@ -381,7 +384,7 @@ Você perguntou: *"o que mais precisaria para uma super revisão de funcionament
 gastos, manutenção, uso, controle?"*. Aqui está a lista do que ainda seria bom ter,
 em ordem de prioridade:
 
-1. **Colocar crédito na Anthropic** — é o desbloqueio nº 1. Sem isso, metade do sistema está dormindo.
+1. ~~Colocar crédito na Anthropic~~ — **feito 07/07**. Acompanhe o saldo se for analisar muitos autos de uma vez.
 2. **Migrar o storage para S3/R2** — para os autos não correrem risco de sumir.
 3. **Rotacionar a senha do Supabase** e **decidir sobre o repo público** (item 8).
 4. **Um "ambiente de teste" separado** — hoje o site local aponta para o **banco de produção** (o mesmo do sistema real). Isso é perigoso: um teste pode alterar dados reais. O ideal seria um segundo banco Supabase só para testes.
