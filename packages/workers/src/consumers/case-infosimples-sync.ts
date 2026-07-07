@@ -222,10 +222,15 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
   }
 
   const curatedCases = await db
-    .select({ cnj: executionCases.executionProcessNumber })
+    .select({ id: executionCases.id, cnj: executionCases.executionProcessNumber })
     .from(executionCases)
     .where(and(eq(executionCases.status, 'active'), isNotNull(executionCases.executionProcessNumber)))
-  const curatedDigits = new Set(curatedCases.map((c) => (c.cnj ?? '').replace(/\D/g, '')).filter(Boolean))
+  const idByDigits = new Map<string, string>()
+  for (const c of curatedCases) {
+    const digits = (c.cnj ?? '').replace(/\D/g, '')
+    if (digits) idByDigits.set(digits, c.id)
+  }
+  const curatedDigits = new Set(idByDigits.keys())
   result.casesCurated = curatedDigits.size
 
   if (curatedDigits.size === 0) {
@@ -266,6 +271,13 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
           const pushed = await pushProcessMovements(internal, proc.processo, proc)
           result.found++
           result.movementsFound += pushed.movementsFound
+          const caseId = idByDigits.get(digits)
+          if (caseId) {
+            await db
+              .update(executionCases)
+              .set({ monitoringStatus: 'monitored', lastSyncedAt: new Date() })
+              .where(eq(executionCases.id, caseId))
+          }
         }
 
         page++
@@ -274,6 +286,22 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
     }
 
     result.notFound = curatedDigits.size - foundThisRun.size
+
+    // Não encontrado nesta passada: fica 'manual_review' (neutro), NÃO 'sealed' —
+    // uma varredura por OAB não é evidência forte de segredo de justiça (pode só
+    // estar fora das páginas buscadas, ou muito recente pra estar indexado). O
+    // sinal 'sealed' fica reservado pra busca individual por CNJ (crawler-sync.ts),
+    // que é uma evidência mais direta.
+    for (const digits of curatedDigits) {
+      if (foundThisRun.has(digits)) continue
+      const caseId = idByDigits.get(digits)
+      if (caseId) {
+        await db
+          .update(executionCases)
+          .set({ lastSyncedAt: new Date() })
+          .where(eq(executionCases.id, caseId))
+      }
+    }
 
     console.info(
       `[case-infosimples-sync] ${result.casesCurated} caso(s) curado(s), ${result.pagesFetched} pág. ` +
