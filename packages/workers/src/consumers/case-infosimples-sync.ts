@@ -34,7 +34,12 @@ import {
 } from '../integrations/internal-api-client.ts'
 import { createHash } from 'node:crypto'
 
-const THROTTLE_MS = 800
+// Ritmo conservador entre consultas — contas InfoSimples (sobretudo em saldo
+// promocional/teste) podem ter limite de requisições por minuto para
+// consultas de tribunal (captcha-heavy, ~5 req/min segundo relato do Miguel,
+// não confirmado na documentação oficial). 20s entre chamadas (3/min) fica
+// bem abaixo desse teto — 40 casos levam ~13min na rodada, sem pressa.
+export const INFOSIMPLES_THROTTLE_MS = 20_000
 
 export type CaseInfosimplesSyncResult = {
   found: boolean
@@ -169,7 +174,7 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
       result.found++
       result.movementsFound += r.movementsFound
     }
-    await new Promise((res) => setTimeout(res, THROTTLE_MS))
+    await new Promise((res) => setTimeout(res, INFOSIMPLES_THROTTLE_MS))
   }
 
   console.info(
