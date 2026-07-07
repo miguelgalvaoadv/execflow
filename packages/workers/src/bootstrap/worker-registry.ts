@@ -245,13 +245,17 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
     console.info('[worker-registry] DataJud case-sync NÃO agendado (opt-in; InfoSimples é a fonte de movimentação). Inventário DataJud segue ativo.')
   }
 
-  // DJEN → intimações oficiais por OAB (grátis, sem CNPJ). 08:00 e 20:00 UTC.
+  // DJEN → intimações oficiais por OAB (grátis, sem CNPJ). 1x/dia, 08:00 UTC.
+  // Via caderno diário (não mais o endpoint filtrado por OAB, bloqueado por
+  // WAF anti-bot desde ~06/07/2026) — baixa o Diário do dia e filtra local,
+  // então rodar 2x/dia só dobraria o download sem trazer dado novo (o
+  // conteúdo de um dia já "Processado" não muda).
   const { runDjenSync } = await import('../consumers/djen-sync.ts')
   await boss.work(QUEUE_DJEN_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
     await runDjenSync(db)
   })
-  await boss.schedule(QUEUE_DJEN_SYNC, '0 8,20 * * *', {})
-  console.info('[worker-registry] DJEN intimações sync registered (2x/dia)')
+  await boss.schedule(QUEUE_DJEN_SYNC, '0 8 * * *', {})
+  console.info('[worker-registry] DJEN intimações sync registered (diário 08:00 UTC, via caderno)')
 
   // InfoSimples → descoberta+monitoramento por OAB (TJSP e-SAJ). PAGO (R$0,20/pág).
   // 1x/dia, 07:00 UTC (~04:00 Brasília). Custo estimado ~R$72/mês (296 processos,

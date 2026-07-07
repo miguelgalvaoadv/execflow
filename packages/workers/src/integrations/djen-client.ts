@@ -8,6 +8,14 @@
  * Verificado ao vivo (03/07/2026): GET /api/v1/comunicacao?numeroOab&ufOab
  * → 200, sem chave. Campos úteis: numero_processo, tipoComunicacao,
  * data_disponibilizacao (termo do prazo!), texto (HTML), hash (dedup), link.
+ *
+ * BLOQUEADO desde ~06/07/2026: proteção anti-bot (WAF na frente do CloudFront)
+ * passou a barrar este endpoint filtrado por OAB — testado de 3 redes
+ * diferentes (residencial BR, datacenter Render, infra Anthropic), todas
+ * bloqueadas (403 ou travamento em renegociação TLS). O sync em produção usa
+ * `djen-caderno-client.ts` (baixa o Diário do dia inteiro e filtra local, sem
+ * bloqueio). `fetchDjenIntimacoes` fica aqui só de referência/fallback manual
+ * — não é mais chamada por nenhum consumer.
  */
 
 import { setDefaultResultOrder } from 'node:dns'

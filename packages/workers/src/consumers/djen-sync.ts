@@ -5,24 +5,32 @@
  *
  * Fonte das OABs: os perfis cadastrados em oab_profiles (tela Inventário) +
  * fallback DJEN_OABS no .env. Grátis, sem CNPJ, sem chave.
+ *
+ * MUDANÇA 06/07/2026: o endpoint filtrado por OAB (`/api/v1/comunicacao`) passou
+ * a ser bloqueado por proteção anti-bot (testado de 3 redes diferentes — todas
+ * bloqueadas). Trocado pelo endpoint de CADERNO diário (`/api/v1/caderno`), que
+ * baixa o Diário do dia inteiro (ZIP) e filtra localmente pelas OABs — mais
+ * pesado, mas funciona (testado ao vivo com resultados reais). Roda 1x/dia,
+ * olhando os últimos DJEN_CADERNO_LOOKBACK_DAYS dias (padrão 3, cobre atraso de
+ * processamento do CNJ) — dedup por hash evita reprocessar.
  */
 
 import { eq } from 'drizzle-orm'
 import { oabProfiles, integrationConnectors } from '@execflow/db/schema'
 import type { WorkersDb } from '../lib/db.ts'
-import {
-  fetchDjenIntimacoes,
-  parseDjenOabsFromEnv,
-  isDjenEnabled,
-  type DjenOab,
-} from '../integrations/djen-client.ts'
+import { parseDjenOabsFromEnv, isDjenEnabled, type DjenOab } from '../integrations/djen-client.ts'
+import { fetchCadernoIntimacoes } from '../integrations/djen-caderno-client.ts'
 import {
   createInternalApiConfig,
   pushCaseMovements,
   type InternalMovementItem,
 } from '../integrations/internal-api-client.ts'
 
-const THROTTLE_MS = 500
+const LOOKBACK_DAYS = Number(process.env['DJEN_CADERNO_LOOKBACK_DAYS'] ?? '3') || 3
+const TRIBUNAIS = (process.env['DJEN_CADERNO_TRIBUNAIS'] ?? 'TJSP')
+  .split(',')
+  .map((s) => s.trim().toUpperCase())
+  .filter(Boolean)
 
 export type DjenSyncResult = {
   oabsQueried: number
@@ -82,51 +90,66 @@ export async function runDjenSync(db: WorkersDb): Promise<DjenSyncResult> {
     return result
   }
 
+  result.oabsQueried = oabs.length
+
   try {
-    for (const oab of oabs) {
-      result.oabsQueried++
-      const q = await fetchDjenIntimacoes(oab, { days: 7, maxItems: 100 })
-      await new Promise((r) => setTimeout(r, THROTTLE_MS))
-      if (q.networkError) {
-        result.networkErrors++
-        continue
-      }
-      result.intimacoesFound += q.intimacoes.length
+    // Um caderno cobre TODAS as OABs de uma vez (filtro é local, não no servidor).
+    const byCnj = new Map<string, { tipoComunicacao: string; texto: string; occurredAt: string; hash: string; link: string | null }[]>()
+    const seenHash = new Set<string>()
+    let anyOk = false
 
-      // Agrupa por processo (uma chamada de reanálise por CNJ)
-      const byCnj = new Map<string, typeof q.intimacoes>()
-      for (const it of q.intimacoes) {
-        const arr = byCnj.get(it.processNumber) ?? []
-        arr.push(it)
-        byCnj.set(it.processNumber, arr)
-      }
-
-      for (const [cnj, intimacoes] of byCnj) {
-        const movements: InternalMovementItem[] = intimacoes.map((it) => ({
-          tipo: it.tipoComunicacao,
-          conteudo: it.texto,
-          occurredAt: it.dataDisponibilizacao.toISOString(),
-          source: 'djen',
-          kind: 'intimacao',
-          dedupKey: `djen:${it.hash}`,
-          link: it.link,
-        }))
-        const ingest = await pushCaseMovements(internal, cnj, movements)
-        if (ingest.matched && ingest.processed > 0) {
-          result.matchedCases++
-          result.opportunitiesCreated += ingest.opportunitiesCreated
-          if (ingest.markedStale) result.markedStale++
+    for (const tribunal of TRIBUNAIS) {
+      for (let i = 0; i < LOOKBACK_DAYS; i++) {
+        const date = new Date(Date.now() - (i + 1) * 86_400_000) // ontem, anteontem, ...
+        const q = await fetchCadernoIntimacoes(tribunal, date, oabs)
+        if (q.networkError) {
+          result.networkErrors++
+          continue
         }
-        result.orphans += ingest.orphaned
+        if (q.notReady) continue
+        anyOk = true
+        for (const it of q.intimacoes) {
+          if (seenHash.has(it.hash)) continue
+          seenHash.add(it.hash)
+          result.intimacoesFound++
+          const arr = byCnj.get(it.processNumber) ?? []
+          arr.push({
+            tipoComunicacao: it.tipoComunicacao,
+            texto: it.texto,
+            occurredAt: it.dataDisponibilizacao.toISOString(),
+            hash: it.hash,
+            link: it.link,
+          })
+          byCnj.set(it.processNumber, arr)
+        }
       }
     }
 
-    if (result.networkErrors > 0 && result.intimacoesFound === 0) {
+    for (const [cnj, intimacoes] of byCnj) {
+      const movements: InternalMovementItem[] = intimacoes.map((it) => ({
+        tipo: it.tipoComunicacao,
+        conteudo: it.texto,
+        occurredAt: it.occurredAt,
+        source: 'djen',
+        kind: 'intimacao',
+        dedupKey: `djen:${it.hash}`,
+        link: it.link,
+      }))
+      const ingest = await pushCaseMovements(internal, cnj, movements)
+      if (ingest.matched && ingest.processed > 0) {
+        result.matchedCases++
+        result.opportunitiesCreated += ingest.opportunitiesCreated
+        if (ingest.markedStale) result.markedStale++
+      }
+      result.orphans += ingest.orphaned
+    }
+
+    if (!anyOk && result.networkErrors > 0) {
       result.error = `DJEN inacessível (${result.networkErrors} falha(s) de rede)`
     }
 
     console.info(
-      `[djen-sync] ${result.error ? '⚠️' : '✅'} ${result.oabsQueried} OAB(s), ` +
+      `[djen-sync] ${result.error ? '⚠️' : '✅'} ${result.oabsQueried} OAB(s), ${TRIBUNAIS.join(',')}, ` +
         `${result.intimacoesFound} intimação(ões), ${result.matchedCases} caso(s) atualizado(s), ` +
         `${result.orphans} órfã(s) p/ triagem, ${result.markedStale} "precisa de autos".`
     )

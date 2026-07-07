@@ -292,6 +292,9 @@ importers:
       xlsx:
         specifier: ^0.18.5
         version: 0.18.5
+      yauzl:
+        specifier: ^3.2.0
+        version: 3.4.0
     devDependencies:
       '@types/mailparser':
         specifier: ^3.4.5
@@ -302,6 +305,9 @@ importers:
       '@types/pg':
         specifier: ^8.11.10
         version: 8.20.0
+      '@types/yauzl':
+        specifier: ^2.10.3
+        version: 2.10.3
       pg:
         specifier: ^8.13.1
         version: 8.20.0
@@ -1673,6 +1679,9 @@ packages:
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
+  '@types/yauzl@2.10.3':
+    resolution: {integrity: sha512-oJoftv0LSuaDZE3Le4DbKX+KS9G36NzOeSap90UIK0yMA/NhKJhqlSGtNDORNRaIbQfzjXDrQa0ytJ6mNRGz/Q==}
 
   '@typescript-eslint/eslint-plugin@8.59.3':
     resolution: {integrity: sha512-PwFvSKsXGShKGW6n5bZOhGHEcCZXM8HofLK9fNsEwZXzFRjoY+XT1Vsf1zgyXdwTr0ZYz1/2tkZ0DBTT9jZjhw==}
@@ -3156,6 +3165,9 @@ packages:
   peberminta@0.10.0:
     resolution: {integrity: sha512-80B2AsU+I4Qdb0ZAPSfe9UwvGzwkM37IKIFEvdS3D/3Ndgv2bsuJ0bfG1+iEYO+l7Gfd4EUJmuRyq7efLgRMzQ==}
 
+  pend@1.2.0:
+    resolution: {integrity: sha512-F3asv42UuXchdzt+xXqfW1OGlVBe+mxa2mqI0pg5yAHZPvFmY3Y6drSf/GQ1A86WgWEN9Kzh/WrgKa6iGcHXLg==}
+
   pg-boss@12.18.2:
     resolution: {integrity: sha512-06kXeWvVWY+BUNsOt2me1okg6NXx2DBnAQHTurA9jtrvbAO9qUOSE3/0ERERQDrokI+FREFM2Twha+JbrFT/8Q==}
     engines: {node: '>=22.12.0'}
@@ -3735,6 +3747,10 @@ packages:
 
   yallist@3.1.1:
     resolution: {integrity: sha512-a4UGQaWPH59mOXUYnAG2ewncQS4i4F43Tv3JoAM+s2VDAmS9NsK8GpDMLrCHPksFT7h3K6TOoUNn2pb7RoXx4g==}
+
+  yauzl@3.4.0:
+    resolution: {integrity: sha512-jIH9yLR9wqr0wOS0TpBvo/g/2UgZH5qePVbjgRliiF0BYvOZyaBknKsF+x9Iht0O6sqgnB93rCICdOZFecJuDw==}
+    engines: {node: '>=12'}
 
   yocto-queue@0.1.0:
     resolution: {integrity: sha512-rVksvsnNCdJ/ohGc6xgPwyN8eheCxsiLM8mxuE/t/mOVqJewPuO1miLpTHQiRgTKCLexL4MeAFVagts7HmNZ2Q==}
@@ -4968,6 +4984,10 @@ snapshots:
       csstype: 3.2.3
 
   '@types/ws@8.18.1':
+    dependencies:
+      '@types/node': 22.19.19
+
+  '@types/yauzl@2.10.3':
     dependencies:
       '@types/node': 22.19.19
 
@@ -6559,6 +6579,8 @@ snapshots:
 
   peberminta@0.10.0: {}
 
+  pend@1.2.0: {}
+
   pg-boss@12.18.2:
     dependencies:
       cron-parser: 5.5.0
@@ -7243,6 +7265,10 @@ snapshots:
   xtend@4.0.2: {}
 
   yallist@3.1.1: {}
+
+  yauzl@3.4.0:
+    dependencies:
+      pend: 1.2.0
 
   yocto-queue@0.1.0: {}
 
