@@ -26,9 +26,9 @@ export function DashboardPageHeader({
             {title}
           </h1>
           {description ? (
-            <p className={`mt-1.5 max-w-2xl text-[14px] leading-relaxed ${text.secondary}`}>
+            <div className={`mt-1.5 max-w-2xl text-[14px] leading-relaxed ${text.secondary}`}>
               {description}
-            </p>
+            </div>
           ) : null}
         </div>
         {actions ? <div className="shrink-0">{actions}</div> : null}
