@@ -78,8 +78,11 @@ export async function analyzeAutosForCase(
     throw new Error('Nenhum documento confirmado (autos em PDF) para analisar. Suba os autos primeiro.')
   }
 
-  // Blocos com proteção de limite: PDFs ≤95 pág. vão nativos; maiores vão como
-  // texto OCR recortado (início+fim com numeração); sem OCR → aviso explícito.
+  // Blocos com proteção de limite: PDFs ≤600 pág. vão nativos (limite real da
+  // API Anthropic pra modelos de 1M de contexto); maiores vão como texto OCR
+  // com triagem por relevância via Haiku (barato) — só as páginas prováveis
+  // de conter sentença/cálculo/PAD/etc. chegam ao Sonnet, com cabeça+cauda
+  // sempre incluídas; sem OCR → aviso explícito.
   const { blocks, manifest } = await buildDocumentBlocks(
     autos.map((d: any) => ({
       id: d.id,
