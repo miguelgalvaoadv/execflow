@@ -1103,8 +1103,22 @@ function OportunidadesTab({
 }: OportunidadesTabProps) {
   const isStale = documentFreshnessStatus === 'stale'
   const [selectedOppId, setSelectedOppId] = useState<string | null>(null)
-  const selectedOpp = items.find((opp) => opp.id === selectedOppId)
   const [promptEditorOpp, setPromptEditorOpp] = useState<any>(null)
+
+  // Por padrão só mostra oportunidades ainda acionáveis (suggested/qualified/
+  // pursuing) — sem isso, dismissed/expired/realized de qualquer época
+  // ficavam misturadas com as reais, presentes e futuras (achado 08/07/2026:
+  // "Prazos" já filtrava certo por padrão, "Oportunidades" nunca filtrou).
+  const ACTIVE_OPP_STATUSES = ['suggested', 'qualified', 'pursuing']
+  const [oppStatusFilter, setOppStatusFilter] = useState<string>('active')
+  const filteredOpps = items.filter((opp) =>
+    oppStatusFilter === 'all'
+      ? true
+      : oppStatusFilter === 'active'
+        ? ACTIVE_OPP_STATUSES.includes(opp.status)
+        : opp.status === oppStatusFilter
+  )
+  const selectedOpp = items.find((opp) => opp.id === selectedOppId)
 
   // Fetch reviews for selected opportunity
   const { data: reviewsData, isLoading: isLoadingReviews } = useOpportunityReviews(
@@ -1206,24 +1220,48 @@ function OportunidadesTab({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       {/* Left side: Opportunities List */}
       <div className={`${selectedOppId ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-2`}>
-        <div className="flex justify-between items-center mb-3">
-          <p className={`text-[12px] ${text.faint}`}>
-            {items.length} {items.length === 1 ? 'oportunidade' : 'oportunidades'} detectada{items.length === 1 ? '' : 's'}
+        <div className="flex justify-between items-center mb-3 gap-3">
+          <p className={`text-[12px] ${text.faint} shrink-0`}>
+            {filteredOpps.length} {filteredOpps.length === 1 ? 'oportunidade' : 'oportunidades'}
+            {oppStatusFilter === 'active' && items.length !== filteredOpps.length
+              ? ` (${items.length - filteredOpps.length} encerrada(s) oculta(s))`
+              : ''}
           </p>
-          {selectedOppId && (
-            <button
-              onClick={() => {
-                setSelectedOppId(null)
-                setActionForm(null)
-              }}
-              className="text-[12px] text-slate-600 hover:text-slate-900 underline cursor-pointer"
+          <div className="flex items-center gap-3">
+            <select
+              value={oppStatusFilter}
+              onChange={(e) => setOppStatusFilter(e.target.value)}
+              className="text-[12px] border border-slate-200 rounded px-2 py-1 bg-white text-slate-700"
             >
-              Limpar seleção
-            </button>
-          )}
+              <option value="active">Ativas (sugeridas/qualificadas/em curso)</option>
+              <option value="all">Todas (inclui encerradas)</option>
+              <option value="suggested">Sugeridas</option>
+              <option value="qualified">Qualificadas</option>
+              <option value="pursuing">Em curso</option>
+              <option value="realized">Realizadas</option>
+              <option value="dismissed">Descartadas</option>
+              <option value="expired">Expiradas</option>
+            </select>
+            {selectedOppId && (
+              <button
+                onClick={() => {
+                  setSelectedOppId(null)
+                  setActionForm(null)
+                }}
+                className="text-[12px] text-slate-600 hover:text-slate-900 underline cursor-pointer"
+              >
+                Limpar seleção
+              </button>
+            )}
+          </div>
         </div>
+        {filteredOpps.length === 0 && (
+          <p className={`text-[13px] ${text.faint} py-4 text-center`}>
+            Nenhuma oportunidade ativa no momento. {items.length > 0 ? 'Veja "Todas" para o histórico.' : ''}
+          </p>
+        )}
         <ul className="space-y-2" aria-label="Oportunidades">
-          {items.map((opp) => {
+          {filteredOpps.map((opp) => {
             const isSelected = opp.id === selectedOppId
             return (
               <li key={opp.id}>
