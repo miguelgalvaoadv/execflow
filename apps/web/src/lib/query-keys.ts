@@ -68,6 +68,7 @@ export const queryKeys = {
       ? (['clients', orgId, filters] as const)
       : (['clients', orgId] as const),
   client: (orgId: string, clientId: string) => ['clients', orgId, clientId] as const,
+  clientNotes: (orgId: string, clientId: string) => ['clients', orgId, clientId, 'notes'] as const,
 
   // Documents
   documents: (

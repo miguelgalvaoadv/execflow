@@ -27,6 +27,7 @@ import { cors } from 'hono/cors'
 import { healthRouter } from './routes/health.ts'
 import { authRouter } from './routes/auth.ts'
 import { clientsRouter } from './routes/clients.ts'
+import { clientNotesRouter } from './routes/client-notes.ts'
 import { casesRouter } from './routes/cases.ts'
 import { intakeRouter } from './routes/intake.ts'
 import { documentsRouter } from './routes/documents.ts'
@@ -130,6 +131,7 @@ app.route('/api', authRouter)
 // -------------------------------------------------------------------------
 
 app.route('/api/v1/clients', clientsRouter)
+app.route('/api/v1/clients', clientNotesRouter)
 app.route('/api/v1/cases', casesRouter)
 app.route('/api/v1/intake', intakeRouter)
 app.route('/api/v1/documents', documentsRouter)

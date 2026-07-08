@@ -12,6 +12,13 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { useSession } from '@/lib/hooks/use-session'
 import { useClient } from '@/lib/hooks/use-client'
+import {
+  useClientNotes,
+  useCreateClientNote,
+  useUpdateClientNote,
+  useDeleteClientNote,
+  type ClientNote,
+} from '@/lib/hooks/use-client-notes'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { EditClientModal } from '@/components/modals/EditClientModal'
 import {
@@ -21,7 +28,7 @@ import {
   ProfileSection,
   Button,
 } from '@/components/ui'
-import { text } from '@/components/dashboard/surfaces'
+import { text, borders } from '@/components/dashboard/surfaces'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Ativo',
@@ -46,6 +53,143 @@ function formatDateTime(iso: string): string {
     hour: '2-digit',
     minute: '2-digit',
   }).format(new Date(iso))
+}
+
+/* ─── Bloquinho de observações — notas separadas, editáveis/excluíveis pelo autor ─── */
+
+function ClientNotesSection({
+  organizationId,
+  clientId,
+  currentUserId,
+}: {
+  organizationId: string
+  clientId: string
+  currentUserId: string
+}) {
+  const notesQuery = useClientNotes(organizationId, clientId)
+  const createMutation = useCreateClientNote(organizationId, clientId)
+  const updateMutation = useUpdateClientNote(organizationId, clientId)
+  const deleteMutation = useDeleteClientNote(organizationId, clientId)
+
+  const [newBody, setNewBody] = useState('')
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingBody, setEditingBody] = useState('')
+
+  const handleAdd = async (e: React.FormEvent) => {
+    e.preventDefault()
+    const trimmed = newBody.trim()
+    if (trimmed === '') return
+    await createMutation.mutateAsync(trimmed)
+    setNewBody('')
+  }
+
+  const startEdit = (note: ClientNote) => {
+    setEditingId(note.id)
+    setEditingBody(note.body)
+  }
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditingBody('')
+  }
+  const saveEdit = async (noteId: string) => {
+    const trimmed = editingBody.trim()
+    if (trimmed === '') return
+    await updateMutation.mutateAsync({ noteId, body: trimmed })
+    setEditingId(null)
+  }
+  const handleDelete = async (noteId: string) => {
+    if (!window.confirm('Excluir esta observação? Essa ação não pode ser desfeita.')) return
+    await deleteMutation.mutateAsync(noteId)
+  }
+
+  const notes = notesQuery.data?.data ?? []
+  const textareaClass = `w-full rounded border ${borders.default} p-2 text-[13px] leading-relaxed focus:outline-none focus:border-blue-600`
+
+  return (
+    <ProfileSection title="Observações">
+      <form onSubmit={(e) => void handleAdd(e)} className="mb-3 space-y-2">
+        <textarea
+          value={newBody}
+          onChange={(e) => setNewBody(e.target.value)}
+          placeholder="Escreva uma observação para lembrar depois…"
+          rows={3}
+          maxLength={5000}
+          className={textareaClass}
+        />
+        <Button
+          type="submit"
+          variant="secondary"
+          disabled={newBody.trim() === '' || createMutation.isPending}
+        >
+          {createMutation.isPending ? 'Salvando…' : '+ Adicionar observação'}
+        </Button>
+      </form>
+
+      {notesQuery.isLoading ? (
+        <p className={`text-[12px] ${text.faint}`}>Carregando observações…</p>
+      ) : notes.length === 0 ? (
+        <p className={`text-[12px] ${text.faint}`}>Nenhuma observação ainda.</p>
+      ) : (
+        <ul className="space-y-2">
+          {notes.map((note) => (
+            <li key={note.id} className={`rounded border ${borders.subtle} bg-slate-50 p-2.5`}>
+              {editingId === note.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editingBody}
+                    onChange={(e) => setEditingBody(e.target.value)}
+                    rows={3}
+                    maxLength={5000}
+                    className={textareaClass}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => void saveEdit(note.id)}
+                      disabled={editingBody.trim() === '' || updateMutation.isPending}
+                    >
+                      {updateMutation.isPending ? 'Salvando…' : 'Salvar'}
+                    </Button>
+                    <Button variant="ghost" onClick={cancelEdit}>
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <p className={`text-[13px] ${text.secondary} whitespace-pre-wrap`}>{note.body}</p>
+                  <div className="mt-1.5 flex items-center justify-between gap-2">
+                    <span className={`text-[11px] ${text.faint}`}>
+                      {formatDateTime(note.createdAt)}
+                      {note.updatedAt !== note.createdAt ? ' (editada)' : ''}
+                    </span>
+                    {note.createdByUserId === currentUserId && (
+                      <div className="flex shrink-0 gap-3">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(note)}
+                          className="text-[11px] font-medium text-blue-600 hover:underline"
+                        >
+                          Editar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleDelete(note.id)}
+                          className="text-[11px] font-medium text-red-600 hover:underline"
+                        >
+                          Excluir
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </ProfileSection>
+  )
 }
 
 export default function ClientProfilePage() {
@@ -129,9 +273,13 @@ export default function ClientProfilePage() {
             </ProfileSection>
 
             {client.notes !== null && client.notes.trim() !== '' && (
-              <ProfileSection title="Notas">
+              <ProfileSection title="Notas (cadastro)">
                 <p className={`text-[13px] ${text.secondary} whitespace-pre-wrap`}>{client.notes}</p>
               </ProfileSection>
+            )}
+
+            {session !== null && session !== undefined && (
+              <ClientNotesSection organizationId={orgId} clientId={clientId} currentUserId={session.user.id} />
             )}
 
             {client.responsibleLawyerUserId !== null && (

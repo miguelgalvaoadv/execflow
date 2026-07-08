@@ -122,11 +122,13 @@ export { caseParties } from './case-party.ts'
 export { courtCommunications } from './court-communication.ts'
 export { integrationConnectors } from './integration-connector.ts'
 export { aiInteractionLogs } from './ai-interaction-log.ts'
+export { clientNotes } from './client-note.ts'
 export type { OabProfile, NewOabProfile, InventoryItem, NewInventoryItem } from './oab-inventory.ts'
 export type { CaseParty, NewCaseParty } from './case-party.ts'
 export type { CourtCommunication, NewCourtCommunication } from './court-communication.ts'
 export type { IntegrationConnector, NewIntegrationConnector } from './integration-connector.ts'
 export type { AiInteractionLog, NewAiInteractionLog } from './ai-interaction-log.ts'
+export type { ClientNote, NewClientNote } from './client-note.ts'
 
 // Re-export inferred types — Phase 1
 export type { Organization, NewOrganization } from './organization.ts'

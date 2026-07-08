@@ -139,6 +139,11 @@ export async function listCaseTimeline(
     limit: params.limit,
     ...(params.cursor !== undefined ? { cursor: params.cursor } : {}),
     visibilityFilter: timelineVisibilityForRole(role),
+    // A aba "Movimentações" é só pra movimentação de processo de verdade
+    // (InfoSimples/DJEN/DataJud, ou lançamento manual a partir dos autos em
+    // segredo de justiça) — nunca ruído de sistema (documento anexado,
+    // monitoramento criado, etc.), que tem seção própria (Documentos).
+    eventCategoryFilter: ['court'],
   })
 
   if (!result.success) {

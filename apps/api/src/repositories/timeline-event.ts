@@ -20,8 +20,10 @@
  */
 
 import { eq, and, asc, lt, inArray } from 'drizzle-orm'
-import { timelineEvents } from '@execflow/db/schema'
+import { timelineEvents, timelineEventCategoryEnum } from '@execflow/db/schema'
 import type { TimelineEvent, NewTimelineEvent } from '@execflow/db/schema'
+
+type TimelineEventCategory = (typeof timelineEventCategoryEnum.enumValues)[number]
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
 import type { RepositoryResult, PaginatedResult, PaginationParams } from '@execflow/db/repositories'
 
@@ -40,7 +42,10 @@ export async function queryTimelineEvents(
   db: AnyTx,
   organizationId: string,
   executionCaseId: string,
-  params: PaginationParams & { visibilityFilter?: Array<'legal' | 'internal' | 'both'> }
+  params: PaginationParams & {
+    visibilityFilter?: Array<'legal' | 'internal' | 'both'>
+    eventCategoryFilter?: TimelineEventCategory[]
+  }
 ): Promise<RepositoryResult<PaginatedResult<TimelineEvent>>> {
   try {
     const limit = Math.min(params.limit ?? 50, 200)
@@ -50,6 +55,11 @@ export async function queryTimelineEvents(
         ? inArray(timelineEvents.visibility, params.visibilityFilter)
         : undefined
 
+    const categoryCondition =
+      params.eventCategoryFilter !== undefined && params.eventCategoryFilter.length > 0
+        ? inArray(timelineEvents.eventCategory, params.eventCategoryFilter)
+        : undefined
+
     const rows = await db.query.timelineEvents.findMany({
       where: and(
         eq(timelineEvents.organizationId, organizationId),
@@ -57,7 +67,8 @@ export async function queryTimelineEvents(
         params.cursor
           ? lt(timelineEvents.occurredAt, new Date(params.cursor))
           : undefined,
-        visibilityCondition
+        visibilityCondition,
+        categoryCondition
       ),
       orderBy: [asc(timelineEvents.occurredAt)],
       limit: limit + 1, // fetch one extra to determine if there's a next page
