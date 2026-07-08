@@ -140,6 +140,28 @@ crawlersRouter.post('/:caseId/analyze', async (c) => {
   const caseId = c.req.param('caseId')
   const { organization, domainUserId } = c.get('org')
 
+  // Guarda contra duplo-clique / múltiplas abas: cada chamada ao Claude
+  // custa ~US$0,05-1,10 dependendo do tamanho dos autos (autos grandes,
+  // ~600 pág., passam de US$1). Sem essa checagem, dois cliques disparavam
+  // duas análises completas e pagas em paralelo pro MESMO caso — achado
+  // 08/07/2026 vasculhando ai_interaction_logs: 4 análises do mesmo caso em
+  // 33 min (uma delas com só 16s de intervalo) consumiram ~US$4,27 sozinhas.
+  const [existingRun] = await db
+    .select()
+    .from(caseAnalysisRuns)
+    .where(
+      and(
+        eq(caseAnalysisRuns.executionCaseId, caseId),
+        eq(caseAnalysisRuns.organizationId, organization.id)
+      )
+    )
+    .orderBy(desc(caseAnalysisRuns.createdAt))
+    .limit(1)
+
+  if (existingRun && (existingRun.status === 'pending' || existingRun.status === 'running')) {
+    return c.json({ data: existingRun }, 202)
+  }
+
   const [run] = await db
     .insert(caseAnalysisRuns)
     .values({
