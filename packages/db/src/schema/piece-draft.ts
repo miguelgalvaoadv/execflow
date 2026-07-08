@@ -10,7 +10,8 @@ export const pieceDraftStatusEnum = pgEnum('piece_draft_status', [
   'generating',
   'draft',
   'reviewing',
-  'finalized'
+  'finalized',
+  'failed'
 ])
 
 export const pieceDrafts = pgTable(
@@ -30,6 +31,9 @@ export const pieceDrafts = pgTable(
     status: pieceDraftStatusEnum('status').notNull().default('generating'),
 
     contentMarkdown: text('content_markdown'),
+
+    /** Preenchido quando status='failed' (ex.: erro da API do Claude). */
+    errorMessage: text('error_message'),
     
     // Model used for generation, e.g. "claude-3-5-sonnet"
     modelUsed: text('model_used'),

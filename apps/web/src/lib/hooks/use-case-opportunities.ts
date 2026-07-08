@@ -167,6 +167,7 @@ export type PieceDraftItem = {
   opportunityId: string
   status: string
   contentMarkdown: string | null
+  errorMessage: string | null
   modelUsed: string | null
   createdAt: string
   updatedAt: string
@@ -234,6 +235,10 @@ export function usePieceDraft(
         signal,
       }),
     staleTime: 0, // Drafts update often
+    // Geração roda em segundo plano (proxy corta chamadas longas ao Claude)
+    // — enquanto 'generating', repolla a cada 2s pra pegar o resultado (ou
+    // 'failed') sem o advogado precisar recarregar a página.
+    refetchInterval: (query) => (query.state.data?.status === 'generating' ? 2000 : false),
     enabled: organizationId !== '' && !!draftId && enabled,
   })
 }

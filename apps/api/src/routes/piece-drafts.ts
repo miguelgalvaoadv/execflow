@@ -45,7 +45,12 @@ pieceDraftsRouter.get('/by-case/:caseId', async (c) => {
 
 /**
  * POST /api/v1/piece-drafts/generate/:opportunityId
- * Triggers Claude to generate a petition for the given opportunity.
+ * Dispara a geração da peça pelo Claude. ASSÍNCRONO (202 Accepted): a
+ * chamada ao Claude lê os mesmos PDFs grandes da análise de autos e pode
+ * levar 60-120s+ — segurar a requisição atravessa o proxy do Next.js e
+ * devolve erro ao navegador mesmo com sucesso no backend (mesmo bug já
+ * corrigido em /analyze). O front acompanha via polling em
+ * GET /piece-drafts/:draftId até o status sair de 'generating'.
  */
 pieceDraftsRouter.post(
   '/generate/:opportunityId',
@@ -65,8 +70,8 @@ pieceDraftsRouter.post(
       if (instructions !== undefined) options.instructions = instructions
       if (systemPrompt !== undefined) options.systemPrompt = systemPrompt
       if (userPrompt !== undefined) options.userPrompt = userPrompt
-      const draft = await drafterService.generateDraftForOpportunity(c, oppId, options)
-      return c.json(draft, 201)
+      const draft = await drafterService.startDraftGeneration(c, oppId, options)
+      return c.json({ data: draft }, 202)
     } catch (err: any) {
       if (err instanceof FreshnessGateError) {
         return c.json(

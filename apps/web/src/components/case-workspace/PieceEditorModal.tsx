@@ -30,6 +30,7 @@ export function PieceEditorModal({
   }, [draft])
 
   const isGenerating = draft?.status === 'generating'
+  const isFailed = draft?.status === 'failed'
 
   const handleSave = () => {
     if (!draftId) return
@@ -107,7 +108,7 @@ export function PieceEditorModal({
         </div>
 
         {/* Toolbar */}
-        {!isLoading && !isGenerating && !isError && (
+        {!isLoading && !isGenerating && !isFailed && !isError && (
           <div className="border-b px-6 py-2 flex items-center gap-2 bg-gray-50">
             <button
               onClick={() => setIsPreview(false)}
@@ -150,6 +151,18 @@ export function PieceEditorModal({
               <p className="text-xs text-gray-400">
                 Isso pode levar de 10 a 20 segundos dependendo do tamanho da fundamentação.
               </p>
+            </div>
+          ) : isFailed ? (
+            <div className="flex-1 flex items-center justify-center text-red-500 p-8">
+              <div className="text-center max-w-md">
+                <p className="font-medium">O Claude não conseguiu gerar a peça.</p>
+                <p className="text-sm text-gray-500 mt-2 break-words">
+                  {draft?.errorMessage || 'Erro desconhecido.'}
+                </p>
+                <p className="text-xs text-gray-400 mt-3">
+                  Feche esta janela e tente gerar a peça novamente.
+                </p>
+              </div>
             </div>
           ) : isError ? (
             <div className="flex-1 flex items-center justify-center text-red-500">
@@ -239,7 +252,7 @@ export function PieceEditorModal({
               variant="secondary"
               onClick={handleSave}
               disabled={
-                isLoading || isGenerating || updateDraft.isPending || draft?.status === 'finalized'
+                isLoading || isGenerating || isFailed || updateDraft.isPending || draft?.status === 'finalized'
               }
             >
               <Save className="h-4 w-4 mr-2" />
@@ -249,7 +262,7 @@ export function PieceEditorModal({
               onClick={handleFinalize}
               className="bg-blue-600 hover:bg-blue-700 text-white"
               disabled={
-                isLoading || isGenerating || updateDraft.isPending || draft?.status === 'finalized'
+                isLoading || isGenerating || isFailed || updateDraft.isPending || draft?.status === 'finalized'
               }
             >
               <CheckCircle2 className="h-4 w-4 mr-2" />

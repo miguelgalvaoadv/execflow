@@ -11,7 +11,7 @@ import {
   users,
   documents,
 } from '@execflow/db/schema'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, desc } from 'drizzle-orm'
 import type { HonoContext } from '../context/types.ts'
 import { createStorageProviderFromEnv } from '@execflow/storage'
 
@@ -233,13 +233,23 @@ Regras:
   }
 
   /**
-   * Generates a piece draft for a qualified opportunity.
+   * Inicia a geração de uma peça (fase síncrona e rápida: valida, checa
+   * "freshness gate", cria o registro em `generating`) e dispara a chamada
+   * ao Claude EM SEGUNDO PLANO — não espera a resposta.
    *
-   * `options.systemPrompt` / `options.userPrompt` permitem que o advogado
-   * substitua o prompt completo (edição na tela). Quando ausentes, usa o padrão
-   * de buildPrompts() com as `instructions` adicionais.
+   * Por quê: a chamada ao Claude para gerar peça lê os mesmos PDFs grandes
+   * da análise de autos (buildDocumentBlocks) e pode levar 60-120s+. Segurar
+   * a requisição HTTP até o fim atravessa o proxy do Next.js (rewrites), que
+   * corta a conexão e devolve erro ao navegador mesmo quando o backend
+   * termina com sucesso — o MESMO bug já corrigido em /analyze (achado
+   * 08/07/2026). O front faz polling em GET /piece-drafts/:draftId até o
+   * status sair de 'generating'.
+   *
+   * Também trava duplo-disparo: se já existe uma peça `generating` para essa
+   * MESMA oportunidade, devolve o registro existente em vez de criar (e
+   * cobrar) outra chamada ao Claude em cima da que já está rodando.
    */
-  async generateDraftForOpportunity(
+  async startDraftGeneration(
     ctx: HonoContext,
     opportunityId: string,
     options: { instructions?: string; systemPrompt?: string; userPrompt?: string } = {}
@@ -259,12 +269,19 @@ Regras:
       )
     }
 
-    const freshnessWarning =
-      !execCase.documentFreshnessStatus || execCase.documentFreshnessStatus === 'unknown'
-        ? 'AVISO: Nenhum autos foi carregado para este processo. A petição será gerada sem os autos, baseada apenas nos dados do caso e na oportunidade identificada. Ressalte na peça que os cálculos devem ser verificados com os autos originais.'
-        : null
+    // ── Guarda contra duplo-clique / múltiplas abas gerando a mesma peça.
+    const [existingDraft] = await db
+      .select()
+      .from(pieceDrafts)
+      .where(and(eq(pieceDrafts.opportunityId, opp.id), eq(pieceDrafts.status, 'generating')))
+      .orderBy(desc(pieceDrafts.createdAt))
+      .limit(1)
 
-    // 3. Create Draft Record in generating state
+    if (existingDraft) {
+      return existingDraft
+    }
+
+    // Create Draft Record in generating state
     const [draft] = await db
       .insert(pieceDrafts)
       .values({
@@ -277,7 +294,36 @@ Regras:
       })
       .returning()
 
-    // 4. Prompt: usa o override completo do advogado, ou monta o padrão.
+    if (!draft) {
+      throw new Error('Failed to create draft record.')
+    }
+
+    void this.runGeneration(data, draft.id, options)
+
+    return draft
+  }
+
+  /**
+   * Fase lenta (chamada ao Claude): roda em segundo plano, chamada por
+   * startDraftGeneration(). Nunca lança — sempre atualiza o registro do
+   * draft (sucesso ou 'failed'), pra nunca ficar preso em 'generating' pra
+   * sempre (achado 08/07/2026: antes, um erro do Claude — ex. sem crédito —
+   * deixava a peça travada "gerando" indefinidamente, sem status de falha).
+   */
+  private async runGeneration(
+    data: Awaited<ReturnType<ClaudeDrafterService['loadContext']>>,
+    draftId: string,
+    options: { instructions?: string; systemPrompt?: string; userPrompt?: string }
+  ) {
+    if (!this.client) return
+    const { organizationId, opp, execCase } = data
+
+    const freshnessWarning =
+      !execCase.documentFreshnessStatus || execCase.documentFreshnessStatus === 'unknown'
+        ? 'AVISO: Nenhum autos foi carregado para este processo. A petição será gerada sem os autos, baseada apenas nos dados do caso e na oportunidade identificada. Ressalte na peça que os cálculos devem ser verificados com os autos originais.'
+        : null
+
+    // Prompt: usa o override completo do advogado, ou monta o padrão.
     const defaults = this.buildPrompts(data, options.instructions)
     const systemPrompt = options.systemPrompt?.trim() ? options.systemPrompt : defaults.systemPrompt
     let userPrompt = options.userPrompt?.trim() ? options.userPrompt : defaults.userPrompt
@@ -350,11 +396,7 @@ Regras:
         durationMs: Date.now() - startedAt,
       })
 
-      if (!draft) {
-        throw new Error('Failed to create draft record.')
-      }
-
-      // 6. Update Draft Record
+      // Update Draft Record
       await db
         .update(pieceDrafts)
         .set({
@@ -362,25 +404,18 @@ Regras:
           status: 'draft',
           updatedAt: new Date(),
         })
-        .where(eq(pieceDrafts.id, draft.id))
-        
-      // 7. Update Opportunity to link to this draft
+        .where(eq(pieceDrafts.id, draftId))
+
+      // Update Opportunity to link to this draft
       await db
         .update(opportunities)
         .set({
-          realizedPieceDraftId: draft.id,
-          // If we want to change status to realized we can, but usually we just link it
+          realizedPieceDraftId: draftId,
         })
         .where(eq(opportunities.id, opp.id))
-
-      return {
-        draftId: draft.id,
-        status: 'draft',
-        contentMarkdown: generatedContent,
-        ...(freshnessWarning ? { freshnessWarning } : {}),
-      }
     } catch (err) {
       console.error('Claude API Error:', err)
+      const errorMessage = err instanceof Error ? err.message : String(err)
       void logAiInteraction({
         organizationId,
         agent: 'draft_generator',
@@ -389,11 +424,15 @@ Regras:
         executionCaseId: execCase.id,
         clientId: execCase.clientId,
         status: 'error',
-        errorMessage: err instanceof Error ? err.message : String(err),
+        errorMessage,
         durationMs: Date.now() - startedAt,
       })
-      // Revert or mark failed (though status is already 'generating', could set to failed if we had it)
-      throw new Error('Falha ao comunicar com o Claude API: ' + (err instanceof Error ? err.message : String(err)))
+      // Nunca deixa o registro preso em 'generating' — sem isso, uma falha do
+      // Claude (ex.: sem crédito) fazia a peça "gerar" pra sempre na tela.
+      await db
+        .update(pieceDrafts)
+        .set({ status: 'failed', errorMessage, updatedAt: new Date() })
+        .where(eq(pieceDrafts.id, draftId))
     }
   }
 
