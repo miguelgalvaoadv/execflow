@@ -55,6 +55,7 @@ import {
 import { DashboardPageHeader } from '@/components/dashboard'
 import { CaseTabBar, type CaseTabId } from '@/components/case-workspace/CaseTabBar'
 import { CasePartiesAndSearch } from '@/components/case-workspace/CasePartiesAndSearch'
+import { CaseNotesSection } from '@/components/case-workspace/CaseNotesSection'
 import { PieceEditorModal } from '@/components/case-workspace/PieceEditorModal'
 import { PromptEditorModal, type GeneratePiecePayload } from '@/components/opportunities/PromptEditorModal'
 import { EditCaseModal } from '@/components/modals/EditCaseModal'
@@ -538,6 +539,12 @@ export default function CaseWorkspacePage() {
               {activeTab === 'partes' && (
                 <FadeIn>
                   <CasePartiesAndSearch caseId={caseId} />
+                </FadeIn>
+              )}
+
+              {activeTab === 'observacoes' && (
+                <FadeIn>
+                  <CaseNotesSection caseId={caseId} />
                 </FadeIn>
               )}
             </>

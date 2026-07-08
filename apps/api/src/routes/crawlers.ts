@@ -5,7 +5,7 @@ import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
 import { requireMinRole } from '../middleware/rbac.ts'
 import { db } from '../lib/db.ts'
-import { crawlerSyncLogs, domainEvents } from '@execflow/db/schema'
+import { crawlerSyncLogs, domainEvents, caseAnalysisRuns } from '@execflow/db/schema'
 import { analyzeAutosForCase } from '../services/case-analysis.ts'
 import type { HonoVariables } from '../context/types.ts'
 
@@ -97,19 +97,78 @@ crawlersRouter.post('/:caseId/sync-tribunal', async (c) => {
 })
 
 /**
+ * GET /api/v1/cases/:caseId/analysis-status
+ * Retorna o status da última análise de autos (IA) para este caso.
+ */
+crawlersRouter.get('/:caseId/analysis-status', async (c) => {
+  const caseId = c.req.param('caseId')
+  const { organization } = c.get('org')
+
+  const runs = await db
+    .select()
+    .from(caseAnalysisRuns)
+    .where(
+      and(
+        eq(caseAnalysisRuns.executionCaseId, caseId),
+        eq(caseAnalysisRuns.organizationId, organization.id)
+      )
+    )
+    .orderBy(desc(caseAnalysisRuns.createdAt))
+    .limit(1)
+
+  if (runs.length === 0) {
+    return c.json({ data: null })
+  }
+
+  return c.json({ data: runs[0] })
+})
+
+/**
  * POST /api/v1/cases/:caseId/analyze
- * Analisa os autos confirmados do caso com IA (Claude) e grava o cálculo de
- * pena (snapshot proposto), oportunidades sugeridas e prazos. Síncrono.
+ * Analisa os autos confirmados do caso com IA (Claude): gera cálculo de
+ * pena (snapshot proposto), oportunidades sugeridas e prazos.
+ *
+ * ASSÍNCRONO (202 Accepted): a chamada ao Claude leva 60-120s+ para PDFs
+ * reais — segurar a requisição HTTP até o fim atravessa o proxy do Next.js
+ * (rewrites), que corta a conexão em requisições longas e devolve "Internal
+ * Server Error" ao navegador mesmo quando o backend termina com sucesso
+ * (achado 08/07/2026, testando o caso real do Marcelo: hit direto na API deu
+ * 200, hit pelo proxy do Next deu 500). Roda em segundo plano; o front faz
+ * polling em GET /analysis-status, igual ao padrão de sync-tribunal.
  */
 crawlersRouter.post('/:caseId/analyze', async (c) => {
   const caseId = c.req.param('caseId')
   const { organization, domainUserId } = c.get('org')
 
-  try {
-    const result = await analyzeAutosForCase(organization.id, caseId, domainUserId)
-    return c.json({ data: result })
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Falha ao analisar os autos.'
-    return c.json({ error: { code: 'ANALYSIS_FAILED', message } }, 400)
+  const [run] = await db
+    .insert(caseAnalysisRuns)
+    .values({
+      organizationId: organization.id,
+      executionCaseId: caseId,
+      status: 'running',
+      startedAt: new Date(),
+      createdByUserId: domainUserId,
+    })
+    .returning()
+
+  if (!run) {
+    return c.json({ error: { code: 'INTERNAL', message: 'Failed to create analysis run.' } }, 500)
   }
+
+  void analyzeAutosForCase(organization.id, caseId, domainUserId)
+    .then(async (result) => {
+      await db
+        .update(caseAnalysisRuns)
+        .set({ status: 'success', completedAt: new Date(), result })
+        .where(eq(caseAnalysisRuns.id, run.id))
+    })
+    .catch(async (err) => {
+      const message = err instanceof Error ? err.message : 'Falha ao analisar os autos.'
+      await db
+        .update(caseAnalysisRuns)
+        .set({ status: 'failed', completedAt: new Date(), errorDetails: message })
+        .where(eq(caseAnalysisRuns.id, run.id))
+    })
+
+  return c.json({ data: run }, 202)
 })

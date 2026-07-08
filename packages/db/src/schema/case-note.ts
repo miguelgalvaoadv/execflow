@@ -1,27 +1,28 @@
 /**
- * ClientNote — anotações livres do advogado sobre um cliente.
+ * CaseNote — anotações livres do advogado sobre um processo (execução).
  *
  * Bloquinho de observações: cada anotação é um registro separado (não um
  * campo único que se sobrescreve), com autor e data, editável e excluível
- * pelo autor. Diferente de `clients.notes` (campo único legado, resumo
- * interno) — aqui é histórico de "lembretes" ao longo do acompanhamento.
+ * pelo autor. Vinculada à execução (não ao cliente) porque um cliente pode
+ * ter mais de um processo — a observação é sobre o processo específico,
+ * junto de Prazos/Movimentações/Cálculos na tela do caso.
  */
 
 import { pgTable, uuid, text, timestamp, index } from 'drizzle-orm/pg-core'
 import { organizations } from './organization.ts'
-import { clients } from './client.ts'
+import { executionCases } from './execution-case.ts'
 import { users } from './user.ts'
 
-export const clientNotes = pgTable(
-  'client_notes',
+export const caseNotes = pgTable(
+  'case_notes',
   {
     id: uuid('id').primaryKey().defaultRandom(),
     organizationId: uuid('organization_id')
       .notNull()
       .references(() => organizations.id),
-    clientId: uuid('client_id')
+    executionCaseId: uuid('execution_case_id')
       .notNull()
-      .references(() => clients.id),
+      .references(() => executionCases.id),
 
     body: text('body').notNull(),
 
@@ -35,10 +36,10 @@ export const clientNotes = pgTable(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [
-    index('client_notes_client_idx').on(table.clientId, table.createdAt),
-    index('client_notes_org_idx').on(table.organizationId),
+    index('case_notes_case_idx').on(table.executionCaseId, table.createdAt),
+    index('case_notes_org_idx').on(table.organizationId),
   ]
 )
 
-export type ClientNote = typeof clientNotes.$inferSelect
-export type NewClientNote = typeof clientNotes.$inferInsert
+export type CaseNote = typeof caseNotes.$inferSelect
+export type NewCaseNote = typeof caseNotes.$inferInsert

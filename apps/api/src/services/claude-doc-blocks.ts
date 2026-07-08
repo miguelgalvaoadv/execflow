@@ -19,11 +19,12 @@
  *      segurança (nunca quebra a análise).
  *   3. PDF grande SEM OCR → pulado com aviso no prompt (nunca silencioso).
  *
- * CACHE DE PROMPT: o último bloco de documento leva cache_control — se o
- * mesmo caso for reanalisado dentro de ~5min, a parte de documento sai a
- * ~10% do preço. Não ajuda numa análise única (é o caso mais comum hoje),
- * mas fica pronto sem custo extra para quando houver reanálise/chat sobre
- * os mesmos autos.
+ * SEM cache_control DE PROPÓSITO: cache write custa 25% A MAIS que o preço
+ * normal e só compensa se o MESMO bloco for reaproveitado em ~5min — hoje
+ * cada caso é analisado uma vez só, então cache_control aqui só encarecia
+ * (25% a mais, nunca lido de volta) e ainda escondia o custo real do relatório
+ * de IA (a API reporta tokens em cache como cache_creation_input_tokens, campo
+ * que o log do app não lê — só input_tokens). Removido em 08/07/2026.
  */
 
 import { eq, desc } from 'drizzle-orm'
@@ -238,12 +239,6 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
         `${doc.fileName}: ${ocr?.pageCount ?? '?'} pág. — GRANDE DEMAIS e sem texto OCR disponível; NÃO incluído (aguarde o OCR processar)`
       )
     }
-  }
-
-  // Cache de prompt: o último bloco de documento é o fim do prefixo estável
-  // (o texto de instrução por caso, que varia, é anexado DEPOIS pelo chamador).
-  if (blocks.length > 0) {
-    blocks[blocks.length - 1]!['cache_control'] = { type: 'ephemeral' }
   }
 
   return { blocks, manifest }

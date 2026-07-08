@@ -9,6 +9,7 @@ export type CaseTabId =
   | 'prazos'
   | 'calculos'
   | 'partes'
+  | 'observacoes'
 
 export const CASE_TABS: { id: CaseTabId; label: string }[] = [
   { id: 'timeline', label: 'Movimentações' },
@@ -17,6 +18,7 @@ export const CASE_TABS: { id: CaseTabId; label: string }[] = [
   { id: 'prazos', label: 'Prazos' },
   { id: 'calculos', label: 'Cálculos' },
   { id: 'partes', label: 'Partes & Busca' },
+  { id: 'observacoes', label: 'Observações' },
 ]
 
 type CaseTabBarProps = {

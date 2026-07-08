@@ -55,6 +55,7 @@ export const queryKeys = {
     ['case-opportunities', orgId, caseId] as const,
   caseDeadlines: (orgId: string, caseId: string) =>
     ['case-deadlines', orgId, caseId] as const,
+  caseNotes: (orgId: string, caseId: string) => ['cases', orgId, caseId, 'notes'] as const,
 
   // Clients
   clients: (
@@ -68,7 +69,6 @@ export const queryKeys = {
       ? (['clients', orgId, filters] as const)
       : (['clients', orgId] as const),
   client: (orgId: string, clientId: string) => ['clients', orgId, clientId] as const,
-  clientNotes: (orgId: string, clientId: string) => ['clients', orgId, clientId, 'notes'] as const,
 
   // Documents
   documents: (
