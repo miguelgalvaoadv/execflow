@@ -42,8 +42,3 @@ export function LoadingState({
 
   return <LoadingStateInline label={label} />
 }
-
-/** @deprecated Use `<LoadingState variant="page" />` */
-export function PageLoadingState(props: Omit<LoadingStateProps, 'variant'>) {
-  return <LoadingState {...props} variant="page" />
-}

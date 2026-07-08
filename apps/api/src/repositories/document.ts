@@ -58,34 +58,6 @@ export async function findDocumentById(
 }
 
 /**
- * Find a document by its checksum within the organization.
- * Used for duplicate detection before registration.
- * Returns null when no match — does NOT return NOT_FOUND error.
- */
-export async function findDocumentByChecksum(
-  db: AnyTx,
-  organizationId: string,
-  checksumSha256: string
-): Promise<RepositoryResult<Document | null>> {
-  try {
-    const row = await db.query.documents.findFirst({
-      where: and(
-        eq(documents.organizationId, organizationId),
-        eq(documents.checksumSha256, checksumSha256),
-        isNull(documents.deletedAt)
-      ),
-    })
-
-    return { success: true, data: row ?? null }
-  } catch (err) {
-    return {
-      success: false,
-      error: { code: 'UNKNOWN', message: 'Failed to query document by checksum.', cause: err },
-    }
-  }
-}
-
-/**
  * List documents associated with an execution case, newest first.
  * Excludes soft-deleted rows. Paginated by uploaded_at + id cursor.
  */

@@ -136,7 +136,7 @@ export default function DocumentDetailPage() {
                 />
                 <FieldRow
                   label="OCR"
-                  value={ocrStatusLabel(doc.ocrStatus)}
+                  value={ocrStatusLabel(doc.ocrStatus, doc.status)}
                   debug={doc.ocrStatus}
                 />
                 <FieldRow label="Atualizado em" value={formatDateTime(doc.updatedAt)} />

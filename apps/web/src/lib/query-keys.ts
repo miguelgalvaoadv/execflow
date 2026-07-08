@@ -98,6 +98,19 @@ export const queryKeys = {
       ? (['deadlines', orgId, filters] as const)
       : (['deadlines', orgId] as const),
   deadline: (orgId: string, deadlineId: string) => ['deadlines', orgId, deadlineId] as const,
+
+  // Opportunities — org-wide list (Oportunidades hub)
+  opportunitiesList: (
+    orgId: string,
+    filters?: {
+      status?: string
+      opportunityType?: string
+      q?: string
+    }
+  ) =>
+    filters !== undefined
+      ? (['opportunities-list', orgId, filters] as const)
+      : (['opportunities-list', orgId] as const),
   deadlineHistory: (orgId: string, deadlineId: string) =>
     ['deadline-history', orgId, deadlineId] as const,
 

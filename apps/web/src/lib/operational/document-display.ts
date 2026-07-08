@@ -46,7 +46,20 @@ export function documentStatusLabel(status: string): string {
   return DOCUMENT_STATUS_LABELS[status] ?? status
 }
 
-export function ocrStatusLabel(status: string): string {
+/**
+ * Rótulo de OCR — leva em conta o status do documento porque "OCR falhou"
+ * sozinho é um falso alarme quando o documento foi CONFIRMADO mesmo assim:
+ * PDFs dentro do limite de leitura nativa (≤600 pág./28MB) vão direto pro
+ * Claude sem precisar de texto OCR — só passam a exigir OCR (e a falha
+ * bloquear de verdade) quando excedem esse limite. Achado 08/07/2026:
+ * o caso do Marcelo mostrava "OCR falhou" ao lado de "Confirmado" mesmo já
+ * tendo sido lido e analisado com sucesso pela IA, o que parecia (errado)
+ * um problema real com o arquivo.
+ */
+export function ocrStatusLabel(status: string, documentStatus?: string): string {
+  if (status === 'failed' && documentStatus === 'confirmed') {
+    return 'OCR dispensado (PDF lido direto)'
+  }
   return OCR_STATUS_LABELS[status] ?? status
 }
 

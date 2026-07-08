@@ -28,6 +28,8 @@ export const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
   remission: 'Remição',
   detraction: 'Detração',
   amnesty: 'Indulto',
+  indult: 'Indulto',
+  parole: 'Livramento condicional',
   commutation: 'Comutação',
   hc: 'Habeas Corpus',
   pad_challenge: 'Impugnação PAD',

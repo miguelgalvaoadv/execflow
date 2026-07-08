@@ -180,11 +180,17 @@ export const sentenceSnapshots = pgTable(
     remainingDays: integer('remaining_days').notNull(),
 
     /**
-     * @deprecated Use crimes_breakdown for exact legal arithmetic in Engine Phase 5B.
      * Fraction of sentence served (served + remission + detraction) / total.
      * Precision: 5 digits, 4 decimal places → 0.0000 to 1.0000 (= 0.00% to 100.00%).
      * Example: 0.1667 = 16.67% served.
      * Used for: progressão fractions (1/6, 2/5, 3/5 per LEP/playbook).
+     *
+     * Achado 08/07/2026: estava marcado @deprecated ("usar crimes_breakdown
+     * no Engine Phase 5B") mas essa migração nunca aconteceu — é o campo
+     * mais lido do snapshot hoje (case-analysis.ts, snapshot-review.ts, a
+     * tela do caso, o mapper de promoção do worker, o loader do engine).
+     * Removido o @deprecated para não induzir a erro; se crimes_breakdown
+     * vier a substituir isso de verdade, marcar de novo então.
      */
     percentServed: numeric('percent_served', { precision: 5, scale: 4 }).notNull(),
 

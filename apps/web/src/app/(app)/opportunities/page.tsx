@@ -1,48 +1,31 @@
 'use client'
 
 /**
- * Opportunities surface — engine-suggested and manually created opportunities.
+ * Opportunities surface — org-wide triage of suggested opportunities.
  *
- * Opportunities surface the engine's non-binding proposals (status=suggested)
- * alongside qualified, deferred, and realized opportunities.
+ * Lê diretamente a tabela opportunities (GET /api/v1/opportunities), não mais
+ * queue_projections. Achado 08/07/2026: a versão anterior dependia de
+ * queue_projections, que só é alimentada pelo fluxo de extraction-promotion
+ * (e-mail/scan) — oportunidades geradas por "Analisar autos" (o caminho mais
+ * comum hoje) nunca apareciam aqui, só dentro de cada caso.
  *
- * Surfacing happens via the queue (opportunity_review queue type) rather than
- * a raw list — but this page provides the full list view for lawyers.
- *
- * What is real: session, org context, queue-derived opportunity items.
- * What is deferred: direct GET /api/v1/opportunities list endpoint (not yet built).
- *
+ * What is real: session, org context, GET /api/v1/opportunities (org-wide).
  * AI_BOUNDARIES.md: frontend never evaluates or derives opportunities.
- * Architecture ref: ux-flow-architecture.md §5 (opportunity review flow).
  */
 
-import { useState } from 'react'
 import { useSession } from '@/lib/hooks/use-session'
-import { useQueueProjections } from '@/lib/hooks/use-queue-projections'
+import { useOpportunities } from '@/lib/hooks/use-opportunities'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
+import { OPPORTUNITY_TYPE_LABELS } from '@/lib/operational/queue-display'
 import Link from 'next/link'
 import { ChevronRight } from 'lucide-react'
 import {
   EmptyState,
   ErrorState,
   LoadingState,
+  Button,
 } from '@/components/ui'
-
-const OPPORTUNITY_TYPE_LABELS: Record<string, string> = {
-  progression: 'Progressão',
-  remission: 'Remição',
-  detraction: 'Detração',
-  amnesty: 'Indulto',
-  commutation: 'Comutação',
-  hc: 'Habeas Corpus',
-  pad_challenge: 'Impugnação PAD',
-  prescription: 'Prescrição',
-  recalculation: 'Recálculo',
-  excess_execution: 'Excesso de execução',
-  rights_violation: 'Violação de direitos',
-  manual: 'Manual',
-}
 
 /** Badge class semântica por categoria de oportunidade. */
 function opportunityTypeBadgeClass(type: string): string {
@@ -64,6 +47,7 @@ function opportunityTypeBadgeClass(type: string): string {
 
 export default function OpportunitiesPage() {
   const { data: session, isLoading: sessionLoading } = useSession()
+  const orgId = session?.organization.id ?? ''
 
   const {
     data,
@@ -71,30 +55,22 @@ export default function OpportunitiesPage() {
     isError,
     error,
     refetch,
-  } = useQueueProjections({
-    organizationId: session?.organization.id ?? '',
-    queueType: 'opportunity_review',
+    hasNextPage,
+    fetchNextPage,
+    isFetchingNextPage,
+  } = useOpportunities({
+    organizationId: orgId,
+    filters: { status: 'suggested' },
   })
 
-  // Also fetch progression-specific queue
-  const {
-    data: progressionData,
-  } = useQueueProjections({
-    organizationId: session?.organization.id ?? '',
-    queueType: 'progression_opportunities',
-  })
-
-  const allOpportunities = [
-    ...(data?.data ?? []),
-    ...(progressionData?.data ?? []),
-  ].sort((a, b) => a.priority - b.priority)
+  const items = data?.pages.flatMap((page) => page.data) ?? []
 
   return (
     <div>
       <DashboardPageHeader
         eyebrow="Operacional"
         title="Oportunidades"
-        description="Sugestões do motor de cálculo pendentes de revisão jurídica. Apenas advogados qualificam."
+        description="Sugestões pendentes de revisão jurídica, de todos os casos. Apenas advogados qualificam."
       />
 
       <div className="mt-6">
@@ -109,62 +85,57 @@ export default function OpportunitiesPage() {
             message={error?.message ?? 'Erro ao carregar oportunidades.'}
             onRetry={() => { void refetch() }}
           />
-        ) : allOpportunities.length === 0 ? (
+        ) : items.length === 0 ? (
           <EmptyState
             title="Sem oportunidades pendentes"
-            description="Oportunidades sugeridas pelo motor de cálculo aparecerão aqui para revisão jurídica."
+            description="Oportunidades sugeridas (pela IA ou pelo motor) aparecerão aqui para revisão jurídica."
           />
         ) : (
           <div>
             <p className={`text-[12px] ${text.faint} mb-3`}>
-              {allOpportunities.length}{' '}
-              {allOpportunities.length === 1 ? 'oportunidade' : 'oportunidades'} aguardando revisão
+              {items.length} {items.length === 1 ? 'oportunidade' : 'oportunidades'} aguardando revisão
             </p>
             <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {allOpportunities.map((item) => {
-                const meta = item.metadata as Record<string, string> | null
-                const opportunityType = meta?.['opportunityType'] ?? 'manual'
-                const confidenceLevel = meta?.['confidenceLevel']
-                const source = meta?.['source']
+              {items.map((item) => {
                 const confidenceText =
-                  confidenceLevel === 'high'
+                  item.confidenceLevel === 'high'
                     ? 'Alta confiança'
-                    : confidenceLevel === 'medium'
+                    : item.confidenceLevel === 'medium'
                       ? 'Confiança média'
-                      : confidenceLevel === 'low'
+                      : item.confidenceLevel === 'low'
                         ? 'Baixa confiança'
                         : null
                 return (
                   <Link
                     key={item.id}
-                    href={item.executionCaseId ? `/cases/${item.executionCaseId}?tab=opportunities` : '#'}
+                    href={`/cases/${item.executionCaseId}?tab=oportunidades`}
                     className="group flex flex-col rounded-xl border border-slate-200 bg-white p-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:border-slate-300 hover:shadow-lg"
                   >
                     <div className="flex flex-wrap items-center gap-1.5">
                       <span
                         className={[
                           'inline-flex items-center rounded-md border px-2 py-0.5 text-[11px] font-medium',
-                          opportunityTypeBadgeClass(opportunityType),
+                          opportunityTypeBadgeClass(item.opportunityType),
                         ].join(' ')}
                       >
-                        {OPPORTUNITY_TYPE_LABELS[opportunityType] ?? opportunityType}
+                        {OPPORTUNITY_TYPE_LABELS[item.opportunityType] ?? item.opportunityType}
                       </span>
-                      {source === 'engine' && (
-                        <span className="inline-flex items-center rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">
-                          Motor
+                      {item.caseInternalRef !== null && (
+                        <span className="inline-flex items-center rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-600">
+                          {item.caseInternalRef}
                         </span>
                       )}
                     </div>
                     <p className="mt-2.5 text-[14px] font-semibold leading-snug text-slate-900 group-hover:text-blue-700">
-                      {item.displayTitle}
+                      {item.summary}
                     </p>
                     {confidenceText !== null && (
                       <p className="mt-1 text-[12px] text-slate-500">{confidenceText}</p>
                     )}
                     <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px]">
                       <span className="text-slate-500">
-                        {item.keyDate !== null
-                          ? `Janela: ${new Intl.DateTimeFormat('pt-BR').format(new Date(item.keyDate))}`
+                        {item.windowEndAt !== null
+                          ? `Janela: ${new Intl.DateTimeFormat('pt-BR').format(new Date(item.windowEndAt))}`
                           : 'Sem janela definida'}
                       </span>
                       <span className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600">
@@ -176,6 +147,17 @@ export default function OpportunitiesPage() {
                 )
               })}
             </div>
+            {hasNextPage && (
+              <div className="mt-5 flex justify-center">
+                <Button
+                  variant="secondary"
+                  onClick={() => { void fetchNextPage() }}
+                  disabled={isFetchingNextPage}
+                >
+                  {isFetchingNextPage ? 'Carregando…' : 'Carregar mais'}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

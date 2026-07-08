@@ -21,6 +21,7 @@ import {
 } from '../repositories/extraction-run.ts'
 import { insertReviewDecision, listReviewDecisionsForSubject } from '../repositories/review-decision.ts'
 import { resolveQueueProjection } from '../repositories/queue-projection.ts'
+import { markAutosFreshIfNewer } from '../repositories/execution-case.ts'
 import {
   EXTRACTION_CONFIRMED,
   EXTRACTION_REJECTED,
@@ -170,6 +171,10 @@ export async function confirmExtractionReview(
           updatedAt: reviewedAt,
         })
         .where(eq(documents.id, doc.id))
+
+      if (doc.executionCaseId) {
+        await markAutosFreshIfNewer(tx, ctx.organizationId, doc.executionCaseId, doc.uploadedAt)
+      }
 
       unwrapOrThrow(
         await insertReviewDecision(tx, {

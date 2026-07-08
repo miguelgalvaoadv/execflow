@@ -287,35 +287,3 @@ export async function updateClient(
   }
 }
 
-/**
- * Update the responsible lawyer for a client.
- * Produces an AuditLog entry at the service layer (not here).
- */
-export async function updateClientLawyer(
-  tx: DbTransaction,
-  organizationId: string,
-  clientId: string,
-  lawyerUserId: string,
-  updatedAt: Date
-): Promise<RepositoryResult<Client>> {
-  try {
-    const [row] = await tx
-      .update(clients)
-      .set({ responsibleLawyerUserId: lawyerUserId, updatedAt })
-      .where(
-        and(eq(clients.id, clientId), eq(clients.organizationId, organizationId))
-      )
-      .returning()
-
-    if (!row) {
-      return { success: false, error: { code: 'NOT_FOUND', message: 'Client not found.' } }
-    }
-
-    return { success: true, data: row }
-  } catch (err) {
-    return {
-      success: false,
-      error: { code: 'UNKNOWN', message: 'Failed to update client lawyer.', cause: err },
-    }
-  }
-}

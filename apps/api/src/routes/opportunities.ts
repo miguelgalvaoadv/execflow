@@ -32,8 +32,11 @@ import {
   reviewOpportunity,
   deferOpportunity,
 } from '../services/opportunity.ts'
+import { listOpportunitiesForOrg } from '../services/opportunity-read.ts'
 import { findOpportunityById } from '../repositories/opportunity.ts'
 import { queryOpportunityReviews } from '../repositories/opportunity-review.ts'
+import { toReadContext } from '../lib/read-context.ts'
+import { PaginationQuerySchema } from '../lib/pagination-schemas.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 const router = new Hono<{ Variables: HonoVariables }>()
@@ -48,7 +51,56 @@ const OPPORTUNITY_TYPES = [
   'excess_execution', 'rights_violation', 'manual',
 ] as const
 
+const OPPORTUNITY_STATUSES = [
+  'suggested', 'qualified', 'pursuing', 'realized', 'dismissed', 'expired',
+] as const
+
 const CONFIDENCE_LEVELS = ['high', 'medium', 'low', 'unknown'] as const
+
+const ListOpportunitiesQuerySchema = PaginationQuerySchema.extend({
+  status: z.enum(OPPORTUNITY_STATUSES).optional(),
+  opportunityType: z.enum(OPPORTUNITY_TYPES).optional(),
+  q: z.string().max(200).optional(),
+})
+
+// -------------------------------------------------------------------------
+// GET /api/v1/opportunities — Paginated org opportunity list
+// -------------------------------------------------------------------------
+
+router.get(
+  '/',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const parsed = ListOpportunitiesQuerySchema.safeParse(c.req.query())
+    if (!parsed.success) {
+      return unprocessable(c, 'Invalid query parameters.', { issues: parsed.error.issues })
+    }
+
+    const ctx = toReadContext(buildWriteContext(c, db))
+    const q = parsed.data
+
+    const result = await listOpportunitiesForOrg(
+      ctx,
+      {
+        ...(q.status !== undefined ? { status: q.status } : {}),
+        ...(q.opportunityType !== undefined ? { opportunityType: q.opportunityType } : {}),
+        ...(q.q !== undefined ? { q: q.q } : {}),
+      },
+      {
+        limit: q.limit,
+        ...(q.cursor !== undefined ? { cursor: q.cursor } : {}),
+      }
+    )
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, result.error)
+    }
+
+    return c.json({ data: result.data.items, nextCursor: result.data.nextCursor }, 200)
+  }
+)
 
 const UncertaintyFlagSchema = z.object({
   factor: z.string().min(1).max(200),

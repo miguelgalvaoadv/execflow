@@ -404,54 +404,50 @@ export async function updateExecutionCase(
   }
 }
 
+
 /**
- * Bind a process number to an existing case (intake → active transition step).
- * Updates execution_process_number and optionally clears process_number_pending_since.
+ * Clears the 'stale' document-freshness flag when autos newer than the
+ * pending critical movement are confirmed. No-op if the case isn't stale, or
+ * if the confirmed document predates the movement that caused the staleness
+ * (uploading an old file shouldn't clear a warning about a newer event).
+ *
+ * Achado 08/07/2026: o schema já documentava essa transição ('stale' →
+ * 'fresh' quando novos autos são confirmados) mas nenhum código a
+ * implementava — o aviso "Autos desatualizados" nunca saía, mesmo depois do
+ * advogado resolver a pendência.
  */
-export async function bindProcessNumber(
+export async function markAutosFreshIfNewer(
   tx: DbTransaction,
   organizationId: string,
   caseId: string,
-  processNumber: string,
-  updatedAt: Date
-): Promise<RepositoryResult<ExecutionCase>> {
+  autosConfirmedAt: Date
+): Promise<RepositoryResult<void>> {
   try {
-    const [row] = await tx
+    await tx
       .update(executionCases)
       .set({
-        executionProcessNumber: processNumber,
-        processNumberPendingSince: null,
-        updatedAt,
+        documentFreshnessStatus: 'fresh',
+        pendingCriticalMovementSince: null,
+        pendingCriticalMovementType: null,
+        autosLastIngestedAt: autosConfirmedAt,
+        updatedAt: new Date(),
       })
       .where(
         and(
           eq(executionCases.id, caseId),
           eq(executionCases.organizationId, organizationId),
-          isNull(executionCases.deletedAt)
+          eq(executionCases.documentFreshnessStatus, 'stale'),
+          or(
+            isNull(executionCases.pendingCriticalMovementSince),
+            lt(executionCases.pendingCriticalMovementSince, autosConfirmedAt)
+          )
         )
       )
-      .returning()
-
-    if (!row) {
-      return { success: false, error: { code: 'NOT_FOUND', message: 'Execution case not found.' } }
-    }
-
-    return { success: true, data: row }
+    return { success: true, data: undefined }
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err)
-    if (message.includes('execution_cases_process_number_unique')) {
-      return {
-        success: false,
-        error: {
-          code: 'CONFLICT',
-          message: 'This process number is already assigned to another case in the organization.',
-          cause: err,
-        },
-      }
-    }
     return {
       success: false,
-      error: { code: 'UNKNOWN', message: 'Failed to bind process number.', cause: err },
+      error: { code: 'UNKNOWN', message: 'Failed to mark autos fresh.', cause: err },
     }
   }
 }

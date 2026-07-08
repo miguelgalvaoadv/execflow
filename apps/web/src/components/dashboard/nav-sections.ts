@@ -25,7 +25,9 @@ export const navSections: NavSection[] = [
   {
     id: "system",
     label: "Sistema",
-    items: [teamNavItem, settingsNavItem],
+    // settingsNavItem NÃO entra aqui — já é fixado no rodapé via footerNavItem
+    // (achado 08/07/2026: estava duplicado, "Configurações" aparecia 2x no menu).
+    items: [teamNavItem],
   },
 ];
 

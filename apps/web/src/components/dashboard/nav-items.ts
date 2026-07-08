@@ -35,7 +35,7 @@ export const primaryNavItems: NavItem[] = [
   { id: "deadlines", label: "Prazos", icon: "deadlines", href: "/deadlines", implemented: true },
   { id: "opportunities", label: "Oportunidades", icon: "opportunities", href: "/opportunities", implemented: true },
   { id: "tasks", label: "Tarefas", icon: "tasks", href: "/tasks", implemented: true },
-  { id: "documents", label: "Peças", icon: "documents", href: "/documents", implemented: true },
+  { id: "documents", label: "Documentos", icon: "documents", href: "/documents", implemented: true },
   { id: "finance", label: "Financeiro", icon: "finance", href: "/finance", implemented: false },
 ];
 

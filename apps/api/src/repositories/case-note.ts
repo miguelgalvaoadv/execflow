@@ -29,24 +29,6 @@ export async function listCaseNotes(
   }
 }
 
-export async function findCaseNoteById(
-  db: AnyTx,
-  organizationId: string,
-  noteId: string
-): Promise<RepositoryResult<CaseNote>> {
-  try {
-    const row = await db.query.caseNotes.findFirst({
-      where: and(eq(caseNotes.id, noteId), eq(caseNotes.organizationId, organizationId)),
-    })
-    if (!row) {
-      return { success: false, error: { code: 'NOT_FOUND', message: 'Case note not found.' } }
-    }
-    return { success: true, data: row }
-  } catch (err) {
-    return { success: false, error: { code: 'UNKNOWN', message: 'Failed to find case note.', cause: err } }
-  }
-}
-
 export async function insertCaseNote(
   tx: DbTransaction,
   data: NewCaseNote

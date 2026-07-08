@@ -48,6 +48,3 @@ export function ErrorState({
     </div>
   )
 }
-
-/** @deprecated Use `<ErrorState />` from `@/components/ui` */
-export const OperationalErrorState = ErrorState

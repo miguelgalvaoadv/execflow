@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { borders, surfaces, text } from "./surfaces";
+import { surfaces } from "./surfaces";
 
 type WorkspacePanelProps = {
   title: string;
@@ -38,20 +38,4 @@ export function WorkspacePanel({
       <div className="flex flex-1 flex-col px-5 py-5">{children}</div>
     </section>
   );
-}
-
-function PanelPlaceholder({ message }: { message: string }) {
-  return (
-    <div
-      className={`flex min-h-[120px] flex-1 items-center justify-center rounded-lg border border-dashed ${borders.default} ${surfaces.panelMuted} px-4 py-8`}
-    >
-      <p className={`text-center text-[13px] leading-relaxed ${text.faint}`}>
-        {message}
-      </p>
-    </div>
-  );
-}
-
-export function WorkspacePanelPlaceholder({ message }: { message: string }) {
-  return <PanelPlaceholder message={message} />;
 }

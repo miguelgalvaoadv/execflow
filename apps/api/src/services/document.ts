@@ -27,6 +27,7 @@
 
 import { withTx, unwrapOrThrow } from '../lib/tx.ts'
 import { insertDocument, associateDocument, updateDocumentStatus, findDocumentById } from '../repositories/document.ts'
+import { markAutosFreshIfNewer } from '../repositories/execution-case.ts'
 import { incrementBundleFileCount } from '../repositories/intake-bundle.ts'
 import { appendTimelineEvent } from '../repositories/timeline-event.ts'
 import { writeAuditAndEvent } from './write-audit-event.ts'
@@ -231,6 +232,13 @@ export async function registerDocument(
         unwrapOrThrow(
           await incrementBundleFileCount(tx, ctx.organizationId, input.intakeBundleId)
         )
+      }
+
+      // Autos manuais confirmados na hora (isManualWithCase) resolvem a
+      // pendência de "autos desatualizados" — desde que sejam mais novos que
+      // a movimentação crítica que causou o aviso.
+      if (isManualWithCase && input.executionCaseId) {
+        await markAutosFreshIfNewer(tx, ctx.organizationId, input.executionCaseId, uploadedAt)
       }
 
       // If linked to a case, append a timeline event for the document arrival

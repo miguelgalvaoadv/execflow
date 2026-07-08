@@ -208,7 +208,7 @@ export default function CaseWorkspacePage() {
     caseId,
     activeTab === 'oportunidades',
   )
-  const deadlinesQuery = useCaseDeadlines(orgId, caseId, activeTab === 'prazos')
+  const deadlinesQuery = useCaseDeadlines(orgId, caseId, activeTab === 'prazos' || activeTab === 'calculos')
   const snapshotsQuery = useCaseSentenceSnapshots(orgId, caseId, activeTab === 'calculos')
 
   const proposeMutation = useProposeSentenceSnapshot(orgId, caseId)
@@ -526,6 +526,7 @@ export default function CaseWorkspacePage() {
                     errorMessage={snapshotsQuery.error?.message}
                     onRetry={() => { void snapshotsQuery.refetch() }}
                     items={snapshotsQuery.data?.data ?? []}
+                    deadlines={deadlinesQuery.data?.data ?? []}
                     onConfirm={(id) => confirmMutation.mutate(id)}
                     onPropose={(input) => proposeMutation.mutate(input)}
                     onSupersede={(id, input) => supersedeMutation.mutate({ snapshotId: id, input })}
@@ -2521,6 +2522,7 @@ type CalculosTabProps = {
   errorMessage?: string
   onRetry: () => void
   items: SentenceSnapshotItem[]
+  deadlines: import('@/lib/hooks/use-case-deadlines').CaseDeadlineItem[]
   onConfirm: (snapshotId: string) => void
   onPropose: (input: ProposeSentenceSnapshotInput) => void
   onSupersede: (snapshotId: string, input: SupersedeSentenceSnapshotInput) => void
@@ -2529,12 +2531,64 @@ type CalculosTabProps = {
   isSuperseding: boolean
 }
 
+/**
+ * Marcos calculados (data-base → progressão → livramento → término), lidos
+ * dos prazos de classe "benefit"/"calculation" já gerados pela análise —
+ * hoje essas datas só existiam espalhadas em texto livre (resumo da IA) ou
+ * dentro de cada card de oportunidade. Achado 08/07/2026: um advogado
+ * acostumado ao SEEU espera ver esses marcos como linha do tempo, não como
+ * parágrafo.
+ */
+function CalculationTimeline({
+  effectiveAt,
+  deadlines,
+}: {
+  effectiveAt: string | null
+  deadlines: import('@/lib/hooks/use-case-deadlines').CaseDeadlineItem[]
+}) {
+  const marcos = deadlines
+    .filter((d) => (d.deadlineClass === 'benefit' || d.deadlineClass === 'calculation') && d.status !== 'dismissed')
+    .map((d) => ({ id: d.id, titulo: d.title, data: d.dueAt }))
+    .sort((a, b) => new Date(a.data).getTime() - new Date(b.data).getTime())
+
+  const pontos = [
+    ...(effectiveAt ? [{ id: 'data-base', titulo: 'Data-base', data: effectiveAt }] : []),
+    ...marcos,
+  ]
+
+  if (pontos.length === 0) return null
+
+  return (
+    <div className={`rounded-lg border ${borders.default} bg-slate-50/40 p-4`}>
+      <h4 className={`mb-3 text-[11px] font-bold uppercase tracking-wider ${text.secondary}`}>
+        Linha do tempo
+      </h4>
+      <div className="flex flex-wrap items-stretch gap-0">
+        {pontos.map((p, i) => (
+          <div key={p.id} className="flex items-stretch">
+            <div className="flex min-w-[140px] max-w-[200px] flex-col gap-0.5 px-3 py-1">
+              <span className="text-[10px] font-mono text-blue-600">
+                {new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(p.data))}
+              </span>
+              <span className={`text-[12px] font-medium leading-snug ${text.primary}`}>{p.titulo}</span>
+            </div>
+            {i < pontos.length - 1 && (
+              <div className="flex items-center px-1 text-slate-300">→</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function CalculosTab({
   isLoading,
   isError,
   errorMessage,
   onRetry,
   items,
+  deadlines,
   onConfirm,
   onPropose,
   onSupersede,
@@ -2784,6 +2838,11 @@ function CalculosTab({
           </div>
         </form>
       )}
+
+      <CalculationTimeline
+        effectiveAt={(activeConfirmed ?? proposedDrafts[0])?.effectiveAt ?? null}
+        deadlines={deadlines}
+      />
 
       {/* Seção do Cálculo Confirmado e Ativo */}
       <div className="space-y-3">

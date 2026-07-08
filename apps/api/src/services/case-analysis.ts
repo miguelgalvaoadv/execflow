@@ -9,7 +9,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiInteraction } from './ai-log.ts'
 import { buildDocumentBlocks } from './claude-doc-blocks.ts'
-import { eq, and } from 'drizzle-orm'
+import { eq, and, notInArray } from 'drizzle-orm'
 import { db } from '../lib/db.ts'
 import {
   executionCases,
@@ -27,7 +27,7 @@ const RELEVANT_CLASSES = [
   'comprovante_trabalho_estudo', 'autos_iniciais', 'autos_integral',
 ]
 const OPP_TYPES = new Set([
-  'progression', 'remission', 'detraction', 'amnesty', 'commutation', 'hc',
+  'progression', 'remission', 'detraction', 'amnesty', 'indult', 'commutation', 'hc',
   'pad_challenge', 'prescription', 'recalculation', 'excess_execution',
   'rights_violation', 'parole',
 ])
@@ -102,12 +102,28 @@ export async function analyzeAutosForCase(
 Analise os autos e RESPONDA APENAS COM JSON VÁLIDO (sem nenhum texto fora do JSON, sem cercas markdown), no formato EXATO:
 {
  "pena": { "penaTotalDias": number|null, "regimeAtual": string|null, "dataBase": "YYYY-MM-DD"|null, "diasRemidos": number|null, "diasCumpridosAprox": number|null, "resumo": string },
- "oportunidades": [ { "tipo": "progression|remission|parole|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "prazo": string, "confianca": "high|medium|low" } ],
+ "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "prazo": string, "confianca": "high|medium|low" } ],
  "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string } ]
 }
 REGRAS DAS OPORTUNIDADES (muito importante):
 - Liste APENAS o que pode ser pleiteado AGORA (dentro do prazo) ou NO FUTURO. NÃO liste oportunidades referentes a atos já passados/perdidos.
 - Em "prazo", diga SEMPRE quando cabe: "imediato — já cumpriu o requisito", ou uma data/previsão aproximada (ex.: "previsto para ~03/2027, ao atingir 2/5 da pena"). Se não der pra estimar, explique objetivamente o gatilho futuro.
+
+TABELA DE FRAÇÕES DO ART. 112 DA LEP (progressão de regime) — USE ESTA TABELA, não confie só no que você já sabe: as Leis 15.358/2026 e 15.402/2026 mudaram os percentuais recentemente e podem estar fora do que você aprendeu em treinamento.
+REGRA DE OURO — IRRETROATIVIDADE (art. 5º, XL, CF/88): use a fração vigente na DATA DO FATO (data do crime), NUNCA a fração vigente hoje nem a da data da petição. Lei penal mais gravosa não retroage. Se o crime foi cometido ANTES da vigência da lei que aumentou a fração, use a fração ANTIGA (mais branda), mesmo que o cálculo/petição seja posterior.
+Frações vigentes por período (para crimes SEM outra causa de aumento específica no processo):
+- Crime comum (sem violência/grave ameaça), réu primário: 1/6 (~16,67%) — inalterado desde a Lei 13.964/2019.
+- Crime comum, reincidente: 20% — inalterado desde 2019.
+- Crime com violência ou grave ameaça (exceto crimes contra a dignidade sexual), réu primário: 25% (Lei 15.402/2026, vigência 08/05/2026); ANTES dessa data: também 25% (já era assim desde 2019 — sem mudança aqui).
+- Crime com violência ou grave ameaça, reincidente específico: 30% — inalterado desde 2019.
+- Crime hediondo/equiparado SEM resultado morte, réu primário: cometido A PARTIR de 25/03/2026 (Lei 15.358/2026) → 70%. Cometido ANTES de 25/03/2026 → 40% (regra do Pacote Anticrime, Lei 13.964/2019).
+- Crime hediondo/equiparado SEM resultado morte, reincidente: a partir de 25/03/2026 → 80%. Antes → 60%.
+- Crime hediondo/equiparado COM resultado morte, réu primário: a partir de 25/03/2026 → 75% (VEDADO livramento condicional se também for líder de organização criminosa ultraviolenta, milícia privada, ou feminicídio). Antes → 50%.
+- Crime hediondo/equiparado COM resultado morte, reincidente: a partir de 25/03/2026 → 85% (VEDADO livramento condicional). Antes → 70%.
+Se os autos não deixarem claro a data exata do crime (data-base costuma ser a da prisão/flagrante, mas o crime pode ter sido cometido antes), use a data do crime narrada na denúncia/sentença — não a data-base de detração.
+Livramento condicional (art. 83 CP): 1/3 da pena (primário, bons antecedentes), 1/2 (reincidente em crime doloso), 2/3 (condenado por crime hediondo/equiparado — mas VEDADO se for reincidente específico em crime hediondo, art. 83, V, CP c/c art. 5º, Lei 8.072/90).
+Remição (art. 126 LEP): 1 dia de pena para cada 3 dias trabalhados, ou a cada 12h de estudo (em ao menos 3 dias). Desde a Lei 15.402/2026, regime domiciliar NÃO impede a remição.
+Detração (art. 42 CP): tempo de prisão provisória/internação/prisão administrativa conta para TODOS os fins, inclusive no numerador da fração de progressão — confira se já foi computada no cálculo homologado.
 
 CHECKLIST DE PRAZOS (percorra cada item; inclua em "prazos" só o que tiver base real nos autos — não invente data nem gatilho):
 - Recurso de agravo em execução (art. 197 LEP) — 5 dias da ciência/intimação de decisão do juízo da execução.
@@ -115,10 +131,15 @@ CHECKLIST DE PRAZOS (percorra cada item; inclua em "prazos" só o que tiver base
 - Manifestação sobre cálculo de pena / PEC (planilha de execução) — prazo de vista à defesa.
 - Impugnação de excesso de execução.
 - Defesa em PAD (falta grave) e prazo pra audiência de justificação.
+- Audiência de justificação (oitiva do apenado, art. 118 §2º LEP) ANTES de qualquer regressão de regime por falta grave — sem essa oitiva a regressão é nula e cabe HC; se os autos mostrarem regressão sem menção a essa audiência, sinalize isso na oportunidade/prazo.
 - Recurso administrativo contra decisão de PAD.
 - Manifestação sobre laudo/parecer da Comissão Técnica de Classificação (CTC) ou exame criminológico, se houver.
+- Exame criminológico: desde a Lei 14.843/2024, é obrigatório em determinados casos para progressão (não mais facultativo) — se os autos indicarem que a progressão está condicionada a esse exame e ele ainda não foi feito/juntado, registre como prazo/pendência.
+- Regime Disciplinar Diferenciado (RDD): se os autos mencionarem inclusão ou prorrogação em RDD, há prazo de recurso próprio — ganhou relevância com o Marco Legal do Crime Organizado (2026), especialmente em casos de organização criminosa ou milícia.
+- Monitoramento eletrônico: quando houver condição de monitoramento (comum em saída temporária e livramento condicional), verifique prazo de vencimento/renovação do equipamento ou da autorização.
 - Prazo de retorno de saída temporária (e renovação, se aplicável).
 - Relatório periódico de cumprimento de condições do livramento condicional.
+- Indulto natalino ou outro decreto de indulto/comutação vigente: decretos de indulto têm janela de vigência e requisitos próprios (geralmente publicados em dezembro) — se os autos mencionarem algum decreto de indulto/comutação e o réu parecer se enquadrar, registre a oportunidade e o prazo de requerimento dentro da vigência do decreto.
 - Prescrição da pretensão executória (data-limite pra execução da pena, se identificável).
 - Data prevista de término da pena (vencimento) — marco de monitoramento, não é bem um "prazo processual", mas deve ser registrado se calculável.
 - Prazo pra requerer detração (tempo de prisão provisória a abater) quando há elemento nos autos sugerindo abatimento ainda não computado.
@@ -186,6 +207,44 @@ NÃO invente dados ausentes (use null). Liste apenas oportunidades e prazos real
     throw new Error('A IA não retornou um JSON válido. Tente novamente.')
   }
 
+  // 0. Supersede sugestões da IA de rodadas anteriores desta mesma análise.
+  // Achado 08/07/2026: a dedup abaixo compara TÍTULO EXATO — como o Claude
+  // varia a redação a cada rodada ("Progressão ao regime semiaberto" vs.
+  // "Progressão de regime para semiaberto"), reanalisar o mesmo caso
+  // acumulava quase-duplicatas em vez de substituir. Antes de inserir o novo
+  // lote, descarta as sugestões da IA da rodada anterior que o advogado
+  // ainda não tocou (oportunidades 'suggested', prazos 'open' com
+  // origin='rule') — decisões humanas (qualificado, prazo reconhecido, etc.)
+  // nunca são tocadas aqui.
+  const supersededNote = `Substituída por nova análise dos autos em ${new Date().toLocaleDateString('pt-BR')}.`
+  await db
+    .update(opportunities)
+    .set({
+      status: 'dismissed',
+      dismissedAt: new Date(),
+      dismissedByUserId: userId,
+      dismissedReason: supersededNote,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(opportunities.executionCaseId, caseId), eq(opportunities.status, 'suggested')))
+  await db
+    .update(deadlines)
+    .set({
+      status: 'dismissed',
+      dismissedAt: new Date(),
+      dismissedByUserId: userId,
+      dismissedReason: supersededNote,
+      dismissedReasonCode: 'superseded_by_reanalysis',
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(deadlines.executionCaseId, caseId),
+        eq(deadlines.status, 'open'),
+        eq(deadlines.origin, 'rule')
+      )
+    )
+
   // 1. Snapshot de pena (proposto)
   let snapshotId: string | null = null
   const pena = parsed.pena
@@ -224,7 +283,13 @@ NÃO invente dados ausentes (use null). Liste apenas oportunidades e prazos real
     const existing = await db
       .select({ id: opportunities.id })
       .from(opportunities)
-      .where(and(eq(opportunities.executionCaseId, caseId), eq(opportunities.summary, titulo)))
+      .where(
+        and(
+          eq(opportunities.executionCaseId, caseId),
+          eq(opportunities.summary, titulo),
+          notInArray(opportunities.status, ['dismissed', 'expired'])
+        )
+      )
       .limit(1)
     if (existing.length > 0) continue
     await db.insert(opportunities).values({
@@ -247,7 +312,13 @@ NÃO invente dados ausentes (use null). Liste apenas oportunidades e prazos real
     const existing = await db
       .select({ id: deadlines.id })
       .from(deadlines)
-      .where(and(eq(deadlines.executionCaseId, caseId), eq(deadlines.title, titulo)))
+      .where(
+        and(
+          eq(deadlines.executionCaseId, caseId),
+          eq(deadlines.title, titulo),
+          notInArray(deadlines.status, ['dismissed', 'completed'])
+        )
+      )
       .limit(1)
     if (existing.length > 0) continue
     // Prefere dataLimite (data real, calculada pela IA) — "dias" só serve pra

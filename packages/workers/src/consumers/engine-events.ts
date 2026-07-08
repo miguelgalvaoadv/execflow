@@ -30,8 +30,6 @@ import {
   scheduleRecalculation,
   startRecalculation,
   completeRecalculation,
-  failRecalculation,
-  runMvpEngine,
 } from '@execflow/engine'
 import { randomUUID } from 'crypto'
 
@@ -526,36 +524,24 @@ export async function handleEngineEvaluationRequested(
 
   const runId = randomUUID()
 
-  try {
-    // MVP E2E PIVOT: Injecting the new ProgressionEvaluator pipeline directly here
-    console.info(
-      `[engine-events] Running MVP Evaluation for case ${executionCaseId} (trigger: ${trigger})`
-    )
-
-    const oppIds = await runMvpEngine(db, executionCaseId, organizationId)
-    const committedRunId = runId // keep runId for logs
-
-    if (recalculationRunId !== undefined) {
-      await completeRecalculation(db, recalculationRunId, {
-        producedEngineRunId: committedRunId,
-        materialChangeDetected: oppIds.length > 0,
-      })
-    }
-
-    console.info(
-      `[engine-events] Evaluation completed for case ${executionCaseId} (run: ${committedRunId}, ${oppIds.length} opportunities)`
-    )
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err)
-    console.error(
-      `[engine-events] Evaluation failed for case ${executionCaseId}: ${errorMsg}`
-    )
-    if (recalculationRunId !== undefined) {
-      await failRecalculation(db, recalculationRunId, errorMsg)
-    }
-    // Note: runMvpEngine manages its own EngineRun lifecycle internally.
-    // failEngineRun is only applicable when using the full commitEngineRun path.
-    throw err
+  // DESLIGADO 08/07/2026: runMvpEngine (V1_MOCK) aplicava fração 1/6 para
+  // QUALQUER crime e, sem um sentence snapshot real, injetava um crime
+  // inventado ("MOCK_CRIME", art. 157) só para garantir que uma oportunidade
+  // aparecesse na tela — e isso era persistido de verdade em `opportunities`.
+  // A análise real hoje vem de analyzeAutosForCase (IA lê os autos de
+  // verdade); esse pipeline MVP nunca chegou a ter um playbook real
+  // conectado (v3-lep-2019.ts existe mas nunca foi registrado). Mantém o
+  // ciclo de vida do RecalculationRun (fecha como 'skipped') para não deixar
+  // runs presos em 'pending', mas não gera mais oportunidade nenhuma
+  // automaticamente até haver um playbook real ligado.
+  console.info(
+    `[engine-events] Avaliação automática (MVP/mock) desligada — pulando caso ${executionCaseId} (trigger: ${trigger}, run: ${runId})`
+  )
+  if (recalculationRunId !== undefined) {
+    await completeRecalculation(db, recalculationRunId, {
+      producedEngineRunId: runId,
+      materialChangeDetected: false,
+    })
   }
 }
 

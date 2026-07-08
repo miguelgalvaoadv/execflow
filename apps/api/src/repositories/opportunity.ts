@@ -8,8 +8,8 @@
  *   detected_at, created_at, created_by_user_id. Never included in update methods.
  */
 
-import { eq, and, desc, lt } from 'drizzle-orm'
-import { opportunities } from '@execflow/db/schema'
+import { eq, and, desc, lt, ilike, or, isNull, sql } from 'drizzle-orm'
+import { opportunities, executionCases } from '@execflow/db/schema'
 import type { Opportunity, NewOpportunity } from '@execflow/db/schema'
 import type { OpportunityStatus } from '@execflow/db/types'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
@@ -84,6 +84,132 @@ export async function listOpportunitiesByCase(
     return {
       success: false,
       error: { code: 'UNKNOWN', message: 'Failed to list opportunities for case.', cause: err },
+    }
+  }
+}
+
+export type OpportunityOrgListItem = {
+  id: string
+  opportunityType: string
+  status: string
+  summary: string
+  confidenceLevel: string | null
+  detectedAt: Date
+  windowEndAt: Date | null
+  executionCaseId: string
+  caseInternalRef: string | null
+}
+
+export type ListOpportunitiesForOrgFilters = {
+  status?: string
+  opportunityType?: string
+  q?: string
+}
+
+function parseOpportunityOrgListCursor(cursor: string): { id: string } | null {
+  const separator = cursor.indexOf('|')
+  const id = separator > 0 ? cursor.slice(separator + 1) : cursor
+  if (id === '' || !/^[0-9a-f-]{36}$/i.test(id)) return null
+  return { id }
+}
+
+function encodeOpportunityOrgListCursor(detectedAt: Date, id: string): string {
+  return `${detectedAt.toISOString()}|${id}`
+}
+
+/**
+ * Org-wide opportunity list — the firm-wide triage view ("all suggested
+ * opportunities across every case"). Ordered by detectedAt DESC (newest
+ * first) so freshly-analyzed autos surface at the top.
+ *
+ * Achado 08/07/2026: esse endpoint nunca existiu — a tela /opportunities do
+ * front dependia de queue_projections, que só é alimentada pelo fluxo de
+ * extraction-promotion (e-mail/scan), nunca por analyzeAutosForCase. Um
+ * advogado nunca via, no painel geral, oportunidades geradas pela IA.
+ */
+export async function listOpportunitiesForOrg(
+  db: AnyTx,
+  organizationId: string,
+  filters: ListOpportunitiesForOrgFilters,
+  params: PaginationParams
+): Promise<RepositoryResult<{ items: OpportunityOrgListItem[]; nextCursor: string | null }>> {
+  try {
+    const limit = Math.min(params.limit ?? 50, 200)
+    const conditions = [eq(opportunities.organizationId, organizationId)]
+
+    if (filters.status !== undefined) {
+      conditions.push(eq(opportunities.status, filters.status as Opportunity['status']))
+    }
+
+    if (filters.opportunityType !== undefined) {
+      conditions.push(eq(opportunities.opportunityType, filters.opportunityType as Opportunity['opportunityType']))
+    }
+
+    const q = filters.q?.trim()
+    if (q !== undefined && q.length > 0) {
+      const pattern = `%${q}%`
+      conditions.push(
+        or(
+          ilike(opportunities.summary, pattern),
+          ilike(executionCases.internalRef, pattern)
+        )!
+      )
+    }
+
+    if (params.cursor !== undefined) {
+      const parsed = parseOpportunityOrgListCursor(params.cursor)
+      if (parsed === null) {
+        return {
+          success: false,
+          error: { code: 'CONSTRAINT', message: 'Invalid pagination cursor.' },
+        }
+      }
+      conditions.push(
+        sql`(${opportunities.detectedAt}, ${opportunities.id}) < (
+          SELECT detected_at, id FROM opportunities
+          WHERE id = ${parsed.id}::uuid AND organization_id = ${organizationId}
+        )`
+      )
+    }
+
+    const rows = await db
+      .select({
+        id: opportunities.id,
+        opportunityType: opportunities.opportunityType,
+        status: opportunities.status,
+        summary: opportunities.summary,
+        confidenceLevel: opportunities.confidenceLevel,
+        detectedAt: opportunities.detectedAt,
+        windowEndAt: opportunities.windowEndAt,
+        executionCaseId: opportunities.executionCaseId,
+        caseInternalRef: executionCases.internalRef,
+      })
+      .from(opportunities)
+      .innerJoin(
+        executionCases,
+        and(
+          eq(opportunities.executionCaseId, executionCases.id),
+          eq(executionCases.organizationId, organizationId),
+          isNull(executionCases.deletedAt)
+        )
+      )
+      .where(and(...conditions))
+      .orderBy(desc(opportunities.detectedAt), desc(opportunities.id))
+      .limit(limit + 1)
+
+    const hasMore = rows.length > limit
+    const page = hasMore ? rows.slice(0, limit) : rows
+
+    const nextCursor =
+      hasMore && page.length > 0
+        ? encodeOpportunityOrgListCursor(page[page.length - 1]!.detectedAt, page[page.length - 1]!.id)
+        : null
+
+    return { success: true, data: { items: page, nextCursor } }
+  } catch (err) {
+    return {
+      success: false,
+      error: { code: 'UNKNOWN', message: 'Failed to list opportunities for organization.', cause: err },
     }
   }
 }

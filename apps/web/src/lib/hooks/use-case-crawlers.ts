@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient, type QueryObserverResult } from '@tanstack/react-query'
 import { apiGet, apiPost, ApiError } from '../api-client'
 import { queryKeys } from '../query-keys'
 
@@ -14,6 +14,18 @@ export type CrawlerSyncLogItem = {
   createdAt: string
 }
 
+/**
+ * refetchInterval compartilhado pelos hooks de status assíncrono (sync do
+ * tribunal, análise de autos): enquanto o status for pending/running,
+ * atualiza a cada 2s pra dar efeito tempo real; parado nos demais casos.
+ */
+function pollWhilePendingOrRunning<T extends { status: string } | null | undefined>(
+  query: QueryObserverResult<{ data: T }, ApiError> | { state: { data?: { data: T } | undefined } }
+): number | false {
+  const status = (query as { state: { data?: { data: T } | undefined } }).state.data?.data?.status
+  return status === 'pending' || status === 'running' ? 2000 : false
+}
+
 export function useCrawlerSyncStatus(organizationId: string, caseId: string, enabled = true) {
   return useQuery<{ data: CrawlerSyncLogItem | null }, ApiError>({
     queryKey: ['crawler-sync-status', organizationId, caseId],
@@ -22,14 +34,7 @@ export function useCrawlerSyncStatus(organizationId: string, caseId: string, ena
         organizationId,
         signal,
       }),
-    refetchInterval: (query) => {
-      // Se tiver rodando ou pending, atualiza a cada 2 segundos pra dar efeito tempo real
-      const status = query.state.data?.data?.status
-      if (status === 'pending' || status === 'running') {
-        return 2000
-      }
-      return false
-    },
+    refetchInterval: pollWhilePendingOrRunning<CrawlerSyncLogItem | null>,
     enabled: organizationId !== '' && caseId !== '' && enabled,
   })
 }
@@ -85,13 +90,7 @@ export function useAnalysisStatus(organizationId: string, caseId: string, enable
         organizationId,
         signal,
       }),
-    refetchInterval: (query) => {
-      const status = query.state.data?.data?.status
-      if (status === 'pending' || status === 'running') {
-        return 2000
-      }
-      return false
-    },
+    refetchInterval: pollWhilePendingOrRunning<CaseAnalysisRunItem | null>,
     enabled: organizationId !== '' && caseId !== '' && enabled,
   })
 }

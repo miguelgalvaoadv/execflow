@@ -198,7 +198,7 @@ export default function DocumentsPage() {
                           OCR
                         </p>
                         <p className="mt-0.5 truncate text-[12px] font-medium text-slate-800">
-                          {ocrStatusLabel(item.ocrStatus)}
+                          {ocrStatusLabel(item.ocrStatus, item.status)}
                         </p>
                       </div>
                       <div className="min-w-0">
