@@ -9,7 +9,8 @@
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiInteraction } from './ai-log.ts'
 import { buildDocumentBlocks } from './claude-doc-blocks.ts'
-import { eq, and, notInArray } from 'drizzle-orm'
+import { buildDossieText } from './case-dossie.ts'
+import { eq, and, notInArray, desc } from 'drizzle-orm'
 import { db } from '../lib/db.ts'
 import {
   executionCases,
@@ -48,6 +49,8 @@ export type CaseAnalysisResult = {
   resumoPena: string | null
   oportunidadesCriadas: number
   prazosCriados: number
+  incremental: boolean
+  documentosLidos: number
 }
 
 export async function analyzeAutosForCase(
@@ -78,13 +81,36 @@ export async function analyzeAutosForCase(
     throw new Error('Nenhum documento confirmado (autos em PDF) para analisar. Suba os autos primeiro.')
   }
 
+  // Reanálise INCREMENTAL: se o caso já tem um dossiê de uma análise
+  // anterior, e nem todos os autos atuais são novos desde então, manda só
+  // os documentos NOVOS + o dossiê anterior como baseline — em vez de reler
+  // TUDO de novo. Achado 08/07/2026 (pedido do Miguel): mudar um documento
+  // pequeno num caso de 600 páginas forçava reler as 600 páginas de novo,
+  // toda vez — desnecessário, já que o sistema já tinha essa leitura salva.
+  // Só cai pro modo integral se for a primeira análise do caso, ou se TODOS
+  // os autos forem novos (não há baseline útil pra reaproveitar).
+  const [previousSnapshot] = await db
+    .select()
+    .from(sentenceSnapshots)
+    .where(and(eq(sentenceSnapshots.executionCaseId, caseId), eq(sentenceSnapshots.organizationId, organizationId)))
+    .orderBy(desc(sentenceSnapshots.createdAt))
+    .limit(1)
+
+  const previousDocIds = new Set(
+    Array.isArray(previousSnapshot?.sourceDocumentIds) ? (previousSnapshot.sourceDocumentIds as string[]) : []
+  )
+  const newAutos = autos.filter((d: any) => !previousDocIds.has(d.id))
+  const hasDossie = !!previousSnapshot?.explanation
+  const isIncremental = hasDossie && newAutos.length > 0 && newAutos.length < autos.length
+  const docsToRead = isIncremental ? newAutos : autos
+
   // Blocos com proteção de limite: PDFs ≤600 pág. vão nativos (limite real da
   // API Anthropic pra modelos de 1M de contexto); maiores vão como texto OCR
   // com triagem por relevância via Haiku (barato) — só as páginas prováveis
   // de conter sentença/cálculo/PAD/etc. chegam ao Sonnet, com cabeça+cauda
   // sempre incluídas; sem OCR → aviso explícito.
   const { blocks, manifest } = await buildDocumentBlocks(
-    autos.map((d: any) => ({
+    docsToRead.map((d: any) => ({
       id: d.id,
       fileName: d.fileName,
       mimeType: d.mimeType,
@@ -96,6 +122,12 @@ export async function analyzeAutosForCase(
     throw new Error(
       `Nenhum documento pôde ser incluído na análise. Detalhe: ${manifest.join(' | ') || 'autos sem conteúdo legível'}. Se o PDF for grande, aguarde o OCR processar (worker) e tente de novo.`
     )
+  }
+  if (isIncremental && previousSnapshot) {
+    blocks.push({
+      type: 'text',
+      text: `${buildDossieText(previousSnapshot)}\n\n[FIM DO DOSSIÊ ANTERIOR — os documentos acima nesta mensagem são SÓ os NOVOS desde essa análise. Os demais autos já analisados não foram reenviados; use o dossiê acima como o que já se sabia sobre eles.]`,
+    })
   }
 
   const system = `Você é advogado criminalista brasileiro, sócio especialista em Execução Penal (LEP) com décadas de banca — o tipo de advogado que a defensoria chama quando o cálculo do juízo parece errado e ninguém mais percebeu. Sua função aqui não é resumir os autos: é fazer a leitura técnica completa que um advogado faria antes de decidir o que peticionar, extraindo TUDO que for real e deixando de fora TUDO que não tiver base concreta nos autos.
@@ -212,11 +244,15 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
 - Todo número, data ou fração que você reportar precisa vir de um destes dois lugares: (a) está escrito literalmente nos autos, ou (b) é uma conta aritmética direta a partir de números que estão nos autos (e nesse caso o "resumo" ou "fundamentacao" deve deixar claro qual conta foi feita, ex.: "8 anos = 2.920 dias; data-base 14/11/2023; 40% de 2.920 = 1.168 dias → previsão 26/01/2027").
 - Nunca preencha um campo numérico ou de data só para não deixar em branco. "null" é sempre a resposta certa quando o dado não existe ou não é calculável com segurança — um campo null é infinitamente melhor que um campo errado, porque um número errado vira uma petição errada, que pode manter alguém preso além do devido ou fazer o advogado protocolar algo sem fundamento.
 - Se os autos forem insuficientes pra determinar algo central (ex.: data do fato ausente, cálculo homologado ilegível, PDF cortado), diga isso explicitamente no "resumo" — não finja completude.
-- Não corrija "para melhor" nem "para pior" na dúvida — se não der pra saber se o réu é primário ou reincidente, por exemplo, não assuma nenhum dos dois; diga que a informação está ausente e que isso afeta a fração aplicável.`
+- Não corrija "para melhor" nem "para pior" na dúvida — se não der pra saber se o réu é primário ou reincidente, por exemplo, não assuma nenhum dos dois; diga que a informação está ausente e que isso afeta a fração aplicável.
+${isIncremental ? `
+REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você recebeu (1) o dossiê da análise anterior, no início da mensagem, e (2) só os documentos NOVOS desde então (não os autos inteiros de novo). Sua tarefa: atualizar a análise, não recomeçar do zero. Trate o dossiê anterior como verdadeiro pra tudo que os documentos novos não contradizem. Se um documento novo contradiz ou substitui algo do dossiê anterior (ex.: novo cálculo homologado substitui o antigo, nova decisão de PAD), priorize o documento novo e diga isso no "resumo". O JSON de resposta deve sair COMPLETO (não só o que mudou) — combine o que já era sabido com o que é novo.` : ''}`
 
   blocks.push({
     type: 'text',
-    text: `Analise os autos de execução penal de ${row.client.fullName} (processo ${row.case.executionProcessNumber ?? 'sem número'}).\nDocumentos fornecidos: ${manifest.join('; ')}.\nRetorne somente o JSON conforme as instruções.`,
+    text: isIncremental
+      ? `Reanálise incremental dos autos de execução penal de ${row.client.fullName} (processo ${row.case.executionProcessNumber ?? 'sem número'}).\nDocumentos NOVOS desde a última análise: ${manifest.join('; ')}.\nO dossiê da análise anterior foi incluído acima. Retorne somente o JSON atualizado e completo conforme as instruções.`
+      : `Analise os autos de execução penal de ${row.client.fullName} (processo ${row.case.executionProcessNumber ?? 'sem número'}).\nDocumentos fornecidos: ${manifest.join('; ')}.\nRetorne somente o JSON conforme as instruções.`,
   })
 
   const startedAt = Date.now()
@@ -371,10 +407,16 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
         remainingDays: remaining,
         percentServed: pct,
         confidenceLevel: confianca,
-        calculationMethod: 'Análise dos autos por IA (Claude) — requer confirmação do advogado.',
+        calculationMethod: isIncremental
+          ? 'Reanálise incremental dos autos por IA (Claude) — requer confirmação do advogado.'
+          : 'Análise dos autos por IA (Claude) — requer confirmação do advogado.',
         crimesBreakdown,
         missingDataFlags,
         explanation,
+        // Grava o conjunto COMPLETO de autos considerados (não só os novos
+        // desta rodada) — é contra essa lista que a PRÓXIMA análise decide o
+        // que já foi lido e o que é de fato novo.
+        sourceDocumentIds: autos.map((d: any) => d.id),
         createdByUserId: userId,
       } as any)
       .returning({ id: sentenceSnapshots.id })
@@ -459,5 +501,7 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
     resumoPena: pena?.resumo ?? null,
     oportunidadesCriadas,
     prazosCriados,
+    incremental: isIncremental,
+    documentosLidos: docsToRead.length,
   }
 }

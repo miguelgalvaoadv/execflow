@@ -64,7 +64,7 @@ export function AnalyzeAutosButton({ organizationId, caseId }: AnalyzeAutosButto
       {run?.status === 'success' && run.result !== null && (
         <span className="flex items-center gap-1.5 text-xs text-emerald-700">
           <CheckCircle2 className="h-3.5 w-3.5" />
-          {`Análise concluída: ${run.result.oportunidadesCriadas} oportunidade(s) e ${run.result.prazosCriados} prazo(s).`}
+          {`Análise ${run.result.incremental ? 'incremental' : 'completa'} concluída (${run.result.documentosLidos} documento(s) lido(s)): ${run.result.oportunidadesCriadas} oportunidade(s) e ${run.result.prazosCriados} prazo(s).`}
           {run.result.snapshotId ? ' Cálculo de pena proposto — confira na aba Cálculos.' : ''}
         </span>
       )}

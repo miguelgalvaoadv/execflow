@@ -14,6 +14,7 @@ import {
 import { eq, and, desc } from 'drizzle-orm'
 import type { HonoContext } from '../context/types.ts'
 import { createStorageProviderFromEnv } from '@execflow/storage'
+import { buildDossieText } from './case-dossie.ts'
 
 /**
  * Instrução ESPECÍFICA por tipo de oportunidade — sem isso, o prompt de
@@ -94,52 +95,6 @@ CUIDADO: não generalize para "condições prisionais ruins" — aponte o direit
 
 function pieceTypeGuidance(opportunityType: string): string {
   return PIECE_TYPE_GUIDANCE[opportunityType] ?? ''
-}
-
-/**
- * Monta um dossiê em texto a partir do "boletim explicativo" que a análise
- * de autos (case-analysis.ts) já grava no snapshot — em vez de reler os
- * PDFs do zero pra gerar cada peça. Achado 08/07/2026: sem isso, cada
- * "Gerar Peça" pagava de novo pra ler os mesmos autos que a análise já
- * tinha lido, MESMO que o caso já tivesse sido analisado minutos antes —
- * pra autos de 600 págs. isso custava ~US$1 por peça gerada. O dossiê é
- * MUITO mais barato (algumas centenas de tokens em vez de centenas de
- * milhares) e ainda cita fonte/evidência específica, porque isso já veio
- * estruturado da análise.
- */
-function buildDossieText(snap: typeof sentenceSnapshots.$inferSelect): string {
-  const lines: string[] = []
-  lines.push(`[DOSSIÊ DO CASO — resultado da última análise de autos, status do cálculo: ${snap.status}]`)
-  lines.push(
-    `Pena total: ${snap.totalSentenceDays} dias | Cumprida: ${snap.servedDays} dias | Remição: ${snap.remissionDays} dias | Detração: ${snap.detractionDays} dias | Restante: ${snap.remainingDays} dias | Percentual cumprido: ${(Number(snap.percentServed) * 100).toFixed(1)}%`
-  )
-  if (snap.calculationMethod) lines.push(`Método: ${snap.calculationMethod}`)
-
-  const exp = snap.explanation as
-    | { basis?: string; components?: Array<{ name: string; value: unknown; sourceRefs?: string[]; derivationNote?: string }>; assumptions?: string[]; legalCitations?: string[] }
-    | null
-  if (exp?.basis) lines.push(`\nResumo da análise: ${exp.basis}`)
-  if (exp?.components?.length) {
-    lines.push('\nComponentes do cálculo (com fonte e conta feita):')
-    for (const c of exp.components) {
-      lines.push(`- ${c.name}: ${String(c.value ?? '')}${c.sourceRefs?.length ? ` (fonte: ${c.sourceRefs.join(', ')})` : ''}${c.derivationNote ? ` — ${c.derivationNote}` : ''}`)
-    }
-  }
-  const crimes = snap.crimesBreakdown as Array<{ crimeName?: string; article?: string; law?: string; sentenceDate?: string | null; isHediondo?: boolean }> | null
-  if (crimes?.length) {
-    lines.push('\nCrimes considerados:')
-    for (const c of crimes) {
-      lines.push(`- ${c.crimeName ?? ''} (${c.article ?? ''} ${c.law ?? ''})${c.sentenceDate ? `, data do fato: ${c.sentenceDate}` : ''}${c.isHediondo ? ' — hediondo/equiparado' : ''}`)
-    }
-  }
-  if (exp?.assumptions?.length) lines.push(`\nPremissas assumidas na análise: ${exp.assumptions.join('; ')}`)
-  const missing = snap.missingDataFlags as Array<{ field?: string; description?: string }> | null
-  if (missing?.length) {
-    lines.push(`\nDados faltantes sinalizados pela análise: ${missing.map((m) => `${m.field}: ${m.description}`).join('; ')}`)
-  }
-  if (exp?.legalCitations?.length) lines.push(`\nBase legal aplicada: ${exp.legalCitations.join('; ')}`)
-
-  return lines.join('\n')
 }
 
 /**

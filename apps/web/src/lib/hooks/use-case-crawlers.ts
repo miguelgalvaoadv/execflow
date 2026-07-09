@@ -62,6 +62,8 @@ export type CaseAnalysisResult = {
   resumoPena: string | null
   oportunidadesCriadas: number
   prazosCriados: number
+  incremental: boolean
+  documentosLidos: number
 }
 
 export type CaseAnalysisRunItem = {
