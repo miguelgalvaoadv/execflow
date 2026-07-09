@@ -65,7 +65,7 @@ export type BuiltDocBlocks = {
   manifest: string[]
 }
 
-async function latestOcrText(documentId: string): Promise<{ text: string; pageCount: number } | null> {
+export async function latestOcrText(documentId: string): Promise<{ text: string; pageCount: number } | null> {
   const [row] = await db
     .select({ rawText: documentOcrResults.rawText, pageCount: documentOcrResults.pageCount })
     .from(documentOcrResults)

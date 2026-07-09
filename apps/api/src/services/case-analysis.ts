@@ -8,7 +8,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiInteraction } from './ai-log.ts'
-import { buildDocumentBlocks } from './claude-doc-blocks.ts'
+import { buildDocumentBlocks, latestOcrText } from './claude-doc-blocks.ts'
 import { buildDossieText } from './case-dossie.ts'
 import { eq, and, notInArray, desc } from 'drizzle-orm'
 import { db } from '../lib/db.ts'
@@ -99,10 +99,47 @@ export async function analyzeAutosForCase(
   const previousDocIds = new Set(
     Array.isArray(previousSnapshot?.sourceDocumentIds) ? (previousSnapshot.sourceDocumentIds as string[]) : []
   )
+  const oldAutos = autos.filter((d: any) => previousDocIds.has(d.id))
   const newAutos = autos.filter((d: any) => !previousDocIds.has(d.id))
   const hasDossie = !!previousSnapshot?.explanation
   const isIncremental = hasDossie && newAutos.length > 0 && newAutos.length < autos.length
-  const docsToRead = isIncremental ? newAutos : autos
+
+  // "Autos atualizados" quase sempre é o PDF INTEIRO do processo baixado de
+  // novo (fls. numeradas sequencialmente, só cresce) — não um arquivo
+  // separado pequeno. Sem tratar isso, um novo upload da mesma classe
+  // (ex.: novo "autos_integral" com mais páginas) contaria como documento
+  // 100% novo e mandaria o PDF inteiro de novo, do mesmo jeito que antes.
+  // Detecta: documento novo de MESMA CLASSE de um já analisado, com MAIS
+  // páginas → trata como continuação, manda só as páginas que vieram
+  // depois + o dossiê anterior, em vez do arquivo inteiro de novo.
+  const growthBlocks: Array<Record<string, unknown>> = []
+  const growthManifest: string[] = []
+  const docsForFullRead: typeof newAutos = []
+  if (isIncremental) {
+    for (const newDoc of newAutos) {
+      const predecessor = oldAutos.find((d: any) => d.documentClass === newDoc.documentClass)
+      if (!predecessor) {
+        docsForFullRead.push(newDoc)
+        continue
+      }
+      const [oldOcr, newOcr] = await Promise.all([latestOcrText(predecessor.id), latestOcrText(newDoc.id)])
+      if (oldOcr && newOcr && newOcr.pageCount > oldOcr.pageCount) {
+        const pages = newOcr.text.split('\f')
+        const newPages = pages.slice(oldOcr.pageCount)
+        growthBlocks.push({
+          type: 'text',
+          text: `===== PÁGINAS NOVAS DE "${newDoc.fileName}" (continuação de "${predecessor.fileName}", a partir da fl. ${oldOcr.pageCount + 1} de ${newOcr.pageCount}) =====\n\n${newPages.map((p, i) => `[página ${oldOcr.pageCount + i + 1}]\n${p}`).join('\n\n')}\n\n===== FIM DAS PÁGINAS NOVAS =====`,
+        })
+        growthManifest.push(`${newDoc.fileName}: continuação de ${predecessor.fileName} — só as ${newPages.length} página(s) novas foram lidas`)
+      } else {
+        // Não deu pra confirmar que é continuação (sem OCR ainda, ou não
+        // cresceu) — trata como documento novo de verdade, lê inteiro.
+        docsForFullRead.push(newDoc)
+      }
+    }
+  } else {
+    docsForFullRead.push(...autos)
+  }
 
   // Blocos com proteção de limite: PDFs ≤600 pág. vão nativos (limite real da
   // API Anthropic pra modelos de 1M de contexto); maiores vão como texto OCR
@@ -110,7 +147,7 @@ export async function analyzeAutosForCase(
   // de conter sentença/cálculo/PAD/etc. chegam ao Sonnet, com cabeça+cauda
   // sempre incluídas; sem OCR → aviso explícito.
   const { blocks, manifest } = await buildDocumentBlocks(
-    docsToRead.map((d: any) => ({
+    docsForFullRead.map((d: any) => ({
       id: d.id,
       fileName: d.fileName,
       mimeType: d.mimeType,
@@ -118,6 +155,8 @@ export async function analyzeAutosForCase(
       storageKey: d.storageKey,
     }))
   )
+  blocks.push(...growthBlocks)
+  manifest.push(...growthManifest)
   if (blocks.length === 0) {
     throw new Error(
       `Nenhum documento pôde ser incluído na análise. Detalhe: ${manifest.join(' | ') || 'autos sem conteúdo legível'}. Se o PDF for grande, aguarde o OCR processar (worker) e tente de novo.`
@@ -126,7 +165,7 @@ export async function analyzeAutosForCase(
   if (isIncremental && previousSnapshot) {
     blocks.push({
       type: 'text',
-      text: `${buildDossieText(previousSnapshot)}\n\n[FIM DO DOSSIÊ ANTERIOR — os documentos acima nesta mensagem são SÓ os NOVOS desde essa análise. Os demais autos já analisados não foram reenviados; use o dossiê acima como o que já se sabia sobre eles.]`,
+      text: `${buildDossieText(previousSnapshot)}\n\n[FIM DO DOSSIÊ ANTERIOR — o que vier acima nesta mensagem é SÓ o que é NOVO desde essa análise (documentos novos inteiros, ou só as páginas novas de autos que cresceram). O restante já analisado não foi reenviado; use o dossiê acima como o que já se sabia sobre ele.]`,
     })
   }
 
@@ -502,6 +541,6 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
     oportunidadesCriadas,
     prazosCriados,
     incremental: isIncremental,
-    documentosLidos: docsToRead.length,
+    documentosLidos: docsForFullRead.length + growthBlocks.length,
   }
 }
