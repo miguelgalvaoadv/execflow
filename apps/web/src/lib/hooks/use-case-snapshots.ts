@@ -2,6 +2,37 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiGet, apiPost, ApiError } from '../api-client'
 import { queryKeys } from '../query-keys'
 
+export type SnapshotExplanationComponent = {
+  name: string
+  value: unknown
+  confidence: 'high' | 'medium' | 'low'
+  sourceRefs: string[]
+  derivationNote: string
+}
+
+export type SnapshotExplanation = {
+  basis: string
+  components: SnapshotExplanationComponent[]
+  assumptions: string[]
+  missingData: string[]
+  legalCitations: string[]
+}
+
+export type SnapshotCrimeBreakdown = {
+  crimeName: string
+  article: string
+  law: string
+  sentenceDate: string | null
+  isHediondo: boolean
+  sentenceDays: number | null
+}
+
+export type SnapshotMissingDataFlag = {
+  field: string
+  impact: 'high' | 'medium'
+  description: string
+}
+
 export type SentenceSnapshotItem = {
   id: string
   organizationId: string
@@ -18,7 +49,9 @@ export type SentenceSnapshotItem = {
   calculationMethod: string | null
   playbookVersionId: string | null
   sourceDocumentIds: string[]
-  explanation: Record<string, unknown> | null
+  explanation: SnapshotExplanation | null
+  crimesBreakdown: SnapshotCrimeBreakdown[]
+  missingDataFlags: SnapshotMissingDataFlag[]
   amendsSnapshotId: string | null
   confirmedByUserId: string | null
   confirmedAt: string | null

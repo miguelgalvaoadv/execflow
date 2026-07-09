@@ -2537,6 +2537,106 @@ function MotorTab({
   )
 }
 
+/* ─── Boletim explicativo do cálculo (como a IA chegou nesse número) ────── */
+
+const CONFIDENCE_LABEL: Record<string, string> = { high: 'Alta', medium: 'Média', low: 'Baixa', unknown: 'Não avaliada' }
+const CONFIDENCE_CLASS: Record<string, string> = {
+  high: 'text-emerald-700 border-emerald-200 bg-emerald-50',
+  medium: 'text-amber-700 border-amber-200 bg-amber-50',
+  low: 'text-red-700 border-red-200 bg-red-50',
+  unknown: 'text-slate-500 border-slate-200 bg-slate-50',
+}
+
+function SnapshotExplanationPanel({ snap }: { snap: SentenceSnapshotItem }) {
+  const exp = snap.explanation
+  const hasContent =
+    (exp && (exp.components?.length || exp.assumptions?.length || exp.legalCitations?.length || exp.missingData?.length)) ||
+    snap.crimesBreakdown?.length ||
+    snap.missingDataFlags?.length
+  if (!hasContent) return null
+
+  return (
+    <details className="mt-2 rounded border border-slate-200 bg-white/60">
+      <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold text-slate-700 flex items-center gap-2">
+        Como a IA chegou nesse cálculo
+        <span className={`inline-flex items-center rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${CONFIDENCE_CLASS[snap.confidenceLevel] ?? CONFIDENCE_CLASS.unknown}`}>
+          Confiança: {CONFIDENCE_LABEL[snap.confidenceLevel] ?? snap.confidenceLevel}
+        </span>
+      </summary>
+      <div className="px-3 pb-3 pt-1 space-y-3 text-[11px]">
+        {snap.crimesBreakdown && snap.crimesBreakdown.length > 0 && (
+          <div>
+            <p className="font-semibold text-slate-600 uppercase text-[10px] tracking-wider mb-1">Crimes considerados</p>
+            <ul className="space-y-1">
+              {snap.crimesBreakdown.map((c, i) => (
+                <li key={i} className="text-slate-700">
+                  {c.crimeName || 'Crime'} — {c.article} {c.law}
+                  {c.sentenceDate ? ` — data do fato: ${formatDate(c.sentenceDate)}` : ''}
+                  {c.isHediondo ? ' — hediondo/equiparado' : ''}
+                  {c.sentenceDays != null ? ` — ${c.sentenceDays} dias` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {exp?.components && exp.components.length > 0 && (
+          <div>
+            <p className="font-semibold text-slate-600 uppercase text-[10px] tracking-wider mb-1">Componentes do cálculo</p>
+            <ul className="space-y-1.5">
+              {exp.components.map((c, i) => (
+                <li key={i} className="border-l-2 border-slate-200 pl-2">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <strong className="text-slate-800">{c.name}</strong>
+                    <span className="text-slate-700">{String(c.value ?? '')}</span>
+                    <span className={`inline-flex items-center rounded border px-1 py-0 text-[9px] font-semibold uppercase ${CONFIDENCE_CLASS[c.confidence] ?? CONFIDENCE_CLASS.unknown}`}>
+                      {CONFIDENCE_LABEL[c.confidence] ?? c.confidence}
+                    </span>
+                  </div>
+                  {c.derivationNote && <p className={text.faint}>{c.derivationNote}</p>}
+                  {c.sourceRefs?.length > 0 && <p className="text-slate-500">Fonte: {c.sourceRefs.join(', ')}</p>}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {exp?.assumptions && exp.assumptions.length > 0 && (
+          <div>
+            <p className="font-semibold text-slate-600 uppercase text-[10px] tracking-wider mb-1">Premissas assumidas</p>
+            <ul className="list-disc list-inside space-y-0.5 text-slate-700">
+              {exp.assumptions.map((a, i) => <li key={i}>{a}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {(snap.missingDataFlags?.length ?? 0) > 0 && (
+          <div>
+            <p className="font-semibold text-slate-600 uppercase text-[10px] tracking-wider mb-1">Dados faltantes</p>
+            <ul className="space-y-0.5">
+              {snap.missingDataFlags.map((m, i) => (
+                <li key={i} className="text-slate-700">
+                  <span className={`inline-flex items-center rounded border px-1 py-0 text-[9px] font-semibold uppercase mr-1 ${m.impact === 'high' ? CONFIDENCE_CLASS.low : CONFIDENCE_CLASS.medium}`}>
+                    {m.impact === 'high' ? 'Alto impacto' : 'Médio impacto'}
+                  </span>
+                  {m.field}: {m.description}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {exp?.legalCitations && exp.legalCitations.length > 0 && (
+          <div>
+            <p className="font-semibold text-slate-600 uppercase text-[10px] tracking-wider mb-1">Base legal aplicada</p>
+            <p className="text-slate-700">{exp.legalCitations.join(' · ')}</p>
+          </div>
+        )}
+      </div>
+    </details>
+  )
+}
+
 /* ─── Tab Cálculos Penais (Fase 4A) ──────────────────────────────────────── */
 
 type ProposeSentenceSnapshotInput = {
@@ -2941,6 +3041,7 @@ function CalculosTab({
                 Substituir Cálculo
               </button>
             </div>
+            <SnapshotExplanationPanel snap={activeConfirmed} />
           </ListCard>
         ) : (
           <EmptyState
@@ -3001,6 +3102,7 @@ function CalculosTab({
                       {isConfirming ? 'Confirmando…' : 'Confirmar Cálculo'}
                     </button>
                   </div>
+                  <SnapshotExplanationPanel snap={snap} />
                 </ListCard>
               </li>
             ))}

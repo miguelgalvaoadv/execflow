@@ -97,6 +97,52 @@ function pieceTypeGuidance(opportunityType: string): string {
 }
 
 /**
+ * Monta um dossiê em texto a partir do "boletim explicativo" que a análise
+ * de autos (case-analysis.ts) já grava no snapshot — em vez de reler os
+ * PDFs do zero pra gerar cada peça. Achado 08/07/2026: sem isso, cada
+ * "Gerar Peça" pagava de novo pra ler os mesmos autos que a análise já
+ * tinha lido, MESMO que o caso já tivesse sido analisado minutos antes —
+ * pra autos de 600 págs. isso custava ~US$1 por peça gerada. O dossiê é
+ * MUITO mais barato (algumas centenas de tokens em vez de centenas de
+ * milhares) e ainda cita fonte/evidência específica, porque isso já veio
+ * estruturado da análise.
+ */
+function buildDossieText(snap: typeof sentenceSnapshots.$inferSelect): string {
+  const lines: string[] = []
+  lines.push(`[DOSSIÊ DO CASO — resultado da última análise de autos, status do cálculo: ${snap.status}]`)
+  lines.push(
+    `Pena total: ${snap.totalSentenceDays} dias | Cumprida: ${snap.servedDays} dias | Remição: ${snap.remissionDays} dias | Detração: ${snap.detractionDays} dias | Restante: ${snap.remainingDays} dias | Percentual cumprido: ${(Number(snap.percentServed) * 100).toFixed(1)}%`
+  )
+  if (snap.calculationMethod) lines.push(`Método: ${snap.calculationMethod}`)
+
+  const exp = snap.explanation as
+    | { basis?: string; components?: Array<{ name: string; value: unknown; sourceRefs?: string[]; derivationNote?: string }>; assumptions?: string[]; legalCitations?: string[] }
+    | null
+  if (exp?.basis) lines.push(`\nResumo da análise: ${exp.basis}`)
+  if (exp?.components?.length) {
+    lines.push('\nComponentes do cálculo (com fonte e conta feita):')
+    for (const c of exp.components) {
+      lines.push(`- ${c.name}: ${String(c.value ?? '')}${c.sourceRefs?.length ? ` (fonte: ${c.sourceRefs.join(', ')})` : ''}${c.derivationNote ? ` — ${c.derivationNote}` : ''}`)
+    }
+  }
+  const crimes = snap.crimesBreakdown as Array<{ crimeName?: string; article?: string; law?: string; sentenceDate?: string | null; isHediondo?: boolean }> | null
+  if (crimes?.length) {
+    lines.push('\nCrimes considerados:')
+    for (const c of crimes) {
+      lines.push(`- ${c.crimeName ?? ''} (${c.article ?? ''} ${c.law ?? ''})${c.sentenceDate ? `, data do fato: ${c.sentenceDate}` : ''}${c.isHediondo ? ' — hediondo/equiparado' : ''}`)
+    }
+  }
+  if (exp?.assumptions?.length) lines.push(`\nPremissas assumidas na análise: ${exp.assumptions.join('; ')}`)
+  const missing = snap.missingDataFlags as Array<{ field?: string; description?: string }> | null
+  if (missing?.length) {
+    lines.push(`\nDados faltantes sinalizados pela análise: ${missing.map((m) => `${m.field}: ${m.description}`).join('; ')}`)
+  }
+  if (exp?.legalCitations?.length) lines.push(`\nBase legal aplicada: ${exp.legalCitations.join('; ')}`)
+
+  return lines.join('\n')
+}
+
+/**
  * Thrown by generateDraftForOpportunity() when documentFreshnessStatus === 'stale'.
  * The route handler catches this and returns HTTP 409 with structured body.
  * The frontend reads 409 to show the staleness banner (not a generic error toast).
@@ -161,19 +207,29 @@ export class ClaudeDrafterService {
     }
     const { opportunity: opp, case: execCase, client } = firstResult
 
+    // Dossiê do caso: pega o snapshot mais rico disponível (confirmado tem
+    // prioridade; senão o proposto mais recente) — não só o vinculado direto
+    // à oportunidade, porque nem toda oportunidade tem sentenceSnapshotId
+    // preenchido, mas o caso pode já ter sido analisado.
+    const snapCandidates = await db
+      .select()
+      .from(sentenceSnapshots)
+      .where(eq(sentenceSnapshots.executionCaseId, execCase.id))
+      .orderBy(desc(sentenceSnapshots.effectiveAt), desc(sentenceSnapshots.createdAt))
+      .limit(10)
+    const snap =
+      snapCandidates.find((s) => s.status === 'confirmed') ??
+      snapCandidates.find((s) => s.status === 'proposed') ??
+      null
+
     let snapshotInfo = ''
-    if (opp.sentenceSnapshotId) {
-      const snapResult = await db
-        .select()
-        .from(sentenceSnapshots)
-        .where(eq(sentenceSnapshots.id, opp.sentenceSnapshotId))
-      const snap = snapResult[0]
-      if (snap) {
-        snapshotInfo = `\n[Contexto da Pena]\nPena Total (Dias): ${snap.totalSentenceDays}\nDias Cumpridos: ${snap.servedDays}\n`
-      }
+    let dossie = ''
+    if (snap) {
+      snapshotInfo = `\n[Contexto da Pena]\nPena Total (Dias): ${snap.totalSentenceDays}\nDias Cumpridos: ${snap.servedDays}\n`
+      dossie = buildDossieText(snap)
     }
 
-    return { organizationId, userId, opp, execCase, client, snapshotInfo }
+    return { organizationId, userId, opp, execCase, client, snapshotInfo, dossie }
   }
 
   /**
@@ -184,7 +240,7 @@ export class ClaudeDrafterService {
     data: Awaited<ReturnType<ClaudeDrafterService['loadContext']>>,
     instructions?: string
   ): { systemPrompt: string; userPrompt: string } {
-    const { opp, execCase, client, snapshotInfo } = data
+    const { opp, execCase, client, snapshotInfo, dossie } = data
     const guidance = pieceTypeGuidance(opp.opportunityType)
 
     const systemPrompt = `Você é um sócio especialista em Execução Penal de um escritório de ponta, com décadas de banca peticionando perante Varas de Execuções Penais. Sua missão é redigir uma petição clara, direta, tecnicamente impecável e elegante para o Juízo da Execução.
@@ -209,6 +265,7 @@ Tipo: ${opp.opportunityType}
 Resumo do Motor: ${opp.summary}
 Fundamentação do Motor: ${opp.rationale || 'Atingiu o requisito objetivo e subjetivo.'}
 ${snapshotInfo}
+${dossie ? `\n${dossie}\n` : ''}
 
 Instruções Adicionais do Advogado:
 ${instructions || 'Nenhuma instrução adicional.'}
@@ -316,7 +373,7 @@ Regras:
     options: { instructions?: string; systemPrompt?: string; userPrompt?: string }
   ) {
     if (!this.client) return
-    const { organizationId, opp, execCase } = data
+    const { organizationId, opp, execCase, dossie } = data
 
     const freshnessWarning =
       !execCase.documentFreshnessStatus || execCase.documentFreshnessStatus === 'unknown'
@@ -331,37 +388,50 @@ Regras:
       userPrompt = `${freshnessWarning}\n\n${userPrompt}`
     }
 
-    // Fetch Relevant Documents for Context (RAG / Vision)
-    const docResults = await db
-      .select()
-      .from(documents)
-      .where(
-        and(
-          eq(documents.executionCaseId, execCase.id),
-          eq(documents.status, 'confirmed')
+    // Reaproveita o dossiê da análise de autos em vez de reler os PDFs do
+    // zero — achado 08/07/2026 (pedido do Miguel): "Gerar Peça" pagava de
+    // novo pra ler os mesmos autos que "Analisar autos" já tinha lido
+    // minutos/dias antes, mesmo sem nada ter mudado. Se o caso já tem um
+    // dossiê (snapshot com boletim explicativo), usa só o dossiê — muito
+    // mais barato e ainda mais específico, porque a fonte já veio citada.
+    // Só relê os PDFs de verdade se o caso NUNCA foi analisado (sem
+    // dossiê) — aí não há alternativa, é a única fonte de dado disponível.
+    let contentBlocks: Exclude<Anthropic.MessageParam['content'], string>
+    let contextSourceNote: string
+    if (dossie) {
+      contentBlocks = [{ type: 'text', text: userPrompt }]
+      contextSourceNote = 'dossiê da análise de autos (sem reanexar PDFs)'
+    } else {
+      const docResults = await db
+        .select()
+        .from(documents)
+        .where(
+          and(
+            eq(documents.executionCaseId, execCase.id),
+            eq(documents.status, 'confirmed')
+          )
         )
+
+      const relevantClasses = ['sentenca', 'acórdão', 'despacho', 'guia_de_execucao', 'atestado_medico', 'laudo_disciplinar', 'atestado_penas', 'ficha_reu', 'pad', 'certidao_carceraria', 'comprovante_trabalho_estudo', 'autos_iniciais', 'autos_integral']
+      const relevantDocs = docResults.filter((d: any) => d.documentClass && relevantClasses.includes(d.documentClass))
+
+      // Blocos com proteção de limite: PDFs grandes viram texto OCR recortado.
+      const { blocks: docBlocks, manifest } = await buildDocumentBlocks(
+        relevantDocs.map((d: any) => ({
+          id: d.id,
+          fileName: d.fileName,
+          mimeType: d.mimeType,
+          byteSize: Number(d.byteSize),
+          storageKey: d.storageKey,
+        }))
       )
-
-    const relevantClasses = ['sentenca', 'acórdão', 'despacho', 'guia_de_execucao', 'atestado_medico', 'laudo_disciplinar', 'atestado_penas', 'ficha_reu', 'pad', 'certidao_carceraria', 'comprovante_trabalho_estudo', 'autos_iniciais', 'autos_integral']
-    const relevantDocs = docResults.filter((d: any) => d.documentClass && relevantClasses.includes(d.documentClass))
-
-    // Blocos com proteção de limite: PDFs grandes viram texto OCR recortado
-    // (limite da API: ~100 páginas/32MB por PDF — autos reais passam disso).
-    const { blocks: docBlocks, manifest } = await buildDocumentBlocks(
-      relevantDocs.map((d: any) => ({
-        id: d.id,
-        fileName: d.fileName,
-        mimeType: d.mimeType,
-        byteSize: Number(d.byteSize),
-        storageKey: d.storageKey,
-      }))
-    )
-    const contentBlocks = docBlocks as unknown as Exclude<Anthropic.MessageParam['content'], string>
-
-    contentBlocks.push({
-      type: 'text',
-      text: manifest.length > 0 ? `Documentos fornecidos: ${manifest.join('; ')}.\n\n${userPrompt}` : userPrompt,
-    })
+      contentBlocks = docBlocks as unknown as Exclude<Anthropic.MessageParam['content'], string>
+      contentBlocks.push({
+        type: 'text',
+        text: manifest.length > 0 ? `Documentos fornecidos: ${manifest.join('; ')}.\n\n${userPrompt}` : userPrompt,
+      })
+      contextSourceNote = `${relevantDocs.length} documento(s) PDF anexado(s) como contexto (caso sem dossiê de análise prévia)`
+    }
 
     // 5. Call Anthropic
     const startedAt = Date.now()
@@ -386,7 +456,7 @@ Regras:
         organizationId,
         agent: 'draft_generator',
         model: 'claude-sonnet-4-6',
-        promptText: `${systemPrompt}\n\n---\n\n${userPrompt}\n\n[+ ${relevantDocs.length} documento(s) PDF anexado(s) como contexto]`,
+        promptText: `${systemPrompt}\n\n---\n\n${userPrompt}\n\n[+ ${contextSourceNote}]`,
         responseText: generatedContent,
         executionCaseId: execCase.id,
         clientId: execCase.clientId,

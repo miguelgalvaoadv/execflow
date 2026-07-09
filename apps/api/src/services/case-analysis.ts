@@ -112,10 +112,29 @@ Se dois documentos dos autos divergirem entre si num mesmo dado (ex.: dois cálc
 
 RESPONDA APENAS COM JSON VÁLIDO (sem nenhum texto fora do JSON, sem cercas markdown), no formato EXATO:
 {
- "pena": { "penaTotalDias": number|null, "regimeAtual": string|null, "dataBase": "YYYY-MM-DD"|null, "diasRemidos": number|null, "diasCumpridosAprox": number|null, "resumo": string },
- "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "prazo": string, "confianca": "high|medium|low" } ],
- "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string } ]
+ "pena": {
+   "penaTotalDias": number|null, "regimeAtual": string|null, "dataBase": "YYYY-MM-DD"|null, "diasRemidos": number|null, "diasCumpridosAprox": number|null,
+   "resumo": string,
+   "confiancaGeral": "high|medium|low",
+   "crimes": [ { "tipificacao": string, "artigo": string, "lei": string, "dataFato": "YYYY-MM-DD"|null, "hediondo": boolean, "diasPena": number|null } ],
+   "componentesDoCalculo": [ { "nome": string, "valor": string, "confianca": "high|medium|low", "fonte": string, "comoChegou": string } ],
+   "premissasAssumidas": string[],
+   "dadosFaltantes": [ { "campo": string, "impacto": "high|medium|low", "descricao": string } ],
+   "baseLegal": string[]
+ },
+ "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "prazo": string, "confianca": "high|medium|low" } ],
+ "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string, "porque": string } ]
 }
+
+CAMPOS NOVOS DE PROFUNDIDADE — leia com atenção, é aqui que mora a diferença entre uma análise genérica (ruim) e uma análise real (o que se espera):
+- "componentesDoCalculo": um item por PARCELA do cálculo (pena por crime, detração, remição, fração aplicada, dias restantes, etc.), cada um com o VALOR, a FONTE (documento/página onde está escrito) e "comoChegou" mostrando a conta feita (ex.: "8 anos = 2.920 dias; 40% de 2.920 = 1.168 dias cumpridos necessários"). Isso é o que vira a explicação "como você chegou nisso" que o advogado vê na tela — sem isso preenchido de verdade e específico deste caso, a análise é inútil.
+- "crimes": um item por crime da condenação (se houver mais de um, cada um com sua própria data do fato — pode mudar a fração aplicável por crime).
+- "premissasAssumidas": toda vez que você precisou assumir algo razoável na ausência de dado explícito (ex.: "assumido réu primário por ausência de menção a antecedentes"), registre aqui — não deixe isso escondido dentro do resumo.
+- "dadosFaltantes": o que falta nos autos pra aumentar a confiança (ex.: atestado de conduta atualizado, certidão de trânsito em julgado).
+- "baseLegal": lista dos dispositivos legais efetivamente usados no cálculo deste caso (não a lista genérica do checklist — só o que você de fato aplicou).
+- "evidencia" (em cada oportunidade): a citação factual específica que sustenta o pedido — nome do documento e, se possível, a informação exata nele (data, número, trecho). PROIBIDO texto genérico do tipo "cumpriu os requisitos legais" ou "atende ao art. 112 LEP" sem dizer QUAL número/data prova isso NESTE caso. Exemplo RUIM: "O sentenciado cumpriu a fração necessária para progressão." Exemplo BOM: "Conforme guia de execução homologada em 14/11/2023 (fls. do atestado de pena), pena total de 2.920 dias, fração de 40% = 1.168 dias; réu já cumpriu 1.203 dias em 08/07/2026 — fração atingida há aproximadamente 35 dias."
+- "porque" (em cada prazo): a razão ESPECÍFICA deste caso pra esse prazo existir agora (não a explicação genérica do instituto, que já está em "descricao") — ex.: "PAD nº 45/2026 julgado em 02/07/2026 sem registro de audiência de justificação nos autos; prazo conta da ciência da decisão em 05/07/2026."
+Se você não tem informação suficiente pra preencher algum desses campos com especificidade real, é melhor deixar a lista vazia ou o item com "confianca": "low" do que preencher com generalidade — genérico demais é tão ruim quanto errado, porque não ajuda o advogado a agir.
 DISTINÇÃO DOS TIPOS DE CLEMÊNCIA (erro comum — não confundir):
 - "amnesty" = ANISTIA: extingue o próprio crime, decretada por LEI do Congresso, atinge classe de crimes — raríssima em execução penal individual. Só use se os autos citarem lei de anistia específica.
 - "indult" = INDULTO: perdão da PENA (não do crime), por decreto do Executivo (ex.: indulto natalino). É o tipo de clemência mais comum de se pleitear — use este pra pedidos de indulto individual.
@@ -206,10 +225,10 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
     resp = await client.messages.create({
       // @ts-ignore
       model: 'claude-sonnet-4-6',
-      // 6000 → 10000: o prompt agora pede leitura mais completa (checklist de
-      // institutos + fundamentação com dispositivo legal citado por item) —
-      // JSON de resposta maior, precisa de mais margem pra não truncar.
-      max_tokens: 10000,
+      // 10000 → 16000: o prompt agora pede o "boletim explicativo" completo
+      // (componentesDoCalculo, premissas, dadosFaltantes, evidência por
+      // oportunidade/prazo) — resposta bem maior que o resumo curto de antes.
+      max_tokens: 16000,
       system,
       messages: [{ role: 'user', content: blocks as unknown as Anthropic.MessageParam['content'] }],
     })
@@ -291,7 +310,12 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
       )
     )
 
-  // 1. Snapshot de pena (proposto)
+  // 1. Snapshot de pena (proposto) — grava o "boletim explicativo" completo
+  // (explanation/crimesBreakdown/missingDataFlags) que o schema já previa
+  // (`sentence-snapshot.ts`, "This is what gets rendered in the 'Explain
+  // calculation' UI") mas nunca tinha sido preenchido de verdade — achado
+  // 08/07/2026: sem isso, a análise parecia genérica porque o dado detalhado
+  // que o Claude podia produzir era descartado antes de chegar no banco.
   let snapshotId: string | null = null
   const pena = parsed.pena
   if (pena && (pena.penaTotalDias || pena.resumo)) {
@@ -300,6 +324,39 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
     const remission = Number(pena.diasRemidos) || 0
     const remaining = Math.max(total - served - remission, 0)
     const pct = total > 0 ? Math.min(served / total, 1).toFixed(4) : '0'
+    const confianca = ['high', 'medium', 'low'].includes(pena.confiancaGeral) ? pena.confiancaGeral : 'unknown'
+    const crimesBreakdown = Array.isArray(pena.crimes)
+      ? pena.crimes.map((c: any) => ({
+          crimeName: String(c.tipificacao ?? ''),
+          article: String(c.artigo ?? ''),
+          law: String(c.lei ?? ''),
+          sentenceDate: c.dataFato ?? null,
+          isHediondo: Boolean(c.hediondo),
+          sentenceDays: c.diasPena != null ? Number(c.diasPena) : null,
+        }))
+      : []
+    const missingDataFlags = Array.isArray(pena.dadosFaltantes)
+      ? pena.dadosFaltantes.map((d: any) => ({
+          field: String(d.campo ?? ''),
+          impact: ['high', 'medium'].includes(d.impacto) ? d.impacto : 'medium',
+          description: String(d.descricao ?? ''),
+        }))
+      : []
+    const explanation = {
+      basis: String(pena.resumo ?? ''),
+      components: Array.isArray(pena.componentesDoCalculo)
+        ? pena.componentesDoCalculo.map((c: any) => ({
+            name: String(c.nome ?? ''),
+            value: c.valor ?? null,
+            confidence: ['high', 'medium', 'low'].includes(c.confianca) ? c.confianca : 'medium',
+            sourceRefs: c.fonte ? [String(c.fonte)] : [],
+            derivationNote: String(c.comoChegou ?? ''),
+          }))
+        : [],
+      assumptions: Array.isArray(pena.premissasAssumidas) ? pena.premissasAssumidas.map(String) : [],
+      missingData: missingDataFlags.map((m: any) => m.description).filter(Boolean),
+      legalCitations: Array.isArray(pena.baseLegal) ? pena.baseLegal.map(String) : [],
+    }
     const inserted = await db
       .insert(sentenceSnapshots)
       .values({
@@ -313,9 +370,11 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
         detractionDays: 0,
         remainingDays: remaining,
         percentServed: pct,
+        confidenceLevel: confianca,
         calculationMethod: 'Análise dos autos por IA (Claude) — requer confirmação do advogado.',
-        crimesBreakdown: [],
-        missingDataFlags: [],
+        crimesBreakdown,
+        missingDataFlags,
+        explanation,
         createdByUserId: userId,
       } as any)
       .returning({ id: sentenceSnapshots.id })
@@ -344,7 +403,10 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
       opportunityType: OPP_TYPES.has(o.tipo) ? o.tipo : 'recalculation',
       status: 'suggested',
       summary: titulo,
-      rationale: (o.prazo ? `⏳ Prazo/previsão: ${String(o.prazo)}\n\n` : '') + String(o.fundamentacao ?? ''),
+      rationale:
+        (o.prazo ? `⏳ Prazo/previsão: ${String(o.prazo)}\n\n` : '') +
+        String(o.fundamentacao ?? '') +
+        (o.evidencia ? `\n\n📄 Evidência: ${String(o.evidencia)}` : ''),
       confidenceLevel: ['high', 'medium', 'low'].includes(o.confianca) ? o.confianca : 'medium',
       isBlocked: false,
     } as any)
@@ -381,7 +443,7 @@ REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
       organizationId,
       executionCaseId: caseId,
       title: titulo,
-      description: String(p.descricao ?? ''),
+      description: String(p.descricao ?? '') + (p.porque ? `\n\nPor quê (específico deste caso): ${String(p.porque)}` : ''),
       dueAt: due,
       deadlineClass: DL_CLASSES.has(p.classe) ? p.classe : 'legal',
       origin: 'rule',
