@@ -98,6 +98,10 @@ export const QUEUE_INFOSIMPLES_SYNC = 'infosimples.oab-sync'
 // InfoSimples → monitoramento só dos casos já cadastrados (curado), por CNJ, 1x/dia
 export const QUEUE_INFOSIMPLES_CURATED_SYNC = 'infosimples.curated-case-sync'
 
+// Lembrete recorrente pra casos em segredo de justiça (nem InfoSimples nem
+// DJEN leem esses — precisa de conferência manual periódica)
+export const QUEUE_SEALED_CASE_REMINDER_SWEEP = 'sealed-case.reminder-sweep'
+
 // WhatsApp Notifier
 export const QUEUE_WHATSAPP_NOTIFICATION_REQUESTED = 'whatsapp.notification.requested'
 

@@ -182,9 +182,21 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
   // Dynamic import to avoid circular dependency issues at the top level
   const { QUEUE_DAILY_CRAWLER_SWEEP } = await import('../queues/names.ts')
   const { runDailyCrawlerSweep } = await import('../consumers/daily-crawler-sweep.ts')
-  
+
   await boss.work(QUEUE_DAILY_CRAWLER_SWEEP, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
     await runDailyCrawlerSweep(db, boss)
+  })
+
+  // Lembrete recorrente pra casos em segredo de justiça — pedido do Miguel
+  // 08/07/2026: nem InfoSimples nem DJEN leem processo sigiloso (fontes
+  // públicas), então sem isso nada avisa o advogado pra conferir manualmente.
+  // Idempotente (só cria se não houver um prazo aberto já) — daily é barato
+  // o suficiente (só leitura/escrita no próprio banco, sem custo de API externa).
+  const { QUEUE_SEALED_CASE_REMINDER_SWEEP } = await import('../queues/names.ts')
+  const { runSealedCaseReminderSweep } = await import('../consumers/sealed-case-reminder-sweep.ts')
+
+  await boss.work(QUEUE_SEALED_CASE_REMINDER_SWEEP, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
+    await runSealedCaseReminderSweep(db)
   })
 
   // Schedule the periodic sweeps
@@ -193,6 +205,8 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
   await boss.schedule(QUEUE_SLA_DEFER_WAKE, SLA_SWEEP_SCHEDULES.deferWake, {})
   await boss.schedule(QUEUE_SLA_ESCALATION_SWEEP, SLA_SWEEP_SCHEDULES.escalationSweep, {})
   await boss.schedule(QUEUE_SLA_STALE_TASK_SWEEP, SLA_SWEEP_SCHEDULES.staleTaskSweep, {})
+  await boss.schedule(QUEUE_SEALED_CASE_REMINDER_SWEEP, '0 9 * * *', {})
+  console.info('[worker-registry] Sealed case reminder sweep registered (diário 09:00 UTC)')
 
   // Varredura diária de movimentações (Jusbrasil) — OPT-IN (padrão desligado).
   // SEPARAÇÃO DE PAPÉIS (anti-duplicação, mesmo motivo do DataJud→caso): sem
