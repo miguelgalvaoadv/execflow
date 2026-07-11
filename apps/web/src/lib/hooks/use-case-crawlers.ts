@@ -128,3 +128,24 @@ export function invalidateAnalysisResults(
   void queryClient.invalidateQueries({ queryKey: queryKeys.caseOpportunities(organizationId, caseId) })
   void queryClient.invalidateQueries({ queryKey: queryKeys.caseDeadlines(organizationId, caseId) })
 }
+
+/**
+ * Invalida as queries que uma sincronização de tribunal concluída afeta.
+ * Achado 08/07/2026 (relatado pelo Miguel, comparando o painel com o e-SAJ
+ * real): "Sincronizar Tribunal" atualizava o banco corretamente (confirmado
+ * — movimentações de julho/2026 já estavam lá), mas a aba Movimentações
+ * (e Oportunidades/Prazos/dados do caso) nunca era avisada de que havia
+ * dado novo — o React Query continuava servindo o cache antigo até um
+ * reload manual da página inteira. Mesma classe de bug de UI travada em
+ * estado velho já corrigida em "Analisar autos".
+ */
+export function invalidateCrawlerSyncResults(
+  queryClient: ReturnType<typeof useQueryClient>,
+  organizationId: string,
+  caseId: string
+): void {
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caseTimeline(organizationId, caseId) })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caseOpportunities(organizationId, caseId) })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.caseDeadlines(organizationId, caseId) })
+  void queryClient.invalidateQueries({ queryKey: queryKeys.case(organizationId, caseId) })
+}

@@ -1,9 +1,11 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   useCrawlerSyncStatus,
   useTriggerCrawlerSync,
+  invalidateCrawlerSyncResults,
 } from '@/lib/hooks/use-case-crawlers'
 import { Button } from '@/components/ui/Button'
 import { RefreshCw, CheckCircle2, AlertCircle, Clock } from 'lucide-react'
@@ -14,10 +16,21 @@ type CrawlerSyncButtonProps = {
 }
 
 export function CrawlerSyncButton({ organizationId, caseId }: CrawlerSyncButtonProps) {
+  const queryClient = useQueryClient()
   const { data: statusData, isLoading: isLoadingStatus } = useCrawlerSyncStatus(organizationId, caseId)
   const syncMutation = useTriggerCrawlerSync(organizationId, caseId)
 
   const log = statusData?.data
+
+  // Sem isso, o banco atualiza (confirmado) mas a tela de Movimentações
+  // continua mostrando o cache antigo até um reload manual da página.
+  const lastNotifiedLogId = useRef<string | null>(null)
+  useEffect(() => {
+    if (log?.status === 'success' && log.id !== lastNotifiedLogId.current) {
+      lastNotifiedLogId.current = log.id
+      invalidateCrawlerSyncResults(queryClient, organizationId, caseId)
+    }
+  }, [log, queryClient, organizationId, caseId])
 
   const handleSync = () => {
     syncMutation.mutate()
