@@ -42,6 +42,12 @@ export function useCaseTimeline(
         params: { limit: 50 },
       }),
     staleTime: 30 * 1000,
+    // Repolla enquanto a tela do caso estiver aberta — sem isso, uma
+    // movimentação trazida pelo cron automático do InfoSimples/DJEN (sem
+    // nenhum clique do advogado) só aparecia depois de um reload manual da
+    // página. Achado 08/07/2026 (Higor Gabriel): o banco já tinha a
+    // movimentação nova, a tela é que nunca ia buscar de novo sozinha.
+    refetchInterval: 90 * 1000,
     enabled: organizationId !== '' && caseId !== '' && enabled,
   })
 }

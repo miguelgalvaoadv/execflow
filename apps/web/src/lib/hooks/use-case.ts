@@ -59,6 +59,10 @@ export function useCase(organizationId: string, caseId: string, enabled = true) 
         signal,
       }),
     staleTime: 60 * 1000,
+    // Repolla com a tela aberta — monitoringStatus/documentFreshnessStatus
+    // mudam por sincronização automática (cron), sem clique nenhum. Mesmo
+    // motivo de use-case-timeline.ts.
+    refetchInterval: 90 * 1000,
     enabled: organizationId !== '' && caseId !== '' && enabled,
   })
 }

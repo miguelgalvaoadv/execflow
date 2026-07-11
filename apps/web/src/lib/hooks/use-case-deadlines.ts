@@ -46,6 +46,9 @@ export function useCaseDeadlines(
         params: { limit: 50 },
       }),
     staleTime: 30 * 1000,
+    // Repolla com a tela aberta — sincronização automática pode gerar
+    // prazo novo sem clique nenhum do advogado.
+    refetchInterval: 90 * 1000,
     enabled: organizationId !== '' && caseId !== '' && enabled,
   })
 }
