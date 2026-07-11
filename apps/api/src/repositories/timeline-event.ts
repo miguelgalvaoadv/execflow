@@ -15,11 +15,17 @@
  * Callers set occurredAt to the legal time. This preserves the two-clock principle.
  *
  * QUERY PATTERN:
- * Reads return events ordered by occurredAt ASC (chronological legal time).
+ * Reads return events ordered by occurredAt DESC (most recent legal event
+ * first — achado 08/07/2026: a ordem ASC fazia a tela sempre mostrar os 50
+ * eventos MAIS ANTIGOS do caso; num caso com 84 eventos, a movimentação real
+ * mais recente nunca chegava nem perto do limite de 50 e nunca aparecia na
+ * tela, não importa quantas vezes o advogado sincronizasse ou recarregasse).
+ * Paginação "carregar mais" (cursor) anda pro passado a partir do evento
+ * mais antigo já mostrado — ver comentário em queryTimelineEvents().
  * For replay queries, use the compound (recorded_at, occurred_at) index.
  */
 
-import { eq, and, asc, lt, inArray } from 'drizzle-orm'
+import { eq, and, desc, lt, inArray } from 'drizzle-orm'
 import { timelineEvents, timelineEventCategoryEnum } from '@execflow/db/schema'
 import type { TimelineEvent, NewTimelineEvent } from '@execflow/db/schema'
 
@@ -32,8 +38,10 @@ import type { RepositoryResult, PaginatedResult, PaginationParams } from '@execf
 // ---------------------------------------------------------------------------
 
 /**
- * Query timeline events for a case in chronological order (occurred_at ASC).
- * Paginated — never returns all events unbounded.
+ * Query timeline events for a case, most recent first (occurred_at DESC) —
+ * o que o advogado quer ver é o que aconteceu agora, não o evento mais
+ * antigo do processo. Paginado ("carregar mais" anda pro passado a partir
+ * do cursor) — nunca retorna tudo sem limite.
  * Filters: only shows non-amended events (amendsEventId IS NULL) by default.
  *
  * Architecture ref: ENGINEERING_PRINCIPLES.md §11 (paginated list queries).
@@ -70,7 +78,7 @@ export async function queryTimelineEvents(
         visibilityCondition,
         categoryCondition
       ),
-      orderBy: [asc(timelineEvents.occurredAt)],
+      orderBy: [desc(timelineEvents.occurredAt)],
       limit: limit + 1, // fetch one extra to determine if there's a next page
     })
 
