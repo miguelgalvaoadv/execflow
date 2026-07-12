@@ -26,6 +26,25 @@ export type PdfTextProviderDeps = {
 const MIN_AVG_CHARS_PER_PAGE = 20
 
 /**
+ * Teto de seguranca pro OCR - SEPARADO do limite de upload (que pode ser bem
+ * maior, porque o upload em si e streaming e nao usa memoria do processo).
+ * Achado 08/07/2026: getObject baixa o arquivo INTEIRO num Buffer e o
+ * pdfjs-dist processa isso na memoria - sem streaming nenhum, e no MESMO
+ * processo Node do InfoSimples/DJEN/DataJud/SLA (ocr-events.ts). Um PDF
+ * gigante pode estourar a memoria da instancia e derrubar o worker inteiro,
+ * levando as outras integracoes junto - mesma classe do incidente de
+ * crash-loop ja documentado em ocr-events.ts. Na pratica isso quase nunca
+ * bloqueia PDF real: um PDF com camada de texto de verdade (o unico tipo que
+ * este provider consegue processar) raramente passa de poucos MB mesmo com
+ * milhares de paginas - quem costuma passar de 80MB e PDF 100% escaneado
+ * como imagem, que ESTE provider ja rejeitaria de qualquer forma (sem
+ * camada de texto) - so que hoje so descobre isso DEPOIS de ja ter
+ * carregado o arquivo inteiro. Falhar cedo aqui evita o risco sem perder
+ * capacidade real nenhuma.
+ */
+const MAX_OCR_BYTES = 80 * 1024 * 1024
+
+/**
  * Remove caracteres que o Postgres rejeita em colunas TEXT.
  * pdfjs emite null bytes ( ) e controles C0/C1 de fontes corrompidas â€”
  * o INSERT falha com "unsupported Unicode escape/invalid byte" sem isto.
@@ -50,6 +69,13 @@ export function createPdfTextOcrProvider(deps: PdfTextProviderDeps): OcrProvider
       if (document.mimeType !== 'application/pdf') {
         throw new OcrProviderError(
           `pdf-text sÃ³ processa application/pdf (recebido: ${document.mimeType}).`,
+          { retryable: false }
+        )
+      }
+
+      if (document.byteSize > MAX_OCR_BYTES) {
+        throw new OcrProviderError(
+          `Arquivo (${(document.byteSize / (1024 * 1024)).toFixed(0)}MB) grande demais para OCR automatico neste servidor (limite ${MAX_OCR_BYTES / (1024 * 1024)}MB) - provavelmente e um PDF escaneado como imagem (PDF de texto raramente fica tao grande). OCR visual de imagem ainda nao e suportado; peca a versao digital do documento ao tribunal/e-SAJ, ou divida o arquivo em partes menores.`,
           { retryable: false }
         )
       }

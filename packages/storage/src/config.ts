@@ -11,7 +11,14 @@ export const DEFAULT_ALLOWED_MIME_TYPES = [
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
 ] as const
 
-const DEFAULT_MAX_UPLOAD_BYTES = 52_428_800 // 50 MiB
+// 50 MiB → 300 MiB: achado 08/07/2026 (revisão geral pedida pelo Miguel) —
+// autos escaneados reais de execução penal passam fácil de 100-200MB (o
+// próprio upload/blob PUT já foi reescrito em streaming pra aguentar isso,
+// ver services/upload.ts), mas o limite de validação continuava em 50MB e
+// rejeitava esses arquivos ANTES de chegar no streaming — o auto real nunca
+// nem começava a subir. 300MB dá margem confortável; S3 aceita até 5GB
+// numa única PUT, então o teto real não é a AWS, é essa constante.
+const DEFAULT_MAX_UPLOAD_BYTES = 314_572_800 // 300 MiB
 const DEFAULT_UPLOAD_EXPIRES_SECONDS = 900 // 15 minutes
 
 export function resolveStorageConfigFromEnv(
