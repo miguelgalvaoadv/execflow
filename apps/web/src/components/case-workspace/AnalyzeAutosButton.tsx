@@ -59,19 +59,32 @@ export function AnalyzeAutosButton({ organizationId, caseId }: AnalyzeAutosButto
     )
   }
 
+  // Mensagens completas ficam no tooltip (title) — no header elas aparecem
+  // truncadas numa largura fixa pra não espremer o título da página nem
+  // empurrar os outros botões pra fora da tela (achado 13/07/2026).
+  const successMsg =
+    run?.status === 'success' && run.result !== null
+      ? `Análise ${run.result.incremental ? 'incremental' : 'completa'} concluída (${run.result.documentosLidos} documento(s) lido(s)): ${run.result.oportunidadesCriadas} oportunidade(s) e ${run.result.prazosCriados} prazo(s).${run.result.snapshotId ? ' Cálculo de pena proposto — confira na aba Cálculos.' : ''}`
+      : null
+
   return (
-    <div className="flex items-center gap-3">
-      {run?.status === 'success' && run.result !== null && (
-        <span className="flex items-center gap-1.5 text-xs text-emerald-700">
-          <CheckCircle2 className="h-3.5 w-3.5" />
-          {`Análise ${run.result.incremental ? 'incremental' : 'completa'} concluída (${run.result.documentosLidos} documento(s) lido(s)): ${run.result.oportunidadesCriadas} oportunidade(s) e ${run.result.prazosCriados} prazo(s).`}
-          {run.result.snapshotId ? ' Cálculo de pena proposto — confira na aba Cálculos.' : ''}
+    <div className="flex min-w-0 items-center gap-3">
+      {successMsg && (
+        <span
+          className="flex min-w-0 max-w-[260px] items-center gap-1.5 text-xs text-emerald-700"
+          title={successMsg}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{successMsg}</span>
         </span>
       )}
       {run?.status === 'failed' && (
-        <span className="flex items-center gap-1.5 text-xs text-red-700" title={run.errorDetails ?? 'Erro interno'}>
-          <AlertCircle className="h-3.5 w-3.5" />
-          {run.errorDetails ?? 'Falha ao analisar os autos.'}
+        <span
+          className="flex min-w-0 max-w-[260px] items-center gap-1.5 text-xs text-red-700"
+          title={run.errorDetails ?? 'Erro interno'}
+        >
+          <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+          <span className="truncate">{run.errorDetails ?? 'Falha ao analisar os autos.'}</span>
         </span>
       )}
       <Button

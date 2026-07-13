@@ -55,7 +55,7 @@ import {
   type SentenceSnapshotItem,
 } from '@/lib/hooks/use-case-snapshots'
 import { DashboardPageHeader } from '@/components/dashboard'
-import { CaseTabBar, type CaseTabId } from '@/components/case-workspace/CaseTabBar'
+import { CaseTabBar, CASE_TABS, type CaseTabId } from '@/components/case-workspace/CaseTabBar'
 import { CasePartiesAndSearch } from '@/components/case-workspace/CasePartiesAndSearch'
 import { CaseNotesSection } from '@/components/case-workspace/CaseNotesSection'
 import { PieceEditorModal } from '@/components/case-workspace/PieceEditorModal'
@@ -186,8 +186,11 @@ export default function CaseWorkspacePage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search)
-      const tab = urlParams.get('tab') as CaseTabId
-      if (tab) setActiveTab(tab)
+      const tab = urlParams.get('tab')
+      // Valida contra os ids reais — um ?tab= inválido (link antigo/errado)
+      // deixava a página SEM nenhum conteúdo de aba (tela em branco), em vez
+      // de cair na aba padrão (achado 13/07/2026).
+      if (tab && CASE_TABS.some((t) => t.id === tab)) setActiveTab(tab as CaseTabId)
     }
   }, [])
   
