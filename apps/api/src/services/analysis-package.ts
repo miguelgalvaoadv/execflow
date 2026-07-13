@@ -41,7 +41,7 @@ TAXONOMIA (regra mais importante — NÃO jogue tudo em "oportunidades"):
 - "alertas": possibilidade a CONFERIR, ainda não madura pra virar peça (ex.: "possível excesso após o novo cálculo — conferir").
 - "prazos" com classe "benefit" = MARCO FUTURO (data estimada de progressão/livramento/término). Use "dataLimite".
 - "prazos" com classe "legal"/"disciplinary"/"calculation" = prazo processual real (agravo, embargos, manifestação). Use "dias".
-- "oportunidades": SÓ o que tiver as 3 pernas juntas — GATILHO (fato concreto), EVIDÊNCIA (documento+data/página), CONSEQUÊNCIA (efeito jurídico + peça). Sem as três, é alerta ou fato, não oportunidade. Deduplique (um recálculo, não três). Remição já deferida = fato, não oportunidade. Livramento/progressão com data distante = marco futuro, não oportunidade (só vira oportunidade se ≤180 dias ou já vencido). Se houve movimentação crítica sem cálculo novo homologado, progressão/excesso viram alerta, não oportunidade.
+- "oportunidades": SÓ o que tiver as 3 pernas juntas — GATILHO (fato concreto), EVIDÊNCIA (documento+data/página), CONSEQUÊNCIA (efeito jurídico + peça). Sem as três, é alerta ou fato, não oportunidade. Deduplique (um recálculo, não três). Remição já deferida = fato, não oportunidade. Livramento/progressão com data distante = marco futuro, não oportunidade (só vira oportunidade se ≤180 dias ou já vencido). Se houve movimentação crítica sem cálculo novo homologado, progressão/excesso viram alerta, não oportunidade. Em "prazoData" (YYYY-MM-DD, usado só pra ordenar a fila por urgência): se "prazo" for "imediato/já vencido", use a data de hoje; se for uma previsão calculável, calcule; se for vago, use null.
 
 Schema JSON EXATO (todos os campos; use null quando não souber — nunca invente número/data):
 {
@@ -55,7 +55,7 @@ Schema JSON EXATO (todos os campos; use null quando não souber — nunca invent
     "dadosFaltantes": [ { "campo": string, "impacto": "high|medium|low", "descricao": string } ],
     "baseLegal": string[]
   },
-  "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "consequencia": string, "prazo": string, "confianca": "high|medium|low" } ],
+  "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "consequencia": string, "prazo": string, "prazoData": "YYYY-MM-DD"|null, "confianca": "high|medium|low" } ],
   "alertas": [ { "titulo": string, "descricao": string, "oQueConferir": string, "gatilho": string } ],
   "fatos": [ { "titulo": string, "descricao": string, "impactoNoCalculo": string } ],
   "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string, "porque": string } ]

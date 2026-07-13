@@ -8,8 +8,8 @@
  *   detected_at, created_at, created_by_user_id. Never included in update methods.
  */
 
-import { eq, and, desc, lt, ilike, or, isNull, sql } from 'drizzle-orm'
-import { opportunities, executionCases } from '@execflow/db/schema'
+import { eq, and, desc, asc, lt, ilike, or, isNull, sql } from 'drizzle-orm'
+import { opportunities, executionCases, clients } from '@execflow/db/schema'
 import type { Opportunity, NewOpportunity } from '@execflow/db/schema'
 import type { OpportunityStatus } from '@execflow/db/types'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
@@ -98,6 +98,8 @@ export type OpportunityOrgListItem = {
   windowEndAt: Date | null
   executionCaseId: string
   caseInternalRef: string | null
+  clientName: string | null
+  processNumber: string | null
 }
 
 export type ListOpportunitiesForOrgFilters = {
@@ -117,10 +119,20 @@ function encodeOpportunityOrgListCursor(detectedAt: Date, id: string): string {
   return `${detectedAt.toISOString()}|${id}`
 }
 
+/** Sentinel bem no futuro pra tratar windowEndAt=NULL como "sem urgência" na ordenação — ver abaixo. */
+const NO_WINDOW_SENTINEL = sql`'9999-12-31 00:00:00+00'::timestamptz`
+
 /**
  * Org-wide opportunity list — the firm-wide triage view ("all suggested
- * opportunities across every case"). Ordered by detectedAt DESC (newest
- * first) so freshly-analyzed autos surface at the top.
+ * opportunities across every case"). Achado 13/07/2026 (pedido do Miguel):
+ * antes ordenava por detectedAt DESC (mais recente primeiro) — não dizia
+ * nada sobre o que fazer primeiro. Agora ordena por URGÊNCIA: quem tem
+ * janela de prazo (windowEndAt) mais próxima de fechar vem primeiro; quem
+ * não tem janela definida (windowEndAt null — comum, é campo opcional) vai
+ * pro final, ordenado por detectada-há-mais-tempo primeiro (pra não
+ * esquecer as mais antigas). COALESCE com sentinela no futuro em vez de
+ * NULLS LAST porque a paginação por keyset abaixo precisa comparar tuplas
+ * sem NULL no meio (NULL quebra comparação de tupla em SQL).
  *
  * Achado 08/07/2026: esse endpoint nunca existiu — a tela /opportunities do
  * front dependia de queue_projections, que só é alimentada pelo fluxo de
@@ -151,7 +163,8 @@ export async function listOpportunitiesForOrg(
       conditions.push(
         or(
           ilike(opportunities.summary, pattern),
-          ilike(executionCases.internalRef, pattern)
+          ilike(executionCases.internalRef, pattern),
+          ilike(clients.fullName, pattern)
         )!
       )
     }
@@ -165,8 +178,8 @@ export async function listOpportunitiesForOrg(
         }
       }
       conditions.push(
-        sql`(${opportunities.detectedAt}, ${opportunities.id}) < (
-          SELECT detected_at, id FROM opportunities
+        sql`(COALESCE(${opportunities.windowEndAt}, ${NO_WINDOW_SENTINEL}), ${opportunities.detectedAt}, ${opportunities.id}) > (
+          SELECT COALESCE(window_end_at, ${NO_WINDOW_SENTINEL}), detected_at, id FROM opportunities
           WHERE id = ${parsed.id}::uuid AND organization_id = ${organizationId}
         )`
       )
@@ -183,6 +196,8 @@ export async function listOpportunitiesForOrg(
         windowEndAt: opportunities.windowEndAt,
         executionCaseId: opportunities.executionCaseId,
         caseInternalRef: executionCases.internalRef,
+        clientName: clients.fullName,
+        processNumber: executionCases.executionProcessNumber,
       })
       .from(opportunities)
       .innerJoin(
@@ -193,8 +208,13 @@ export async function listOpportunitiesForOrg(
           isNull(executionCases.deletedAt)
         )
       )
+      .innerJoin(clients, eq(executionCases.clientId, clients.id))
       .where(and(...conditions))
-      .orderBy(desc(opportunities.detectedAt), desc(opportunities.id))
+      .orderBy(
+        asc(sql`COALESCE(${opportunities.windowEndAt}, ${NO_WINDOW_SENTINEL})`),
+        asc(opportunities.detectedAt),
+        asc(opportunities.id)
+      )
       .limit(limit + 1)
 
     const hasMore = rows.length > limit

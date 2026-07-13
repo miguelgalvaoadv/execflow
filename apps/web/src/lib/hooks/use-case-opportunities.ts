@@ -103,6 +103,11 @@ export function useReviewOpportunity(organizationId: string, caseId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.queueProjections(organizationId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.engineRuns(organizationId, caseId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.opportunityReviews(organizationId, variables.opportunityId) })
+      // Achado 13/07/2026: faltava isso — o hub geral /opportunities nunca
+      // era invalidado ao qualificar/descartar uma oportunidade de dentro do
+      // caso, então podia ficar mostrando uma linha já tratada até o
+      // staleTime de 30s expirar por conta própria.
+      void queryClient.invalidateQueries({ queryKey: queryKeys.opportunitiesList(organizationId) })
     },
   })
 }
@@ -124,6 +129,7 @@ export function useDeferOpportunity(organizationId: string, caseId: string) {
       void queryClient.invalidateQueries({ queryKey: queryKeys.queueProjections(organizationId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.engineRuns(organizationId, caseId) })
       void queryClient.invalidateQueries({ queryKey: queryKeys.opportunityReviews(organizationId, variables.opportunityId) })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.opportunitiesList(organizationId) })
     },
   })
 }

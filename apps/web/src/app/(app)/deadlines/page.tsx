@@ -8,7 +8,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useSession } from '@/lib/hooks/use-session'
 import { useDeadlines } from '@/lib/hooks/use-deadlines'
 import Link from 'next/link'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, FileText } from 'lucide-react'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
 import {
@@ -89,7 +89,7 @@ export default function DeadlinesPage() {
       <DashboardPageHeader
         eyebrow="Operacional"
         title="Prazos"
-        description="Prazos processuais ativos e vencidos da organização."
+        description="Prazos processuais ativos e vencidos da organização — ordenados do mais urgente (vencimento mais próximo) para o menos urgente."
       />
 
       <div className="mt-6 space-y-4">
@@ -98,7 +98,7 @@ export default function DeadlinesPage() {
             id="dl-search"
             value={searchInput}
             onChange={setSearchInput}
-            placeholder="Título ou ref. do caso…"
+            placeholder="Título, cliente ou ref. do caso…"
           />
           <FilterSelect
             id="dl-status"
@@ -178,10 +178,16 @@ export default function DeadlinesPage() {
                       <StatusBadge variant="deadline" status={item.status} />
                       <PriorityBadge variant="deadline" priority={item.priority} />
                     </div>
-                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px]">
-                      <span className="truncate text-slate-500">
-                        {item.caseInternalRef !== null ? `Caso: ${item.caseInternalRef}` : 'Sem caso vinculado'}
+                    <div className="mt-2.5 min-w-0">
+                      <p className="truncate text-[13px] font-medium text-slate-700">
+                        {item.clientName ?? 'Cliente não identificado'}
+                      </p>
+                      <span className="mt-0.5 inline-flex items-center gap-1.5 text-[12px] text-slate-500">
+                        <FileText className="h-3.5 w-3.5 shrink-0 text-slate-400" />
+                        {item.processNumber ?? <span className="text-amber-700">Processo pendente</span>}
                       </span>
+                    </div>
+                    <div className="mt-auto flex items-center justify-end gap-2 border-t border-slate-100 pt-3 text-[12px]">
                       <span className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600">
                         Abrir
                         <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />

@@ -15,6 +15,8 @@ export type DeadlineListItem = {
   dueAt: string
   executionCaseId: string
   caseInternalRef: string | null
+  clientName: string | null
+  processNumber: string | null
 }
 
 type DeadlinesListResponse = {

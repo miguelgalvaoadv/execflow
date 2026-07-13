@@ -234,7 +234,7 @@ RESPONDA APENAS COM JSON VÁLIDO (sem nenhum texto fora do JSON, sem cercas mark
    "dadosFaltantes": [ { "campo": string, "impacto": "high|medium|low", "descricao": string } ],
    "baseLegal": string[]
  },
- "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "consequencia": string, "prazo": string, "confianca": "high|medium|low" } ],
+ "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "consequencia": string, "prazo": string, "prazoData": "YYYY-MM-DD"|null, "confianca": "high|medium|low" } ],
  "alertas": [ { "titulo": string, "descricao": string, "oQueConferir": string, "gatilho": string } ],
  "fatos": [ { "titulo": string, "descricao": string, "impactoNoCalculo": string } ],
  "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string, "porque": string } ]
@@ -284,6 +284,7 @@ Se os autos não citarem o número/ano do decreto de indulto/comutação vigente
 REGRAS DAS OPORTUNIDADES (muito importante):
 - Só entra em "oportunidades" o que passa na REGRA DE OURO (gatilho + evidência + consequência) da taxonomia acima e é acionável AGORA ou está muito próximo (requisito a ≤180 dias de vencer). Benefício com data distante NÃO é oportunidade — é marco futuro (prazo classe benefit). Ato já passado/perdido não entra. Possibilidade que depende de conferência/documento futuro NÃO entra — vira alerta.
 - Em "prazo", diga SEMPRE quando cabe: "imediato — já cumpriu o requisito", ou uma data/previsão aproximada. Se o gatilho ainda é futuro e distante, isto provavelmente é um marco futuro (prazo benefit) ou um alerta, não uma oportunidade — reclassifique.
+- Em "prazoData" (usado SÓ para ordenar a fila de trabalho por urgência — nunca para decidir prazo processual, isso é sempre "prazos"/"dias"/"dataLimite"): a mesma informação de "prazo", mas em YYYY-MM-DD. Se "imediato/já vencido", use a DATA DE HOJE (para subir ao topo da fila). Se "prazo" for uma data/previsão calculável (ex.: "requisito vence em ~35 dias"), calcule e preencha. Se "prazo" for vago/indeterminado (ex.: "depende de novo cálculo"), use null — null é sempre melhor que uma data chutada.
 - Em "fundamentacao", cite o dispositivo legal exato (artigo + lei/código) e o fato específico dos autos que sustenta o pedido (nunca genérico como "cumpriu os requisitos" — diga QUAL requisito e COMO você chegou nesse número/data).
 - Em "consequencia", diga o efeito jurídico concreto e a peça que nasce disso (ex.: "requisito de progressão já vencido há ~35 dias → cabe pedido de progressão de regime desde já").
 - "confianca": "high" só quando o dado-chave (fração, data, dias) está EXPLÍCITO nos autos ou é cálculo aritmético direto sobre dados explícitos. "medium" quando envolve inferência razoável. "low" quando os autos são ambíguos — nesse caso prefira rebaixar pra ALERTA (com "oQueConferir") em vez de listar como oportunidade de baixa confiança; oportunidade é pra tese pronta, alerta é pra "olhe isto e confirme".
@@ -573,6 +574,14 @@ export async function persistAnalysisReport(
       )
       .limit(1)
     if (existing.length > 0) continue
+    // Achado 13/07/2026 (pedido do Miguel: hub geral de Oportunidades
+    // ordenado por urgência): "prazoData" é a mesma info de "prazo", só que
+    // em YYYY-MM-DD — usada SÓ pra ordenar a fila (windowEndAt), nunca pra
+    // decidir prazo processual de verdade (isso é sempre a tabela deadlines).
+    const prazoData = typeof o.prazoData === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(o.prazoData)
+      ? new Date(`${o.prazoData}T00:00:00Z`)
+      : null
+    const windowEndAt = prazoData && !isNaN(prazoData.getTime()) ? prazoData : null
     await db.insert(opportunities).values({
       organizationId,
       executionCaseId: caseId,
@@ -586,6 +595,7 @@ export async function persistAnalysisReport(
         (o.consequencia ? `\n\n⚖️ Consequência / peça: ${String(o.consequencia)}` : ''),
       confidenceLevel: ['high', 'medium', 'low'].includes(o.confianca) ? o.confianca : 'medium',
       isBlocked: false,
+      ...(windowEndAt ? { windowEndAt } : {}),
     } as any)
     oportunidadesCriadas++
   }

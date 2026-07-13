@@ -22,6 +22,8 @@ export type OpportunityOrgListItemResponse = {
   windowEndAt: string | null
   executionCaseId: string
   caseInternalRef: string | null
+  clientName: string | null
+  processNumber: string | null
 }
 
 export type PaginatedOpportunitiesResponse = {
@@ -40,6 +42,8 @@ function toOrgListItemResponse(item: OpportunityOrgListItem): OpportunityOrgList
     windowEndAt: item.windowEndAt ? item.windowEndAt.toISOString() : null,
     executionCaseId: item.executionCaseId,
     caseInternalRef: item.caseInternalRef,
+    clientName: item.clientName,
+    processNumber: item.processNumber,
   }
 }
 

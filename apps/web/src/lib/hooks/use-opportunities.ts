@@ -16,6 +16,8 @@ export type OpportunityListItem = {
   windowEndAt: string | null
   executionCaseId: string
   caseInternalRef: string | null
+  clientName: string | null
+  processNumber: string | null
 }
 
 type OpportunitiesListResponse = {

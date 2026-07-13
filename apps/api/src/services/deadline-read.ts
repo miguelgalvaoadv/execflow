@@ -30,6 +30,8 @@ export type DeadlineOrgListItemResponse = {
   dueAt: string
   executionCaseId: string
   caseInternalRef: string | null
+  clientName: string | null
+  processNumber: string | null
 }
 
 export type PaginatedDeadlinesResponse = {
@@ -94,6 +96,8 @@ function toOrgListItemResponse(item: DeadlineOrgListItem): DeadlineOrgListItemRe
     dueAt: item.dueAt.toISOString(),
     executionCaseId: item.executionCaseId,
     caseInternalRef: item.caseInternalRef,
+    clientName: item.clientName,
+    processNumber: item.processNumber,
   }
 }
 

@@ -15,7 +15,7 @@
  */
 
 import { eq, and, asc, lt, gt, or, ilike, isNull, sql } from 'drizzle-orm'
-import { deadlines, executionCases } from '@execflow/db/schema'
+import { deadlines, executionCases, clients } from '@execflow/db/schema'
 import type { Deadline, NewDeadline } from '@execflow/db/schema'
 import type { DeadlineStatus, DeadlinePriority } from '@execflow/db/types'
 import type { DbTransaction, AnyTx } from '../lib/db.ts'
@@ -103,6 +103,8 @@ export type DeadlineOrgListItem = {
   dueAt: Date
   executionCaseId: string
   caseInternalRef: string | null
+  clientName: string | null
+  processNumber: string | null
 }
 
 export type ListDeadlinesForOrgFilters = {
@@ -155,7 +157,8 @@ export async function listDeadlinesForOrg(
         or(
           ilike(deadlines.title, pattern),
           ilike(deadlines.description, pattern),
-          ilike(executionCases.internalRef, pattern)
+          ilike(executionCases.internalRef, pattern),
+          ilike(clients.fullName, pattern)
         )!
       )
     }
@@ -186,6 +189,8 @@ export async function listDeadlinesForOrg(
         dueAt: deadlines.dueAt,
         executionCaseId: deadlines.executionCaseId,
         caseInternalRef: executionCases.internalRef,
+        clientName: clients.fullName,
+        processNumber: executionCases.executionProcessNumber,
       })
       .from(deadlines)
       .innerJoin(
@@ -196,6 +201,7 @@ export async function listDeadlinesForOrg(
           isNull(executionCases.deletedAt)
         )
       )
+      .innerJoin(clients, eq(executionCases.clientId, clients.id))
       .where(and(...conditions))
       .orderBy(asc(deadlines.dueAt), asc(deadlines.id))
       .limit(limit + 1)
@@ -212,6 +218,8 @@ export async function listDeadlinesForOrg(
       dueAt: row.dueAt,
       executionCaseId: row.executionCaseId,
       caseInternalRef: row.caseInternalRef,
+      clientName: row.clientName,
+      processNumber: row.processNumber,
     }))
 
     const nextCursor =
