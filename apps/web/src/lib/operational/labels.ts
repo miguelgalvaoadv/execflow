@@ -74,6 +74,7 @@ export function documentClassLabel(documentClass: string | null): string {
     procuracao: 'Procuração',
     autos_iniciais: 'Autos (peças iniciais)',
     autos_integral: 'Autos (cópia integral)',
+    autos_apenso: 'Apenso',
     petition: 'Petição',
     ficha_reu: 'Ficha do réu',
     pad: 'PAD',

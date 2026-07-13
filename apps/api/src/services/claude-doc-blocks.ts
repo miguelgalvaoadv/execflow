@@ -73,6 +73,8 @@ export type DocForBlocks = {
   mimeType: string
   byteSize: number
   storageKey: string
+  /** 'autos_apenso' rotula o bloco como [APENSO] em todo marcador de página — ver case-analysis.ts. */
+  documentClass?: string | null
 }
 
 export type BuiltDocBlocks = {
@@ -223,6 +225,13 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
   for (const doc of docs) {
     if (doc.mimeType !== 'application/pdf') continue
 
+    // Achado 13/07/2026 (pedido do Miguel): quando o processo tem apenso, todo
+    // marcador de página/manifest usa este rótulo — é o que permite o Claude
+    // dizer "fl. X dos autos principais" vs "fl. X do apenso" em vez de
+    // misturar as duas fontes sem dizer qual é qual.
+    const isApenso = doc.documentClass === 'autos_apenso'
+    const label = isApenso ? `${doc.fileName} [APENSO]` : doc.fileName
+
     const ocr = await latestOcrText(doc.id)
     const pageCount = ocr?.pageCount ?? 0
     const hasOcr = !!ocr && ocr.text.trim().length > 0
@@ -239,12 +248,12 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
     const preferText = hasOcr && (pageCount > NATIVE_PDF_MAX_PAGES || tooManyPages || tooBig)
 
     if (preferText) {
-      const excerpt = await excerptPagedText(ocr!.text, doc.fileName)
+      const excerpt = await excerptPagedText(ocr!.text, label)
       blocks.push({
         type: 'text',
-        text: `===== CONTEÚDO EXTRAÍDO DE: ${doc.fileName} (${pageCount} páginas — enviado como TEXTO com triagem por relevância para economizar custo; layout visual de tabelas pode diferir do PDF original) =====\n\n${excerpt}\n\n===== FIM DE ${doc.fileName} =====`,
+        text: `===== CONTEÚDO EXTRAÍDO DE: ${label} (${pageCount} páginas — enviado como TEXTO com triagem por relevância para economizar custo; layout visual de tabelas pode diferir do PDF original) =====\n\n${excerpt}\n\n===== FIM DE ${label} =====`,
       })
-      manifest.push(`${doc.fileName}: ${pageCount} pág. — enviado como TEXTO (triagem Haiku por relevância; economia de custo)`)
+      manifest.push(`${label}: ${pageCount} pág. — enviado como TEXTO (triagem Haiku por relevância; economia de custo)`)
       continue
     }
 
@@ -257,19 +266,23 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
         blocks.push({
           type: 'document',
           source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') },
+          // 'title' é metadado oficial da API pra blocos de documento — ajuda o
+          // Claude a atribuir corretamente cada citação/página à fonte certa
+          // quando há mais de um PDF anexado (autos principais + apenso).
+          title: label,
         })
-        manifest.push(`${doc.fileName}: PDF anexado integral${ocr ? ` (${pageCount} pág.)` : ''}`)
+        manifest.push(`${label}: PDF anexado integral${ocr ? ` (${pageCount} pág.)` : ''}`)
         continue
       } catch (e) {
         console.error(`[claude-doc-blocks] Falha ao ler ${doc.id} do storage:`, e)
-        manifest.push(`${doc.fileName}: FALHA ao ler do storage — não incluído`)
+        manifest.push(`${label}: FALHA ao ler do storage — não incluído`)
         continue
       }
     }
 
     // Grande demais pra PDF nativo E sem texto OCR pra triar → não dá pra incluir.
     manifest.push(
-      `${doc.fileName}: ${pageCount || '?'} pág. — GRANDE DEMAIS e sem texto OCR disponível; NÃO incluído (aguarde o OCR processar)`
+      `${label}: ${pageCount || '?'} pág. — GRANDE DEMAIS e sem texto OCR disponível; NÃO incluído (aguarde o OCR processar)`
     )
   }
 

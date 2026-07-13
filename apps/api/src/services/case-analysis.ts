@@ -25,7 +25,7 @@ import { createStorageProviderFromEnv } from '@execflow/storage'
 const RELEVANT_CLASSES = [
   'sentenca', 'acórdão', 'despacho', 'guia_de_execucao', 'atestado_medico',
   'laudo_disciplinar', 'atestado_penas', 'ficha_reu', 'pad', 'certidao_carceraria',
-  'comprovante_trabalho_estudo', 'autos_iniciais', 'autos_integral',
+  'comprovante_trabalho_estudo', 'autos_iniciais', 'autos_integral', 'autos_apenso',
 ]
 const OPP_TYPES = new Set([
   'progression', 'remission', 'detraction', 'amnesty', 'indult', 'commutation', 'hc',
@@ -100,6 +100,11 @@ export async function analyzeAutosForCase(
   if (autos.length === 0) {
     throw new Error('Nenhum documento confirmado (autos em PDF) para analisar. Suba os autos primeiro.')
   }
+  // Pedido do Miguel 13/07/2026: quando há apenso, toda citação de página na
+  // resposta da IA precisa dizer de qual dos dois autos ela veio — ver
+  // instrução condicional no prompt abaixo e o rótulo "[APENSO]" que
+  // buildDocumentBlocks aplica em cada marcador de página/manifest.
+  const hasApenso = autos.some((d: any) => d.documentClass === 'autos_apenso')
 
   // Reanálise INCREMENTAL: se o caso já tem um dossiê de uma análise
   // anterior, e nem todos os autos atuais são novos desde então, manda só
@@ -158,13 +163,14 @@ export async function analyzeAutosForCase(
       }
       const [oldOcr, newOcr] = await Promise.all([latestOcrText(predecessor.id), latestOcrText(newDoc.id)])
       if (oldOcr && newOcr && newOcr.pageCount > oldOcr.pageCount) {
+        const growthLabel = newDoc.documentClass === 'autos_apenso' ? ' [APENSO]' : ''
         const pages = newOcr.text.split('\f')
         const newPages = pages.slice(oldOcr.pageCount)
         growthBlocks.push({
           type: 'text',
-          text: `===== PÁGINAS NOVAS DE "${newDoc.fileName}" (continuação de "${predecessor.fileName}", a partir da fl. ${oldOcr.pageCount + 1} de ${newOcr.pageCount}) =====\n\n${newPages.map((p, i) => `[página ${oldOcr.pageCount + i + 1}]\n${p}`).join('\n\n')}\n\n===== FIM DAS PÁGINAS NOVAS =====`,
+          text: `===== PÁGINAS NOVAS DE "${newDoc.fileName}${growthLabel}" (continuação de "${predecessor.fileName}", a partir da fl. ${oldOcr.pageCount + 1} de ${newOcr.pageCount}) =====\n\n${newPages.map((p, i) => `[página ${oldOcr.pageCount + i + 1}]\n${p}`).join('\n\n')}\n\n===== FIM DAS PÁGINAS NOVAS =====`,
         })
-        growthManifest.push(`${newDoc.fileName}: continuação de ${predecessor.fileName} — só as ${newPages.length} página(s) novas foram lidas`)
+        growthManifest.push(`${newDoc.fileName}${growthLabel}: continuação de ${predecessor.fileName} — só as ${newPages.length} página(s) novas foram lidas`)
       } else {
         // Não deu pra confirmar que é continuação (sem OCR ainda, ou não
         // cresceu) — trata como documento novo de verdade, lê inteiro.
@@ -187,6 +193,7 @@ export async function analyzeAutosForCase(
       mimeType: d.mimeType,
       byteSize: Number(d.byteSize),
       storageKey: d.storageKey,
+      documentClass: d.documentClass,
     }))
   )
   blocks.push(...growthBlocks)
@@ -342,6 +349,8 @@ DATA DO PRAZO — use "dias" OU "dataLimite", nunca os dois:
 - "dias": use SÓ para prazos processuais contados a partir de HOJE (ex.: agravo em execução = 5, embargos de declaração = 2). Nunca use "dias" pra estimar uma data que já está anos no futuro — isso conta errado.
 NÃO invente dados ausentes (use null). Liste apenas oportunidades e prazos realmente cabíveis com base nos autos — a ausência de uma categoria do checklist nos autos não é erro, é sinal de que ela não se aplica a este caso.
 
+${hasApenso ? `
+ESTE CASO TEM APENSO: você recebeu MAIS DE UM conjunto de autos — os AUTOS PRINCIPAIS e um APENSO (volume anexado, marcado como "[APENSO]" no nome do documento/manifest). São fontes DISTINTAS do mesmo processo. Toda vez que citar uma página/fl. em "evidencia", "fonte" (dentro de componentesDoCalculo), "fundamentacao" ou "porque", diga EXPLICITAMENTE de qual dos dois você está citando — ex.: "fl. 12 dos autos principais" ou "fl. 3 do apenso". NUNCA cite uma página sem indicar a origem quando houver apenso; uma citação sem essa indicação é inútil pro advogado conferir depois.` : ''}
 REGRA FINAL — DISCIPLINA CONTRA ALUCINAÇÃO (a mais importante de todas):
 - Todo número, data ou fração que você reportar precisa vir de um destes dois lugares: (a) está escrito literalmente nos autos, ou (b) é uma conta aritmética direta a partir de números que estão nos autos (e nesse caso o "resumo" ou "fundamentacao" deve deixar claro qual conta foi feita, ex.: "8 anos = 2.920 dias; data-base 14/11/2023; 40% de 2.920 = 1.168 dias → previsão 26/01/2027").
 - Nunca preencha um campo numérico ou de data só para não deixar em branco. "null" é sempre a resposta certa quando o dado não existe ou não é calculável com segurança — um campo null é infinitamente melhor que um campo errado, porque um número errado vira uma petição errada, que pode manter alguém preso além do devido ou fazer o advogado protocolar algo sem fundamento.

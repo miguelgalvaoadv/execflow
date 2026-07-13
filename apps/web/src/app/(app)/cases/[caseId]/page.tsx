@@ -1009,6 +1009,7 @@ function DocumentosTab({
                       completo — a IA sempre dizia "sem autos" mesmo com upload feito. */}
                   <option value="autos_integral">Autos Inteiros (processo completo)</option>
                   <option value="autos_iniciais">Autos Iniciais (denúncia/inquérito)</option>
+                  <option value="autos_apenso">Apenso (volume anexado ao processo)</option>
                   <option value="sentenca">Sentença</option>
                   <option value="acórdão">Acórdão</option>
                   <option value="despacho">Despacho/Decisão</option>
@@ -1023,6 +1024,11 @@ function DocumentosTab({
                   <option value="procuracao">Procuração</option>
                   <option value="outros">Outros</option>
                 </select>
+                {docClass === 'autos_apenso' && (
+                  <p className="mt-1 text-[10px] text-slate-500">
+                    A IA lê os autos principais e o apenso juntos, e toda citação de página passa a indicar de qual dos dois ela vem.
+                  </p>
+                )}
               </div>
               <div>
                 <label className="block text-[11px] text-slate-600 mb-1">Arquivo PDF</label>

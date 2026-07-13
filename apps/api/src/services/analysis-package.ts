@@ -24,6 +24,7 @@ import {
   opportunities,
   deadlines,
   timelineEvents,
+  documents,
 } from '@execflow/db/schema'
 
 function fmtDate(d: Date | string | null | undefined): string {
@@ -115,6 +116,24 @@ export async function buildAnalysisPackage(
     .orderBy(desc(timelineEvents.occurredAt))
     .limit(15)
 
+  // Pedido do Miguel 13/07/2026: se o caso já tem um documento marcado como
+  // apenso no ExecFlow, avisa o advogado que precisa anexar os DOIS PDFs no
+  // ChatGPT (autos principais + apenso) e instrui a resposta a distinguir
+  // de qual dos dois vem cada citação de página — mesma disciplina do modo
+  // "Analisar autos (IA)" nativo (ver case-analysis.ts/claude-doc-blocks.ts).
+  const [apensoDoc] = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(
+      and(
+        eq(documents.executionCaseId, caseId),
+        eq(documents.status, 'confirmed'),
+        eq(documents.documentClass, 'autos_apenso')
+      )
+    )
+    .limit(1)
+  const hasApenso = !!apensoDoc
+
   const c = row.case
   const cl = row.client
 
@@ -161,7 +180,11 @@ ${dlLines}
 ${movLines}
 ==== FIM DO CONTEXTO ====`
 
-  const prompt = `${INSTRUCTION}\n\n${context}\n\nAgora analise o PDF dos autos que estou anexando e devolva o relatório no schema JSON acima. Considere o contexto acima como o que já se sabe (atualize/corrija se os autos disserem o contrário).`
+  const apensoNote = hasApenso
+    ? '\n\nATENÇÃO — ESTE CASO TEM APENSO: este processo tem um APENSO cadastrado no ExecFlow. Anexe os DOIS PDFs (autos principais E apenso). São fontes DISTINTAS do mesmo processo — em "evidencia", "fonte" e "fundamentacao", diga SEMPRE de qual dos dois você está citando (ex.: "fl. 12 dos autos principais" ou "fl. 3 do apenso"). Nunca cite uma página sem indicar a origem.'
+    : ''
+
+  const prompt = `${INSTRUCTION}\n\n${context}\n\nAgora analise o(s) PDF(s) dos autos que estou anexando e devolva o relatório no schema JSON acima. Considere o contexto acima como o que já se sabe (atualize/corrija se os autos disserem o contrário).${apensoNote}`
 
   return { prompt, clientName: cl.fullName, processNumber: c.executionProcessNumber ?? null }
 }
