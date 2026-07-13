@@ -1,5 +1,5 @@
 /**
- * Daily sweep covering three independent health domains:
+ * Daily sweep covering two independent health domains:
  *
  * 1. Astrea e-mail ingestion pipeline (same as before):
  *    (a) zero successful polls in 24h → IMAP down
@@ -7,11 +7,7 @@
  *    (c) >50% orphan/parse_failed rate (min 3 emails) → Astrea changed template
  *    (d) zero emails in 48h despite IMAP working → notification disabled in Astrea
  *
- * 2. AASP webhook monitoring:
- *    Zero system_health_checks rows with checkType='aasp_webhook_received' in 48h,
- *    while AASP_WEBHOOK_TOKEN is configured → AASP may have stopped calling us.
- *
- * 3. Stale-case sweep:
+ * 2. Stale-case sweep:
  *    Cases stuck in documentFreshnessStatus='stale' for >7 days → alert office.
  *
  * Immediate auth-failure alerts are handled right inside astrea-email-sync.ts —
@@ -33,9 +29,6 @@ export async function runSystemHealthSweep(db: WorkersDb): Promise<void> {
 
     const astreaAlerts = await evaluateAstreaEmailHealth(db, org.id)
     alerts.push(...astreaAlerts)
-
-    const aaspAlerts = await evaluateAaspHealth(db, org.id)
-    alerts.push(...aaspAlerts)
 
     const staleAlerts = await runStaleCaseSweep(db, org.id)
     alerts.push(...staleAlerts)
@@ -115,36 +108,7 @@ async function evaluateAstreaEmailHealth(db: WorkersDb, organizationId: string):
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// (2) AASP webhook monitoring
-// ─────────────────────────────────────────────────────────────────────────────
-
-async function evaluateAaspHealth(db: WorkersDb, organizationId: string): Promise<string[]> {
-  if (!process.env['AASP_WEBHOOK_TOKEN']) return []
-
-  const since48h = new Date(Date.now() - 2 * DAY_MS)
-  const rows = await db
-    .select({ id: systemHealthChecks.id })
-    .from(systemHealthChecks)
-    .where(
-      and(
-        eq(systemHealthChecks.organizationId, organizationId),
-        eq(systemHealthChecks.checkType, 'aasp_webhook_received'),
-        gte(systemHealthChecks.createdAt, since48h)
-      )
-    )
-    .limit(1)
-
-  if (rows.length === 0) {
-    return [
-      '⚠️ Nenhuma intimação recebida da AASP nas últimas 48 horas (AASP_WEBHOOK_TOKEN está configurado). Verifique se o webhook está registrado corretamente em intimacaoapi-cadastro.aasp.org.br e se a URL da API está acessível.'
-    ]
-  }
-
-  return []
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// (3) Stale-case sweep
+// (2) Stale-case sweep
 // ─────────────────────────────────────────────────────────────────────────────
 
 async function runStaleCaseSweep(db: WorkersDb, organizationId: string): Promise<string[]> {

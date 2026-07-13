@@ -156,7 +156,7 @@ export default function SettingsPage() {
           </span>
           <div>
             <p className="text-[13px] font-semibold text-slate-900">Integrações</p>
-            <p className="text-[12px] text-slate-500">Estado real de cada fonte: AASP, DataJud, tribunais, e-mail.</p>
+            <p className="text-[12px] text-slate-500">Estado real de cada fonte: DJEN, InfoSimples, DataJud, e-mail.</p>
           </div>
         </Link>
         <Link

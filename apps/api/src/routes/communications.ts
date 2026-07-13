@@ -3,8 +3,11 @@
  *
  * SEPARAÇÃO DE FONTES (spec): intimações são uma entidade própria
  * (court_communications), diferente de movimentações (timeline_events) e de
- * autos (documents). Aqui o advogado vê o que chegou da AASP/DJE/manual,
- * resolve órfãs e marca irrelevantes.
+ * autos (documents). Aqui o advogado vê o que chegou do DJEN/InfoSimples/
+ * manual, resolve órfãs e marca irrelevantes. Achado 13/07/2026: só entra
+ * aqui o que É de fato um ato de comunicação (intimação/publicação/citação),
+ * não qualquer movimentação — ver isFormalCommunication em
+ * services/movement-ingestion.ts.
  *
  * Montado em /api/v1/communications
  */
@@ -16,7 +19,7 @@ import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
 import { requireMinRole } from '../middleware/rbac.ts'
 import { db } from '../lib/db.ts'
-import { courtCommunications, executionCases, timelineEvents } from '@execflow/db/schema'
+import { courtCommunications, executionCases, timelineEvents, clients } from '@execflow/db/schema'
 import { unprocessable, notFound } from '../lib/respond.ts'
 import type { HonoVariables } from '../context/types.ts'
 
@@ -57,12 +60,24 @@ communicationsRouter.get('/', requireMinRole('assistant'), async (c) => {
     if (search) conditions.push(search)
   }
 
+  // Achado 13/07/2026 (Miguel: "poderiam vir com o nome ali além do número do
+  // processo"): join com execution_cases/clients quando já há caso vinculado
+  // — a tela mostrava só o CNJ, obrigando abrir o caso pra saber de quem é.
   const rows = await db
-    .select()
+    .select({
+      comm: courtCommunications,
+      clientName: clients.fullName,
+      caseInternalRef: executionCases.internalRef,
+    })
     .from(courtCommunications)
+    .leftJoin(executionCases, eq(courtCommunications.executionCaseId, executionCases.id))
+    .leftJoin(clients, eq(executionCases.clientId, clients.id))
     .where(and(...conditions))
     .orderBy(desc(courtCommunications.createdAt))
     .limit(q.limit)
+    .then((results) =>
+      results.map((r) => ({ ...r.comm, clientName: r.clientName, caseInternalRef: r.caseInternalRef }))
+    )
 
   const [counters] = await db
     .select({

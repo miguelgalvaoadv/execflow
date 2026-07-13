@@ -37,15 +37,6 @@ type ConnectorSeed = {
 
 const CONNECTOR_SEEDS: ConnectorSeed[] = [
   {
-    kind: 'aasp',
-    name: 'AASP — API de Intimações',
-    category: 'intimacoes',
-    manualImportAvailable: false,
-    notes: 'Push webhook. Registrar em intimacaoapi-cadastro.aasp.org.br e gravar AASP_WEBHOOK_TOKEN.',
-    credentialCheck: () => Boolean(process.env['AASP_WEBHOOK_TOKEN']),
-    enabledCheck: () => process.env['AASP_WEBHOOK_ENABLED'] !== 'false',
-  },
-  {
     kind: 'datajud',
     name: 'DataJud (CNJ) — metadados públicos',
     category: 'movimentacoes',
@@ -69,7 +60,7 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     name: 'Jusbrasil — monitoramento (webhook)',
     category: 'movimentacoes',
     manualImportAvailable: false,
-    notes: 'Paralelo durante validação da AASP (30 dias).',
+    notes: 'Extra opcional — só roda se JUSBRASIL_API_KEY estiver configurada.',
     credentialCheck: () => Boolean(process.env['JUSBRASIL_API_KEY']),
   },
   {
@@ -180,32 +171,6 @@ integrationsRouter.get('/', requireMinRole('assistant'), async (c) => {
         .set({ hasCredential: effectiveCredential, status: derivedStatus, updatedAt: new Date() })
         .where(eq(integrationConnectors.id, existing.id))
     }
-  }
-
-  // AASP: promove a 'connected' se houver webhook recebido registrado.
-  const [lastAasp] = await db
-    .select()
-    .from(systemHealthChecks)
-    .where(
-      and(
-        eq(systemHealthChecks.organizationId, organization.id),
-        eq(systemHealthChecks.checkType, 'aasp_webhook_received'),
-        eq(systemHealthChecks.status, 'success')
-      )
-    )
-    .orderBy(desc(systemHealthChecks.createdAt))
-    .limit(1)
-
-  if (lastAasp) {
-    await db
-      .update(integrationConnectors)
-      .set({ lastRunAt: lastAasp.createdAt, lastSuccessAt: lastAasp.createdAt, updatedAt: new Date() })
-      .where(
-        and(
-          eq(integrationConnectors.organizationId, organization.id),
-          eq(integrationConnectors.kind, 'aasp')
-        )
-      )
   }
 
   // Astrea: mesma evidência via health checks do poll IMAP.

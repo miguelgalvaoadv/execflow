@@ -1,7 +1,8 @@
 /**
- * Ingestão de movimentação/intimação num caso — a MESMA cadeia de reanálise
- * usada pela webhook AASP, agora extraída para ser reusada por qualquer fonte
- * (DataJud, DJEN, AASP, manual) via o endpoint interno /api/v1/internal/case-movements.
+ * Ingestão de movimentação/intimação num caso — cadeia reusada por qualquer
+ * fonte (DataJud, DJEN, InfoSimples, manual) via o endpoint interno
+ * /api/v1/internal/case-movements. AASP foi removida em 13/07/2026 (nunca
+ * teve credencial real — exige CNPJ que o Miguel não tem).
  *
  * O que a cadeia faz, dado um caso + uma movimentação nova:
  *   1. Dedup (não reprocessa a mesma movimentação).
@@ -40,7 +41,7 @@ export type MovementItem = {
   conteudo: string
   /** Quando ocorreu / foi disponibilizada — usada como termo inicial do prazo. */
   occurredAt: Date
-  /** Fonte: 'datajud' | 'djen' | 'aasp' | 'manual'. */
+  /** Fonte: 'datajud' | 'djen' | 'infosimples' | 'manual'. */
   source: string
   /** 'movimentacao' (andamento público) | 'intimacao' (comunicação com prazo). */
   kind: 'movimentacao' | 'intimacao'
@@ -77,6 +78,38 @@ function hasDeadlineSignal(tipo: string, conteudo: string): boolean {
     'sentenc',
     'acordao',
     'decisao',
+  ].some((k) => t.includes(k))
+}
+
+/**
+ * Achado 13/07/2026 (Miguel testando a aba Intimações): a InfoSimples/DataJud
+ * mandam MOVIMENTAÇÃO comum (ex.: "Expedição de documento", "Conclusos para
+ * decisão") no mesmo fluxo que o DJEN manda intimação de verdade — e o código
+ * gravava TUDO em court_communications sem distinguir, inflando "Recebidas"
+ * com ruído que já aparece igual na aba Movimentações do caso (763 registros,
+ * dos quais só ~4 eram intimação/publicação real).
+ *
+ * Esta função é mais ESTREITA que `hasDeadlineSignal` acima (que serve pra
+ * outra pergunta: "isso pode ter peso jurídico?" — ampla de propósito, inclui
+ * sentença/decisão/prazo). Aqui a pergunta é diferente: "isso É, em si, um ATO
+ * DE COMUNICAÇÃO (intimação/citação/publicação/notificação)?" — só isso deve
+ * virar court_communication. "Conclusos para decisão" tem peso jurídico mas
+ * NÃO é uma comunicação (ainda não foi publicado/intimado nada).
+ */
+function isFormalCommunication(tipo: string, conteudo: string): boolean {
+  const t = `${tipo} ${conteudo}`
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+  return [
+    'intima',
+    'publicad',
+    'disponibilizad',
+    'citac',
+    'notifica',
+    'remetido ao dje',
+    'remetido ao diario',
+    'ciencia',
   ].some((k) => t.includes(k))
 }
 
@@ -278,15 +311,23 @@ export async function ingestMovementForCase(
     markedStale = true
   }
 
-  // ── Intimação/possível prazo → court_communication + prazo provisório
+  // ── Comunicação oficial (intimação/publicação/citação) → court_communication
+  // + prazo provisório. Achado 13/07/2026: SÓ grava aqui quando o item É, em
+  // si, um ato de comunicação (ver isFormalCommunication) — não toda
+  // movimentação. Movimentação comum (ex.: "Conclusos para decisão") já foi
+  // gravada acima na timeline; duplicá-la aqui só inflava "Recebidas" com
+  // ruído sem virar comunicação de verdade nenhuma.
+  const isComm = item.kind === 'intimacao' || isFormalCommunication(item.tipo, cleanText)
   const possibleDeadline =
-    item.kind === 'intimacao' ||
-    hasDeadlineSignal(item.tipo, cleanText) ||
-    criticalityTier === '1' ||
-    criticalityTier === '2'
+    isComm &&
+    (item.kind === 'intimacao' ||
+      hasDeadlineSignal(item.tipo, cleanText) ||
+      criticalityTier === '1' ||
+      criticalityTier === '2')
 
   let provisionalDeadlineId: string | null = null
-  try {
+  if (isComm) {
+   try {
     const [comm] = await db
       .insert(courtCommunications)
       .values({
@@ -306,7 +347,11 @@ export async function ingestMovementForCase(
       .onConflictDoNothing()
       .returning()
 
-    if (comm && possibleDeadline && item.kind === 'intimacao') {
+    // Achado 13/07/2026: antes só disparava pra kind==='intimacao' (só o DJEN
+    // usa essa tag) — uma publicação real vinda da InfoSimples com
+    // possibleDeadline=true NUNCA gerava prazo provisório (0 em 763 gravados).
+    // Agora que o insert acima já é gated por isComm, basta possibleDeadline.
+    if (comm && possibleDeadline) {
       provisionalDeadlineId = await createProvisionalDeadline({
         organizationId: execCase.organizationId,
         executionCaseId: execCase.id,
@@ -323,8 +368,9 @@ export async function ingestMovementForCase(
           .where(eq(courtCommunications.id, comm.id))
       }
     }
-  } catch (e) {
+   } catch (e) {
     console.warn('[movement-ingestion] Falha em court_communication/prazo:', e)
+   }
   }
 
   // ── Domain event
@@ -447,6 +493,10 @@ async function recordOrphanCommunications(cnj: string, items: MovementItem[]): P
     let count = 0
     for (const item of items) {
       const cleanText = stripHtml(item.conteudo).substring(0, 8000)
+      // Mesmo filtro do caminho com caso vinculado (ver isFormalCommunication):
+      // movimentação comum de um processo órfão vira ruído duplicado igual,
+      // sem virar comunicação de verdade — não grava.
+      if (item.kind !== 'intimacao' && !isFormalCommunication(item.tipo, cleanText)) continue
       const contentHash = communicationHash(cnj, item.dedupKey)
       const [inserted] = await db
         .insert(courtCommunications)

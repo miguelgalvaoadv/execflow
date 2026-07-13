@@ -1,7 +1,7 @@
 'use client'
 
 /**
- * Intimações — comunicações oficiais recebidas (AASP/DJE/manual).
+ * Intimações — comunicações oficiais recebidas (DJEN/InfoSimples/manual).
  *
  * Fonte separada de movimentações e autos (regra central do painel).
  * Órfãs (processo sem caso) aparecem aqui para triagem: vincular a um caso
@@ -41,6 +41,9 @@ type CourtCommunication = {
   possibleDeadline: boolean
   status: 'new' | 'processed' | 'orphan' | 'dismissed'
   createdAt: string
+  /** Nome do cliente, quando já vinculada a um caso (join no backend). */
+  clientName: string | null
+  caseInternalRef: string | null
 }
 
 type Counters = { total: number; orphan: number; unprocessed: number; withDeadline: number }
@@ -180,7 +183,7 @@ export default function IntimationsPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             title="Nenhuma intimação"
-            description="As intimações recebidas via AASP (e outras fontes configuradas) aparecerão aqui automaticamente."
+            description="As intimações recebidas via DJEN, InfoSimples (e outras fontes configuradas) aparecerão aqui automaticamente."
           />
         ) : (
           <div className="space-y-2">
@@ -196,8 +199,11 @@ export default function IntimationsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <BellRing className="h-4 w-4 shrink-0 text-slate-400" />
                         <p className={`text-[13px] font-semibold ${text.primary}`}>
-                          {comm.processNumber ?? 'Processo não identificado'}
+                          {comm.clientName ?? 'Cliente não identificado'}
                         </p>
+                        <span className={`text-[12px] ${text.faint}`}>
+                          {comm.processNumber ?? 'Processo não identificado'}
+                        </span>
                         <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
                           {badge.label}
                         </span>
