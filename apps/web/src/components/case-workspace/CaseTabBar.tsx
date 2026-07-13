@@ -8,7 +8,6 @@ export type CaseTabId =
   | 'oportunidades'
   | 'prazos'
   | 'calculos'
-  | 'partes'
   | 'observacoes'
 
 export const CASE_TABS: { id: CaseTabId; label: string }[] = [
@@ -17,7 +16,6 @@ export const CASE_TABS: { id: CaseTabId; label: string }[] = [
   { id: 'oportunidades', label: 'Oportunidades' },
   { id: 'prazos', label: 'Prazos' },
   { id: 'calculos', label: 'Cálculos' },
-  { id: 'partes', label: 'Partes & Busca' },
   { id: 'observacoes', label: 'Observações' },
 ]
 

@@ -56,7 +56,6 @@ import {
 } from '@/lib/hooks/use-case-snapshots'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { CaseTabBar, CASE_TABS, type CaseTabId } from '@/components/case-workspace/CaseTabBar'
-import { CasePartiesAndSearch } from '@/components/case-workspace/CasePartiesAndSearch'
 import { CaseNotesSection } from '@/components/case-workspace/CaseNotesSection'
 import { PieceEditorModal } from '@/components/case-workspace/PieceEditorModal'
 import { PromptEditorModal, type GeneratePiecePayload } from '@/components/opportunities/PromptEditorModal'
@@ -544,11 +543,6 @@ export default function CaseWorkspacePage() {
                 </FadeIn>
               )}
 
-              {activeTab === 'partes' && (
-                <FadeIn>
-                  <CasePartiesAndSearch caseId={caseId} />
-                </FadeIn>
-              )}
 
               {activeTab === 'observacoes' && (
                 <FadeIn>

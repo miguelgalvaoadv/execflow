@@ -54,7 +54,6 @@ import { communicationsRouter } from './routes/communications.ts'
 import { integrationsRouter } from './routes/integrations.ts'
 import { aiLogsRouter } from './routes/ai-logs.ts'
 import { portalRouter } from './routes/portal.ts'
-import { partiesRouter } from './routes/parties.ts'
 import { internalRouter } from './routes/internal.ts'
 import type { HonoVariables } from './context/types.ts'
 import { internalError } from './lib/respond.ts'
@@ -139,7 +138,6 @@ app.route('/api/v1/cases', timelineRouter) // timeline: /api/v1/cases/:caseId/ti
 app.route('/api/v1/cases', crawlersRouter) // crawlers: /api/v1/cases/:caseId/sync-tribunal
 app.route('/api/v1/cases', caseSnapshotsRouter) // snapshots: /api/v1/cases/:caseId/*-snapshots
 app.route('/api/v1/cases', caseWorkspaceReadRouter) // read lists: documents, opportunities, deadlines
-app.route('/api/v1/cases', partiesRouter) // partes + busca nos autos: /:caseId/parties, /:caseId/search-autos
 
 // -------------------------------------------------------------------------
 // Domain routes (Phase 5) — deadline and opportunity foundation
