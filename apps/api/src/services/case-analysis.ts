@@ -44,6 +44,19 @@ function parseJsonLoose(text: string): any {
   return JSON.parse(t)
 }
 
+export type CasePanelAlert = {
+  titulo: string
+  descricao: string
+  oQueConferir: string
+  gatilho: string
+}
+
+export type CasePanelFact = {
+  titulo: string
+  descricao: string
+  impactoNoCalculo: string
+}
+
 export type CaseAnalysisResult = {
   snapshotId: string | null
   resumoPena: string | null
@@ -51,6 +64,13 @@ export type CaseAnalysisResult = {
   prazosCriados: number
   incremental: boolean
   documentosLidos: number
+  // Taxonomia (achado 12/07/2026, feedback do Miguel via análise do ChatGPT):
+  // nem todo achado da IA é "oportunidade". Fatos já consumados e alertas
+  // (possibilidades a conferir) não viram linha em `opportunities` — ficam
+  // aqui no resultado da análise (salvo em case_analysis_runs.result, JSONB)
+  // e a tela renderiza como cards informativos, sem poluir a aba Oportunidades.
+  alertas: CasePanelAlert[]
+  fatos: CasePanelFact[]
 }
 
 export async function analyzeAutosForCase(
@@ -207,9 +227,37 @@ RESPONDA APENAS COM JSON VÁLIDO (sem nenhum texto fora do JSON, sem cercas mark
    "dadosFaltantes": [ { "campo": string, "impacto": "high|medium|low", "descricao": string } ],
    "baseLegal": string[]
  },
- "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "prazo": string, "confianca": "high|medium|low" } ],
+ "oportunidades": [ { "tipo": "progression|remission|parole|amnesty|indult|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "evidencia": string, "consequencia": string, "prazo": string, "confianca": "high|medium|low" } ],
+ "alertas": [ { "titulo": string, "descricao": string, "oQueConferir": string, "gatilho": string } ],
+ "fatos": [ { "titulo": string, "descricao": string, "impactoNoCalculo": string } ],
  "prazos": [ { "titulo": string, "classe": "legal|benefit|disciplinary|calculation", "dias": number|null, "dataLimite": "YYYY-MM-DD"|null, "descricao": string, "porque": string } ]
 }
+
+TAXONOMIA — A REGRA MAIS IMPORTANTE DESTA ANÁLISE (é aqui que se separa um painel jurídico útil de uma lista de "coisas que podem existir em execução penal"):
+Cada achado seu tem UM lugar certo. NÃO jogue tudo em "oportunidades" — esse é o erro clássico que deixa o painel inútil (o advogado abre o caso, vê 10 "oportunidades" e 8 são ruído). Classifique com rigor:
+
+1. "fatos" — algo JÁ CONSUMADO/CONFIRMADO nos autos que o advogado precisa SABER, mas que não é uma ação a tomar. Ex.: "42 dias de remição por trabalho JÁ deferidos em 03/07/2026". Isso NÃO é oportunidade — já aconteceu. Se gera uma ação de acompanhamento (conferir se o novo cálculo computou), essa ação vira UM alerta ou UMA pendência, não uma "oportunidade de remição".
+
+2. "alertas" — uma POSSIBILIDADE ainda NÃO madura pra virar peça, que depende de conferência ou de um documento que ainda não está nos autos. Ex.: "Possível excesso de execução após a unificação — conferir quando o novo cálculo sair". Alerta é honesto: diz "olhe isto", sem fingir que já é uma tese pronta. Em "gatilho" diga o que faz esse alerta existir; em "oQueConferir" diga exatamente o que precisa ser verificado pra ele virar (ou não) oportunidade real.
+
+3. "prazos" com classe "benefit" = MARCO FUTURO (data de progressão/livramento/término estimada). NÃO é prazo processual, é uma data pra monitorar. Use "dataLimite". Progressão/livramento/aberto/término da pena entram SEMPRE aqui, nunca como "oportunidade" (a menos que o requisito já esteja vencido/muito próximo — aí vira TAMBÉM uma oportunidade, ver regra abaixo).
+
+4. "prazos" com classe "legal"/"disciplinary"/"calculation" = PRAZO PROCESSUAL real, com data de vencimento contada de intimação/publicação/ciência (agravo, embargos, manifestação sobre cálculo, defesa em PAD). Use "dias".
+
+5. "oportunidades" — SÓ entra aqui o que passar na REGRA DE OURO (as três pernas juntas, obrigatórias):
+   (a) GATILHO: um fato concreto nos autos que abre a oportunidade AGORA (ex.: "cálculo homologado não computou os 42 dias de remição já deferidos").
+   (b) EVIDÊNCIA: a citação factual específica (documento + data/número/página) que prova o gatilho — a mesma disciplina do campo "evidencia".
+   (c) CONSEQUÊNCIA: o efeito jurídico concreto e a peça que nasce disso (ex.: "a progressão pode estar até 42 dias mais próxima → cabe pedido de retificação de cálculo").
+   Se você não consegue preencher as TRÊS com especificidade real deste caso, NÃO é oportunidade — é alerta (se falta conferência) ou fato (se já consumado) ou marco futuro (se é data distante). Preencha "consequencia" em cada oportunidade com a peça/efeito concreto; sem isso, rebaixe pra alerta.
+
+DEDUPLICAÇÃO OBRIGATÓRIA: se dois ou mais achados apontam pra mesma ação (ex.: três variações de "recálculo após unificação/remição"), FUNDA em UMA só oportunidade com a fundamentação combinada. Nunca liste o mesmo instituto várias vezes com redação diferente — isso é o defeito nº 1 a evitar.
+EXEMPLOS DE ROTEAMENTO (siga à risca):
+- "Remição de 42 dias já deferida" → FATO (não oportunidade). Impacto: "incluir no novo cálculo".
+- "Livramento condicional previsto para 2031" → MARCO FUTURO (prazo classe benefit). Só vira oportunidade se a data estimada estiver a ≤180 dias OU já vencida.
+- "Cálculo não computou remição homologada, podendo antecipar a progressão" → OPORTUNIDADE (tem gatilho+evidência+consequência).
+- "Unificação pode alterar a fração de progressão — conferir" → ALERTA (falta o cálculo novo pra confirmar).
+- "Pena pode ter excesso de execução" sem número que prove → ALERTA, nunca oportunidade.
+REGRA DA BASE DE CÁLCULO INSTÁVEL (importante): se houve movimentação crítica recente que ainda NÃO se refletiu num cálculo homologado (unificação/soma de penas, nova condenação, falta grave reconhecida, remição nova), então progressão, livramento e excesso ficam como ALERTA ("reavaliar após novo cálculo"), NÃO como oportunidade — mesmo que a data pareça próxima —, porque a própria base do cálculo está em movimento. A ÚNICA oportunidade real nesse cenário costuma ser o pedido/conferência do novo cálculo (recalculation). Só promova progressão/livramento a oportunidade quando existir cálculo homologado atual que já reflita a movimentação e mostre o requisito vencido/próximo.
 
 CAMPOS NOVOS DE PROFUNDIDADE — leia com atenção, é aqui que mora a diferença entre uma análise genérica (ruim) e uma análise real (o que se espera):
 - "componentesDoCalculo": um item por PARCELA do cálculo (pena por crime, detração, remição, fração aplicada, dias restantes, etc.), cada um com o VALOR, a FONTE (documento/página onde está escrito) e "comoChegou" mostrando a conta feita (ex.: "8 anos = 2.920 dias; 40% de 2.920 = 1.168 dias cumpridos necessários"). Isso é o que vira a explicação "como você chegou nisso" que o advogado vê na tela — sem isso preenchido de verdade e específico deste caso, a análise é inútil.
@@ -227,10 +275,11 @@ DISTINÇÃO DOS TIPOS DE CLEMÊNCIA (erro comum — não confundir):
 Se os autos não citarem o número/ano do decreto de indulto/comutação vigente, NÃO invente — registre a oportunidade mas diga explicitamente em "fundamentacao" que o advogado precisa confirmar o decreto vigente antes de peticionar.
 
 REGRAS DAS OPORTUNIDADES (muito importante):
-- Liste APENAS o que pode ser pleiteado AGORA (dentro do prazo) ou NO FUTURO. NÃO liste oportunidades referentes a atos já passados/perdidos.
-- Em "prazo", diga SEMPRE quando cabe: "imediato — já cumpriu o requisito", ou uma data/previsão aproximada (ex.: "previsto para ~03/2027, ao atingir 2/5 da pena"). Se não der pra estimar, explique objetivamente o gatilho futuro.
-- Em "fundamentacao", cite o dispositivo legal exato (artigo + lei/código) e, quando possível, o fato específico dos autos que sustenta o pedido (não genérico como "cumpriu os requisitos" — diga QUAL requisito e COMO você chegou nesse número/data).
-- "confianca": "high" só quando o dado-chave (fração, data, dias) está EXPLÍCITO nos autos ou é cálculo aritmético direto sobre dados explícitos. "medium" quando envolve alguma inferência razoável (ex.: presumir data do fato pela denúncia quando a sentença não repete). "low" quando os autos são ambíguos ou incompletos nesse ponto — nunca omita a oportunidade só por baixa confiança, apenas marque como "low" e diga o que falta confirmar.
+- Só entra em "oportunidades" o que passa na REGRA DE OURO (gatilho + evidência + consequência) da taxonomia acima e é acionável AGORA ou está muito próximo (requisito a ≤180 dias de vencer). Benefício com data distante NÃO é oportunidade — é marco futuro (prazo classe benefit). Ato já passado/perdido não entra. Possibilidade que depende de conferência/documento futuro NÃO entra — vira alerta.
+- Em "prazo", diga SEMPRE quando cabe: "imediato — já cumpriu o requisito", ou uma data/previsão aproximada. Se o gatilho ainda é futuro e distante, isto provavelmente é um marco futuro (prazo benefit) ou um alerta, não uma oportunidade — reclassifique.
+- Em "fundamentacao", cite o dispositivo legal exato (artigo + lei/código) e o fato específico dos autos que sustenta o pedido (nunca genérico como "cumpriu os requisitos" — diga QUAL requisito e COMO você chegou nesse número/data).
+- Em "consequencia", diga o efeito jurídico concreto e a peça que nasce disso (ex.: "requisito de progressão já vencido há ~35 dias → cabe pedido de progressão de regime desde já").
+- "confianca": "high" só quando o dado-chave (fração, data, dias) está EXPLÍCITO nos autos ou é cálculo aritmético direto sobre dados explícitos. "medium" quando envolve inferência razoável. "low" quando os autos são ambíguos — nesse caso prefira rebaixar pra ALERTA (com "oQueConferir") em vez de listar como oportunidade de baixa confiança; oportunidade é pra tese pronta, alerta é pra "olhe isto e confirme".
 
 CHECKLIST DE OPORTUNIDADES — institutos da execução penal (percorra cada um; inclua só o que tiver base real nos autos, mas NÃO PULE nenhum item sem checar):
 - Progressão de regime (art. 112 LEP) — fração cumprida? Ver tabela abaixo.
@@ -501,7 +550,8 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
       rationale:
         (o.prazo ? `⏳ Prazo/previsão: ${String(o.prazo)}\n\n` : '') +
         String(o.fundamentacao ?? '') +
-        (o.evidencia ? `\n\n📄 Evidência: ${String(o.evidencia)}` : ''),
+        (o.evidencia ? `\n\n📄 Evidência: ${String(o.evidencia)}` : '') +
+        (o.consequencia ? `\n\n⚖️ Consequência / peça: ${String(o.consequencia)}` : ''),
       confidenceLevel: ['high', 'medium', 'low'].includes(o.confianca) ? o.confianca : 'medium',
       isBlocked: false,
     } as any)
@@ -549,6 +599,27 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
     prazosCriados++
   }
 
+  // 4. Alertas e fatos — NÃO viram linha em `opportunities`/`deadlines`.
+  // Ficam no resultado da análise (case_analysis_runs.result, JSONB) e a tela
+  // renderiza como cards informativos. Sanitiza + limita pra não deixar a IA
+  // inflar o painel (máx. 8 de cada; strings recortadas).
+  const clip = (v: unknown, max = 600): string => String(v ?? '').slice(0, max)
+  const alertas: CasePanelAlert[] = Array.isArray(parsed.alertas)
+    ? parsed.alertas.slice(0, 8).map((a: any) => ({
+        titulo: clip(a.titulo, 200),
+        descricao: clip(a.descricao),
+        oQueConferir: clip(a.oQueConferir),
+        gatilho: clip(a.gatilho, 300),
+      }))
+    : []
+  const fatos: CasePanelFact[] = Array.isArray(parsed.fatos)
+    ? parsed.fatos.slice(0, 8).map((f: any) => ({
+        titulo: clip(f.titulo, 200),
+        descricao: clip(f.descricao),
+        impactoNoCalculo: clip(f.impactoNoCalculo, 300),
+      }))
+    : []
+
   return {
     snapshotId,
     resumoPena: pena?.resumo ?? null,
@@ -556,5 +627,7 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
     prazosCriados,
     incremental: isIncremental,
     documentosLidos: docsForFullRead.length + growthBlocks.length,
+    alertas,
+    fatos,
   }
 }

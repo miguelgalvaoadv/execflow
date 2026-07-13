@@ -1,22 +1,29 @@
 /**
- * Detector de oportunidades por IA a partir do TEXTO das movimentações.
+ * Classificador de CRITICIDADE de movimentações por IA (a partir do texto).
  *
  * Diferente de `case-analysis.ts` (que lê os autos em PDF), este serviço é leve:
- * recebe o texto das movimentações novas (ex.: vindas do webhook do Escavador) e
- * pergunta ao Claude se há uma oportunidade jurídica de execução penal ali.
- * Oportunidades entram como 'suggested' (o advogado confirma).
+ * recebe o texto das movimentações novas (InfoSimples/DJEN/webhook) e classifica
+ * a CRITICIDADE delas para os autos já existentes. É o que dispara o "autos
+ * desatualizados" (freshness gate): movimentação crítica → o caso precisa de
+ * autos novos antes de gerar peça.
+ *
+ * MUDANÇA 12/07/2026 (feedback do Miguel via análise do ChatGPT): este serviço
+ * NÃO cria mais "oportunidades". Ler só o TEXTO de uma movimentação e chutar
+ * oportunidades jurídicas gerava exatamente o lixo que o Miguel reclamou —
+ * pra "Unificação e Soma de Penas" ele despejava progressão/recálculo/excesso/
+ * livramento/remição genéricos e duplicados, sem base concreta, porque não
+ * abriu o PDF. Oportunidade REAL só nasce da análise dos autos
+ * (`case-analysis.ts`), que lê o processo inteiro e aplica a regra de ouro
+ * (gatilho + evidência + consequência). Aqui a IA só responde UMA pergunta
+ * barata: quão crítica é esta movimentação? (tier 1/2/3). Nada é escrito em
+ * `opportunities` — o retorno mantém a forma antiga (oportunidadesCriadas: 0)
+ * só pra não quebrar os chamadores.
  */
 import Anthropic from '@anthropic-ai/sdk'
 import { logAiInteraction } from './ai-log.ts'
 import { eq, and } from 'drizzle-orm'
 import { db } from '../lib/db.ts'
-import { executionCases, clients, opportunities } from '@execflow/db/schema'
-
-const OPP_TYPES = new Set([
-  'progression', 'remission', 'detraction', 'amnesty', 'commutation', 'hc',
-  'pad_challenge', 'prescription', 'recalculation', 'excess_execution',
-  'rights_violation', 'parole',
-])
+import { executionCases, clients } from '@execflow/db/schema'
 
 function parseJsonLoose(text: string): any {
   let t = text.trim()
@@ -29,16 +36,18 @@ function parseJsonLoose(text: string): any {
 }
 
 export type MovementOpportunityResult = {
+  /** Mantido por compatibilidade — este serviço NÃO cria mais oportunidades (sempre 0). */
   oportunidadesCriadas: number
+  /** Mantido por compatibilidade — sempre vazio. */
   titulos: string[]
-  /** Highest criticality tier across all movements in this batch, or null if none classified. */
+  /** Maior criticidade entre as movimentações do lote, ou null se nenhuma classificada. */
   criticalityTier: '1' | '2' | '3' | null
 }
 
 /**
- * Analisa o texto das movimentações novas de um caso e cria oportunidades
- * sugeridas quando o Claude identifica algo cabível. Best-effort: se a chave
- * não estiver configurada ou a IA não retornar JSON, retorna 0 sem lançar.
+ * Classifica a criticidade das movimentações novas de um caso (não cria
+ * oportunidades — ver docstring do módulo). Best-effort: se a chave não estiver
+ * configurada ou a IA não retornar JSON, retorna criticidade null sem lançar.
  */
 export async function detectOpportunitiesFromMovements(params: {
   organizationId: string
@@ -65,25 +74,20 @@ export async function detectOpportunitiesFromMovements(params: {
 
   const client = new Anthropic({ apiKey })
   const system = `Você é advogado criminalista brasileiro especialista em Execução Penal (LEP).
-Recebe NOVAS MOVIMENTAÇÕES de um processo de execução penal e deve:
-1. Identificar se surgiu alguma OPORTUNIDADE jurídica acionável (ex.: progressão, livramento, remição, indulto, comutação, HC, impugnação de PAD, excesso de execução, prescrição, recálculo).
-2. Classificar a CRITICIDADE dessas movimentações para os autos já existentes do processo.
+Recebe NOVAS MOVIMENTAÇÕES de um processo de execução penal e deve APENAS classificar a CRITICIDADE delas para os autos já existentes do processo. NÃO liste oportunidades, teses, prazos ou pedidos — isso é feito por outra etapa que lê o PDF completo dos autos. Sua única tarefa aqui é dizer o quão crítica a movimentação é.
 
 RESPONDA APENAS COM JSON VÁLIDO, sem texto fora do JSON, no formato EXATO:
 {
-  "oportunidades": [ { "tipo": "progression|remission|parole|commutation|detraction|hc|excess_execution|prescription|pad_challenge|rights_violation|recalculation", "titulo": string, "fundamentacao": string, "prazo": string, "confianca": "high|medium|low" } ],
-  "criticalidadeTier": "1"|"2"|"3"|null
+  "criticalidadeTier": "1"|"2"|"3"|null,
+  "motivo": string
 }
 
 Regras para criticalidadeTier (escolha o PIOR tier entre todas as movimentações):
-- "1" (INVALIDA OS AUTOS): regressão de regime, extinção da pena, cálculo novo de pena, revogação de benefício, falta grave homologada — qualquer movimentação que torna os autos anteriores desatualizados para fins de petição.
-- "2" (RELEVANTE MAS NÃO INVALIDA): progressão aguardando guia de recolhimento, audiência marcada, remição parcial concedida — impacto real mas os autos ainda são válidos.
+- "1" (INVALIDA OS AUTOS): regressão de regime, extinção da pena, cálculo novo de pena, unificação/soma de penas, revogação de benefício, falta grave homologada, nova condenação — qualquer movimentação que torna os autos anteriores desatualizados para fins de petição (a base de cálculo mudou).
+- "2" (RELEVANTE MAS NÃO INVALIDA): progressão aguardando guia de recolhimento, audiência marcada, remição parcial concedida, decisão que defere benefício — impacto real mas os autos ainda são válidos.
 - "3" (PROCEDIMENTAL/INFORMATIVO): vistas, cargas, certidões expedidas, conclusos ao juiz, expedição de mandado — sem impacto no mérito dos autos.
 - null: nenhuma movimentação de mérito identificada.
-
-Liste APENAS oportunidades que podem ser feitas AGORA ou no FUTURO — nunca atos já passados.
-Se NÃO houver nada acionável, retorne oportunidades: [].
-Não invente fatos ausentes.`
+Em "motivo", explique em uma frase curta por que escolheu esse tier (ex.: "Unificação de penas altera a base de cálculo — exige autos atualizados"). Não invente fatos.`
 
   const userPrompt = `Processo ${row.case.executionProcessNumber ?? 'sem número'} de ${row.client.fullName}.
 Novas movimentações:
@@ -97,7 +101,7 @@ Retorne somente o JSON.`
     const resp = await client.messages.create({
       // @ts-ignore — id de modelo validado no servidor
       model: 'claude-sonnet-4-6',
-      max_tokens: 1500,
+      max_tokens: 300,
       system,
       messages: [{ role: 'user', content: userPrompt }],
     })
@@ -116,7 +120,7 @@ Retorne somente o JSON.`
     })
     parsed = parseJsonLoose(text)
   } catch (e) {
-    console.warn('[opportunity-detector] IA indisponível ou JSON inválido:', e)
+    console.warn('[movement-classifier] IA indisponível ou JSON inválido:', e)
     void logAiInteraction({
       organizationId: params.organizationId,
       agent: 'movement_classifier',
@@ -134,29 +138,5 @@ Retorne somente o JSON.`
   const criticalityTier: '1' | '2' | '3' | null =
     rawTier === '1' || rawTier === '2' || rawTier === '3' ? rawTier : null
 
-  let oportunidadesCriadas = 0
-  const titulos: string[] = []
-  for (const o of parsed.oportunidades ?? []) {
-    const titulo = String(o.titulo ?? 'Oportunidade').slice(0, 255)
-    const existing = await db
-      .select({ id: opportunities.id })
-      .from(opportunities)
-      .where(and(eq(opportunities.executionCaseId, params.executionCaseId), eq(opportunities.summary, titulo)))
-      .limit(1)
-    if (existing.length > 0) continue
-    await db.insert(opportunities).values({
-      organizationId: params.organizationId,
-      executionCaseId: params.executionCaseId,
-      opportunityType: OPP_TYPES.has(o.tipo) ? o.tipo : 'recalculation',
-      status: 'suggested',
-      summary: titulo,
-      rationale: (o.prazo ? `⏳ Prazo/previsão: ${String(o.prazo)}\n\n` : '') + String(o.fundamentacao ?? ''),
-      confidenceLevel: ['high', 'medium', 'low'].includes(o.confianca) ? o.confianca : 'medium',
-      isBlocked: false,
-    } as any)
-    oportunidadesCriadas++
-    titulos.push(titulo)
-  }
-
-  return { oportunidadesCriadas, titulos, criticalityTier }
+  return { oportunidadesCriadas: 0, titulos: [], criticalityTier }
 }

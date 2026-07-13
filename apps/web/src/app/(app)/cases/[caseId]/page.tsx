@@ -32,6 +32,7 @@ import {
   useGeneratePieceDraft,
 } from '@/lib/hooks/use-case-opportunities'
 import { useCaseDeadlines } from '@/lib/hooks/use-case-deadlines'
+import { useAnalysisStatus } from '@/lib/hooks/use-case-crawlers'
 import { useQueryClient } from '@tanstack/react-query'
 import { CrawlerSyncButton } from '@/components/case-workspace/CrawlerSyncButton'
 import { AnalyzeAutosButton } from '@/components/case-workspace/AnalyzeAutosButton'
@@ -454,6 +455,7 @@ export default function CaseWorkspacePage() {
                     onRetry={() => { void opportunitiesQuery.refetch() }}
                     items={opportunitiesQuery.data?.data ?? []}
                     organizationId={orgId}
+                    caseId={caseId}
                     onReview={async (opportunityId, input) => {
                       await reviewOpportunityMutation.mutateAsync({ opportunityId, input })
                     }}
@@ -1069,6 +1071,7 @@ function DocumentosTab({
 
 type OportunidadesTabProps = TabProps<import('@/lib/hooks/use-case-opportunities').CaseOpportunityItem> & {
   organizationId: string
+  caseId: string
   onReview: (opportunityId: string, input: any) => Promise<void>
   onDefer: (opportunityId: string, input: any) => Promise<void>
   isReviewing: boolean
@@ -1089,6 +1092,7 @@ function OportunidadesTab({
   onRetry,
   items,
   organizationId,
+  caseId,
   onReview,
   onDefer,
   isReviewing,
@@ -1126,6 +1130,16 @@ function OportunidadesTab({
     selectedOppId ?? '',
     !!selectedOppId
   )
+
+  // Taxonomia (12/07/2026): alertas (possibilidades a conferir) e fatos (já
+  // consumados) vêm do resultado da última análise de autos — NÃO são
+  // oportunidades e não poluem a lista abaixo. Reusa o mesmo query de
+  // useAnalysisStatus do botão "Analisar autos" (React Query dedupe → sem
+  // request extra).
+  const { data: analysisStatus } = useAnalysisStatus(organizationId, caseId)
+  const lastResult = analysisStatus?.data?.status === 'success' ? analysisStatus.data.result : null
+  const panelAlertas = lastResult?.alertas ?? []
+  const panelFatos = lastResult?.fatos ?? []
 
   const [actionForm, setActionForm] = useState<
     | 'qualified'
@@ -1220,6 +1234,45 @@ function OportunidadesTab({
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
       {/* Left side: Opportunities List */}
       <div className={`${selectedOppId ? 'lg:col-span-2' : 'lg:col-span-3'} space-y-2`}>
+        {/* Taxonomia: Fatos confirmados e Alertas a conferir vêm da análise dos
+            autos e aparecem ANTES das oportunidades — separando "o que já é
+            certo" e "o que vale olhar" das oportunidades reais (acionáveis). */}
+        {panelFatos.length > 0 && (
+          <div className="mb-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3">
+            <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] ${text.faint}`}>
+              Fatos confirmados nos autos
+            </p>
+            <ul className="space-y-2">
+              {panelFatos.map((f, i) => (
+                <li key={i} className="text-[12px]">
+                  <p className="font-medium text-slate-800">{f.titulo}</p>
+                  {f.descricao && <p className={`${text.secondary} leading-snug`}>{f.descricao}</p>}
+                  {f.impactoNoCalculo && (
+                    <p className="mt-0.5 text-[11px] text-slate-500">Impacto: {f.impactoNoCalculo}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {panelAlertas.length > 0 && (
+          <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50/70 p-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] text-amber-700">
+              ⚠️ Alertas — a conferir (ainda não são oportunidades)
+            </p>
+            <ul className="space-y-2">
+              {panelAlertas.map((a, i) => (
+                <li key={i} className="text-[12px]">
+                  <p className="font-medium text-amber-900">{a.titulo}</p>
+                  {a.descricao && <p className="text-amber-800/90 leading-snug">{a.descricao}</p>}
+                  {a.oQueConferir && (
+                    <p className="mt-0.5 text-[11px] text-amber-700/80">O que conferir: {a.oQueConferir}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
         <div className="flex justify-between items-center mb-3 gap-3">
           <p className={`text-[12px] ${text.faint} shrink-0`}>
             {filteredOpps.length} {filteredOpps.length === 1 ? 'oportunidade' : 'oportunidades'}
@@ -2036,8 +2089,12 @@ function PrazosTab({
             description="Tente alterar os filtros ou crie um novo prazo manual."
           />
         ) : (
-          <ul className="space-y-2 max-h-[600px] overflow-y-auto pr-1" aria-label="Prazos">
-            {filteredItems.map((deadline) => {
+          (() => {
+            // Taxonomia (12/07/2026): "marco futuro" (data de progressão/
+            // livramento/término estimada = classe benefit) NÃO é prazo
+            // processual. Erro comum apontado na revisão do ChatGPT: tratar
+            // os dois na mesma lista. Aqui a gente separa visualmente.
+            const renderDeadlineItem = (deadline: (typeof filteredItems)[number]) => {
               const accent = deadlineCardAccentClass(deadline.status, deadline.priority)
               const isSelected = deadline.id === selectedDeadlineId
               return (
@@ -2071,7 +2128,7 @@ function PrazosTab({
                     </p>
                     <div className="flex justify-between items-center mt-1.5">
                       <p className={`text-[11px] ${text.faint} tabular-nums`}>
-                        Limite: {formatDate(deadline.dueAt)}
+                        {deadline.deadlineClass === 'benefit' ? 'Previsão' : 'Limite'}: {formatDate(deadline.dueAt)}
                       </p>
                       {deadline.status === 'overdue' && (
                         <span className="text-[9.5px] font-bold text-red-500 uppercase tracking-wide animate-pulse">
@@ -2082,8 +2139,34 @@ function PrazosTab({
                   </div>
                 </li>
               )
-            })}
-          </ul>
+            }
+            const marcosFuturos = filteredItems.filter((d) => d.deadlineClass === 'benefit')
+            const prazosProcessuais = filteredItems.filter((d) => d.deadlineClass !== 'benefit')
+            return (
+              <div className="space-y-4 max-h-[600px] overflow-y-auto pr-1">
+                {prazosProcessuais.length > 0 && (
+                  <div>
+                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] ${text.faint}`}>
+                      Prazos processuais / operacionais
+                    </p>
+                    <ul className="space-y-2" aria-label="Prazos processuais">
+                      {prazosProcessuais.map(renderDeadlineItem)}
+                    </ul>
+                  </div>
+                )}
+                {marcosFuturos.length > 0 && (
+                  <div>
+                    <p className={`mb-2 text-[10px] font-semibold uppercase tracking-[0.1em] ${text.faint}`}>
+                      Marcos futuros da execução <span className="normal-case font-normal text-slate-400">(datas de benefício — monitorar, não são prazo de recurso)</span>
+                    </p>
+                    <ul className="space-y-2" aria-label="Marcos futuros">
+                      {marcosFuturos.map(renderDeadlineItem)}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )
+          })()
         )}
       </div>
 

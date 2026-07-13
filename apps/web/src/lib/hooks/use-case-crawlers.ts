@@ -57,6 +57,19 @@ export function useTriggerCrawlerSync(organizationId: string, caseId: string) {
   })
 }
 
+export type CasePanelAlert = {
+  titulo: string
+  descricao: string
+  oQueConferir: string
+  gatilho: string
+}
+
+export type CasePanelFact = {
+  titulo: string
+  descricao: string
+  impactoNoCalculo: string
+}
+
 export type CaseAnalysisResult = {
   snapshotId?: string
   resumoPena: string | null
@@ -64,6 +77,12 @@ export type CaseAnalysisResult = {
   prazosCriados: number
   incremental: boolean
   documentosLidos: number
+  // Taxonomia: alertas (possibilidades a conferir) e fatos (já consumados) não
+  // são "oportunidades" — vêm no resultado da análise e a tela mostra como
+  // cards informativos. Opcionais: análises antigas (antes de 12/07/2026) não
+  // tinham esses campos.
+  alertas?: CasePanelAlert[]
+  fatos?: CasePanelFact[]
 }
 
 export type CaseAnalysisRunItem = {
