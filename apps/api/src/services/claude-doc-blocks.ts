@@ -35,6 +35,23 @@ import { createStorageProviderFromEnv } from '@execflow/storage'
 
 const MAX_PDF_PAGES = 600
 const MAX_PDF_BYTES = 28 * 1024 * 1024
+
+/**
+ * Teto de páginas para mandar o PDF NATIVO (imagem — caro: ~2.800 tokens/pág.
+ * no Sonnet, foi o que fez o auto de 215 pág. do Hígor custar ~US$2/R$10).
+ * ACIMA deste teto, se o PDF tiver camada de texto (OCR), a gente manda TEXTO
+ * com triagem por relevância (Haiku aponta as páginas de sentença/cálculo/PAD;
+ * só essas + cabeça/cauda vão pro Sonnet) — ~10-20x mais barato.
+ *
+ * Trade-off (Direção 3, pedido do Miguel 12/07/2026): texto OCR perde a
+ * fidelidade VISUAL de tabelas/carimbos que o PDF nativo preserva — pode
+ * arranhar a leitura de uma tabela de cálculo mal formatada. Por isso é
+ * configurável por env (`ANALYSIS_NATIVE_PDF_MAX_PAGES`): autos pequenos
+ * (≤ teto) continuam nativos (melhor leitura, e já são baratos); só os
+ * maiores caem no texto barato. Suba o teto (ou ponha um valor bem alto) se
+ * notar perda de qualidade em cálculo; abaixe pra economizar mais.
+ */
+const NATIVE_PDF_MAX_PAGES = Number(process.env['ANALYSIS_NATIVE_PDF_MAX_PAGES'] ?? '60') || 60
 /** Recorte de segurança (cabeça+cauda) usado se a triagem por Haiku falhar. */
 const HEAD_PAGES = 30
 const TAIL_PAGES = 60
@@ -207,9 +224,33 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
     if (doc.mimeType !== 'application/pdf') continue
 
     const ocr = await latestOcrText(doc.id)
-    const tooManyPages = (ocr?.pageCount ?? 0) > MAX_PDF_PAGES
+    const pageCount = ocr?.pageCount ?? 0
+    const hasOcr = !!ocr && ocr.text.trim().length > 0
+    const tooManyPages = pageCount > MAX_PDF_PAGES
     const tooBig = doc.byteSize > MAX_PDF_BYTES
 
+    // Caminho BARATO (texto OCR + triagem Haiku): usado quando o PDF tem camada
+    // de texto E é grande o bastante pra o PDF nativo sair caro (acima do teto
+    // configurável) OU não caberia nativo de qualquer forma (>600 pág./>28MB).
+    // Achado 12/07/2026 (Direção 3): antes isso só valia >600 pág., então um
+    // auto de 215 pág. como o do Hígor ia inteiro como PDF nativo e custava
+    // ~US$2. Agora autos médios/grandes com texto vão como texto triado
+    // (~10-20x mais barato). Autos pequenos (≤ teto) seguem nativos.
+    const preferText = hasOcr && (pageCount > NATIVE_PDF_MAX_PAGES || tooManyPages || tooBig)
+
+    if (preferText) {
+      const excerpt = await excerptPagedText(ocr!.text, doc.fileName)
+      blocks.push({
+        type: 'text',
+        text: `===== CONTEÚDO EXTRAÍDO DE: ${doc.fileName} (${pageCount} páginas — enviado como TEXTO com triagem por relevância para economizar custo; layout visual de tabelas pode diferir do PDF original) =====\n\n${excerpt}\n\n===== FIM DE ${doc.fileName} =====`,
+      })
+      manifest.push(`${doc.fileName}: ${pageCount} pág. — enviado como TEXTO (triagem Haiku por relevância; economia de custo)`)
+      continue
+    }
+
+    // Caminho de QUALIDADE (PDF nativo): auto pequeno (≤ teto de páginas) e não
+    // grande demais — Claude lê layout/tabelas/carimbos melhor que texto puro.
+    // Também é o fallback pra PDF escaneado (sem OCR) que ainda cabe nativo.
     if (!tooManyPages && !tooBig) {
       try {
         const buffer = await storage.getObject(doc.storageKey)
@@ -217,7 +258,7 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
           type: 'document',
           source: { type: 'base64', media_type: 'application/pdf', data: buffer.toString('base64') },
         })
-        manifest.push(`${doc.fileName}: PDF anexado integral${ocr ? ` (${ocr.pageCount} pág.)` : ''}`)
+        manifest.push(`${doc.fileName}: PDF anexado integral${ocr ? ` (${pageCount} pág.)` : ''}`)
         continue
       } catch (e) {
         console.error(`[claude-doc-blocks] Falha ao ler ${doc.id} do storage:`, e)
@@ -226,19 +267,10 @@ export async function buildDocumentBlocks(docs: DocForBlocks[]): Promise<BuiltDo
       }
     }
 
-    // Grande demais para PDF nativo (>600 pág. ou >28MB) → texto OCR com triagem Haiku
-    if (ocr && ocr.text.trim().length > 0) {
-      const excerpt = await excerptPagedText(ocr.text, doc.fileName)
-      blocks.push({
-        type: 'text',
-        text: `===== CONTEÚDO EXTRAÍDO DE: ${doc.fileName} (${ocr.pageCount} páginas — excede o limite de PDF nativo; texto extraído com triagem por relevância) =====\n\n${excerpt}\n\n===== FIM DE ${doc.fileName} =====`,
-      })
-      manifest.push(`${doc.fileName}: ${ocr.pageCount} pág. — enviado como TEXTO (triagem Haiku por relevância)`)
-    } else {
-      manifest.push(
-        `${doc.fileName}: ${ocr?.pageCount ?? '?'} pág. — GRANDE DEMAIS e sem texto OCR disponível; NÃO incluído (aguarde o OCR processar)`
-      )
-    }
+    // Grande demais pra PDF nativo E sem texto OCR pra triar → não dá pra incluir.
+    manifest.push(
+      `${doc.fileName}: ${pageCount || '?'} pág. — GRANDE DEMAIS e sem texto OCR disponível; NÃO incluído (aguarde o OCR processar)`
+    )
   }
 
   return { blocks, manifest }
