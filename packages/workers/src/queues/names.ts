@@ -83,9 +83,6 @@ export const QUEUE_CRAWLER_SYNC_REQUESTED = 'crawler.sync.requested'
 export const QUEUE_ASTREA_EMAIL_POLL = 'astrea.email-poll'
 export const QUEUE_SYSTEM_HEALTH_SWEEP = 'system.astrea-health-sweep'
 
-// Inventário por OAB — enriquecimento diário via DataJud (metadados públicos)
-export const QUEUE_INVENTORY_ENRICHMENT = 'inventory.datajud-enrichment'
-
 // DataJud → caso: sync de movimentações dos casos promovidos + reanálise
 export const QUEUE_DATAJUD_CASE_SYNC = 'datajud.case-sync'
 

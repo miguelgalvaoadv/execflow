@@ -8,7 +8,6 @@ export type NavIcon =
   | "finance"
   | "settings"
   | "team"
-  | "inventory"
   | "intimations"
   | "tasks";
 
@@ -29,7 +28,6 @@ export type NavItem = {
 export const primaryNavItems: NavItem[] = [
   { id: "dashboard", label: "Início", icon: "dashboard", href: "/dashboard", implemented: true },
   { id: "executions", label: "Execuções", icon: "executions", href: "/cases", implemented: true },
-  { id: "inventory", label: "Inventário OAB", icon: "inventory", href: "/inventory", implemented: true },
   { id: "intimations", label: "Intimações", icon: "intimations", href: "/intimations", implemented: true },
   { id: "clients", label: "Clientes", icon: "clients", href: "/clients", implemented: true },
   { id: "deadlines", label: "Prazos", icon: "deadlines", href: "/deadlines", implemented: true },

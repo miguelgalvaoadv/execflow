@@ -230,23 +230,13 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
   await boss.schedule(QUEUE_SYSTEM_HEALTH_SWEEP, ASTREA_SCHEDULES.healthSweep, {})
   console.info('[worker-registry] System health sweep registered (diário)')
 
-  // Inventário por OAB: enriquecimento diário via DataJud (metadados públicos).
-  // 09:30 UTC ≈ 06:30 Brasília — logo após a varredura de movimentações.
-  // Sem DATAJUD_API_KEY a rodada degrada graciosamente (aviso, sem crash).
-  const { QUEUE_INVENTORY_ENRICHMENT, QUEUE_DATAJUD_CASE_SYNC, QUEUE_DJEN_SYNC, QUEUE_INFOSIMPLES_SYNC } = await import('../queues/names.ts')
-  const { runInventoryEnrichment } = await import('../consumers/inventory-enrichment.ts')
-  await boss.work(QUEUE_INVENTORY_ENRICHMENT, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
-    await runInventoryEnrichment(db)
-  })
-  await boss.schedule(QUEUE_INVENTORY_ENRICHMENT, '30 9 * * *', {})
-  console.info('[worker-registry] Inventory DataJud enrichment registered (diário 09:30 UTC)')
+  const { QUEUE_DATAJUD_CASE_SYNC, QUEUE_DJEN_SYNC, QUEUE_INFOSIMPLES_SYNC } = await import('../queues/names.ts')
 
   // DataJud → CASO: movimentações novas dos casos promovidos + reanálise.
   // SEPARAÇÃO DE PAPÉIS (anti-duplicação): para o TJSP, o InfoSimples já traz as
   // movimentações do caso — deixar o DataJud também escrever na timeline
   // duplicaria o mesmo fato com texto diferente (impossível deduplicar 100%).
-  // Por isso o DataJud→caso fica OPT-IN (padrão desligado). O DataJud continua
-  // SEMPRE ligado no enriquecimento do INVENTÁRIO (metadado, não duplica caso).
+  // Por isso o DataJud→caso fica OPT-IN (padrão desligado).
   // Ligue com DATAJUD_CASE_SYNC_ENABLED=true se usar tribunais fora do InfoSimples.
   const { runDatajudCaseSync } = await import('../consumers/datajud-case-sync.ts')
   await boss.work(QUEUE_DATAJUD_CASE_SYNC, SLA_SWEEP_WORKER_OPTIONS, async (_jobs: Job<unknown>[]) => {
@@ -256,7 +246,7 @@ async function registerSweepJobs(boss: PgBoss, db: WorkersDb): Promise<void> {
     await boss.schedule(QUEUE_DATAJUD_CASE_SYNC, '0 6,18 * * *', {})
     console.info('[worker-registry] DataJud case-sync registered (2x/dia — OPT-IN ligado)')
   } else {
-    console.info('[worker-registry] DataJud case-sync NÃO agendado (opt-in; InfoSimples é a fonte de movimentação). Inventário DataJud segue ativo.')
+    console.info('[worker-registry] DataJud case-sync NÃO agendado (opt-in; InfoSimples é a fonte de movimentação).')
   }
 
   // DJEN → intimações oficiais por OAB (grátis, sem CNPJ). 1x/dia, 08:00 UTC.

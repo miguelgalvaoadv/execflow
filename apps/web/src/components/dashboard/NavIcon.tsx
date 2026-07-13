@@ -8,7 +8,6 @@ import {
   Wallet,
   Settings,
   UsersRound,
-  ListChecks,
   BellRing,
   ClipboardCheck,
   type LucideIcon,
@@ -25,7 +24,6 @@ const ICONS: Record<NavIconName, LucideIcon> = {
   finance: Wallet,
   settings: Settings,
   team: UsersRound,
-  inventory: ListChecks,
   intimations: BellRing,
   tasks: ClipboardCheck,
 };
