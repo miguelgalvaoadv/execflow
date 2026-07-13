@@ -11,11 +11,13 @@
  *
  * Uma intimação pode gerar prazo — mas o cálculo é do motor determinístico
  * (deadlines + engine), nunca daqui. Aqui fica o FATO da comunicação com
- * proveniência e dedup por hash, alimentado por AASP (webhook), Astrea (e-mail),
- * DJE/DJEN (quando configurado) ou registro manual.
+ * proveniência e dedup por hash, alimentado por Astrea (e-mail), DJE/DJEN
+ * (quando configurado), InfoSimples ou registro manual.
  *
- * Órfãs (processo não encontrado) ficam com status='orphan' e aparecem na
- * triagem — nada é descartado silenciosamente (mesmo contrato do astrea_email_logs).
+ * ESCOPO 13/07/2026: só entra aqui comunicação de processo CADASTRADO — o
+ * matching (CNJ de execução, CNJ de origem, ou nome exato de cliente) roda
+ * em movement-ingestion.ts ANTES de gravar; o que não bate com nenhum caso é
+ * descartado sem virar linha aqui (não existe mais status='orphan').
  */
 
 import {
@@ -94,9 +96,8 @@ export const courtCommunications = pgTable(
     // -------------------------------------------------------------------------
 
     /**
-     * 'new'       → recebida, ainda não processada/vista
-     * 'processed' → vinculada a caso/inventário e tratada
-     * 'orphan'    → processo não encontrado — precisa de triagem manual
+     * 'new'       → recebida, ainda não vista pelo advogado (conta em "Novas")
+     * 'processed' → advogado marcou como vista
      * 'dismissed' → conferida e marcada como irrelevante
      */
     status: text('status').notNull().default('new'),

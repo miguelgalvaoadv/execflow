@@ -1,7 +1,9 @@
 /**
  * DJEN → intimações por OAB. Puxa as intimações oficiais das OABs do escritório
- * e envia à reanálise: se o processo já é um caso, dispara alerta/prazo/oportunidade;
- * se não, vira intimação órfã na triagem (/intimations). Nada se perde.
+ * e envia à reanálise: só processos CADASTRADOS entram no painel (matching por
+ * CNJ de execução/origem ou nome exato do cliente, em movement-ingestion.ts —
+ * decisão do Miguel em 13/07/2026: painel só é pra casos cadastrados). O que
+ * não bate com nenhum caso é descartado (log de auditoria, sem linha visível).
  *
  * Fonte das OABs: os perfis cadastrados em oab_profiles (tela Inventário) +
  * fallback DJEN_OABS no .env. Grátis, sem CNPJ, sem chave.
@@ -161,7 +163,7 @@ export async function runDjenSync(db: WorkersDb): Promise<DjenSyncResult> {
     console.info(
       `[djen-sync] ${result.error ? '⚠️' : '✅'} ${result.oabsQueried} OAB(s), ${TRIBUNAIS.join(',')}, ` +
         `${result.intimacoesFound} intimação(ões), ${result.matchedCases} caso(s) atualizado(s), ` +
-        `${result.orphans} órfã(s) p/ triagem, ${result.markedStale} "precisa de autos".`
+        `${result.orphans} de processo(s) não cadastrado(s) — ignorada(s), ${result.markedStale} "precisa de autos".`
     )
   } catch (err) {
     result.error = err instanceof Error ? err.message : String(err)

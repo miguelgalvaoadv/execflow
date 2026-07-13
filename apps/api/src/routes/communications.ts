@@ -4,10 +4,15 @@
  * SEPARAÇÃO DE FONTES (spec): intimações são uma entidade própria
  * (court_communications), diferente de movimentações (timeline_events) e de
  * autos (documents). Aqui o advogado vê o que chegou do DJEN/InfoSimples/
- * manual, resolve órfãs e marca irrelevantes. Achado 13/07/2026: só entra
- * aqui o que É de fato um ato de comunicação (intimação/publicação/citação),
- * não qualquer movimentação — ver isFormalCommunication em
- * services/movement-ingestion.ts.
+ * manual e marca o que já viu. Achado 13/07/2026: só entra aqui o que É de
+ * fato um ato de comunicação (intimação/publicação/citação), não qualquer
+ * movimentação — ver isFormalCommunication em services/movement-ingestion.ts.
+ *
+ * ESCOPO 13/07/2026: o painel só mostra processos CADASTRADOS — não existe
+ * mais "órfã" (ver findRegisteredCase em movement-ingestion.ts: itens de
+ * processo não cadastrado são descartados antes de chegar aqui). Toda
+ * comunicação que entra já está vinculada a um caso, com status='new'
+ * (ainda não vista pelo advogado) até alguém marcar como vista.
  *
  * Montado em /api/v1/communications
  */
@@ -19,7 +24,7 @@ import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
 import { requireMinRole } from '../middleware/rbac.ts'
 import { db } from '../lib/db.ts'
-import { courtCommunications, executionCases, timelineEvents, clients } from '@execflow/db/schema'
+import { courtCommunications, executionCases, clients } from '@execflow/db/schema'
 import { unprocessable, notFound } from '../lib/respond.ts'
 import type { HonoVariables } from '../context/types.ts'
 
@@ -28,7 +33,7 @@ export const communicationsRouter = new Hono<{ Variables: HonoVariables }>()
 communicationsRouter.use('*', authMiddleware, orgMiddleware)
 
 const ListQuerySchema = z.object({
-  status: z.enum(['new', 'processed', 'orphan', 'dismissed']).optional(),
+  status: z.enum(['new', 'processed', 'dismissed']).optional(),
   kind: z.string().max(30).optional(),
   possibleDeadline: z.enum(['true', 'false']).optional(),
   q: z.string().max(200).optional(),
@@ -82,7 +87,6 @@ communicationsRouter.get('/', requireMinRole('assistant'), async (c) => {
   const [counters] = await db
     .select({
       total: sql<number>`count(*)::int`,
-      orphan: sql<number>`count(*) filter (where ${courtCommunications.status} = 'orphan')::int`,
       unprocessed: sql<number>`count(*) filter (where ${courtCommunications.status} = 'new')::int`,
       withDeadline: sql<number>`count(*) filter (where ${courtCommunications.possibleDeadline} = true and ${courtCommunications.status} not in ('dismissed'))::int`,
     })
@@ -93,11 +97,12 @@ communicationsRouter.get('/', requireMinRole('assistant'), async (c) => {
 })
 
 // ---------------------------------------------------------------------------
-// POST /:id/resolve — vincular a um caso ou marcar como irrelevante
+// POST /:id/resolve — marcar como vista/não vista ou irrelevante
 // ---------------------------------------------------------------------------
 
 const ResolveSchema = z.union([
-  z.object({ action: z.literal('link'), executionCaseId: z.string().uuid() }),
+  z.object({ action: z.literal('mark_seen') }),
+  z.object({ action: z.literal('mark_unseen') }),
   z.object({ action: z.literal('dismiss'), notes: z.string().max(2000).optional() }),
 ])
 
@@ -132,48 +137,28 @@ communicationsRouter.post('/:id/resolve', requireMinRole('lawyer'), async (c) =>
     return c.json({ data: { resolved: true, action: 'dismiss' } })
   }
 
-  // action === 'link' — vincula ao caso e materializa a movimentação na timeline
-  const [execCase] = await db
-    .select()
-    .from(executionCases)
-    .where(
-      and(
-        eq(executionCases.id, parsed.data.executionCaseId),
-        eq(executionCases.organizationId, organization.id)
-      )
-    )
-    .limit(1)
+  if (parsed.data.action === 'mark_seen') {
+    await db
+      .update(courtCommunications)
+      .set({
+        status: 'processed',
+        reviewedAt: new Date(),
+        reviewedByUserId: domainUserId,
+        updatedAt: new Date(),
+      })
+      .where(eq(courtCommunications.id, commId))
+    return c.json({ data: { resolved: true, action: 'mark_seen' } })
+  }
 
-  if (!execCase) return unprocessable(c, 'Caso não encontrado nesta organização.')
-
-  const summary = `Intimação vinculada manualmente: ${(comm.content ?? '').substring(0, 200)}`
-  const [newEvent] = await db
-    .insert(timelineEvents)
-    .values({
-      organizationId: organization.id,
-      executionCaseId: execCase.id,
-      eventCategory: 'court',
-      eventType: 'process_movement',
-      occurredAt: comm.availableAt ?? comm.createdAt,
-      summary: summary.substring(0, 255),
-      source: 'integration',
-      actorType: 'user',
-      actorId: domainUserId,
-      sourceRefType: 'CourtCommunication',
-      sourceRefId: comm.id,
-    })
-    .returning()
-
+  // action === 'mark_unseen'
   await db
     .update(courtCommunications)
     .set({
-      status: 'processed',
-      executionCaseId: execCase.id,
-      reviewedAt: new Date(),
-      reviewedByUserId: domainUserId,
+      status: 'new',
+      reviewedAt: null,
+      reviewedByUserId: null,
       updatedAt: new Date(),
     })
     .where(eq(courtCommunications.id, commId))
-
-  return c.json({ data: { resolved: true, action: 'link', timelineEventId: newEvent?.id ?? null } })
+  return c.json({ data: { resolved: true, action: 'mark_unseen' } })
 })

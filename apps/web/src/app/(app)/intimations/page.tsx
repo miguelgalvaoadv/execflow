@@ -4,8 +4,11 @@
  * Intimações — comunicações oficiais recebidas (DJEN/InfoSimples/manual).
  *
  * Fonte separada de movimentações e autos (regra central do painel).
- * Órfãs (processo sem caso) aparecem aqui para triagem: vincular a um caso
- * ou marcar como irrelevante. Nada é descartado silenciosamente.
+ * ESCOPO 13/07/2026: só aparecem aqui comunicações de processos CADASTRADOS —
+ * o backend (findRegisteredCase em movement-ingestion.ts) já descarta o que
+ * não bate com nenhum caso antes de gravar. Toda linha aqui já está vinculada
+ * a um cliente/caso; o que resta ao advogado é marcar como vista (some da
+ * contagem "Novas") ou descartar como irrelevante.
  */
 
 import { useMemo, useState } from 'react'
@@ -14,7 +17,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { TriangleAlert, BellRing } from 'lucide-react'
 import { apiGet, apiPost, ApiError } from '@/lib/api-client'
 import { useSession } from '@/lib/hooks/use-session'
-import { useCases } from '@/lib/hooks/use-cases'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
 import {
@@ -39,27 +41,25 @@ type CourtCommunication = {
   publishedAt: string | null
   acknowledgedAt: string | null
   possibleDeadline: boolean
-  status: 'new' | 'processed' | 'orphan' | 'dismissed'
+  status: 'new' | 'processed' | 'dismissed'
   createdAt: string
-  /** Nome do cliente, quando já vinculada a um caso (join no backend). */
+  /** Nome do cliente — toda comunicação já chega vinculada a um caso cadastrado. */
   clientName: string | null
   caseInternalRef: string | null
 }
 
-type Counters = { total: number; orphan: number; unprocessed: number; withDeadline: number }
+type Counters = { total: number; unprocessed: number; withDeadline: number }
 
 const STATUS_OPTIONS = [
   { value: '', label: 'Todos os status' },
-  { value: 'orphan', label: 'Órfãs (triagem)' },
   { value: 'new', label: 'Novas' },
-  { value: 'processed', label: 'Processadas' },
+  { value: 'processed', label: 'Vistas' },
   { value: 'dismissed', label: 'Descartadas' },
 ] as const
 
 const STATUS_BADGES: Record<string, { label: string; cls: string }> = {
   new: { label: 'Nova', cls: 'text-blue-700 bg-blue-50 border-blue-200' },
-  processed: { label: 'Processada', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
-  orphan: { label: 'Órfã — triagem', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
+  processed: { label: 'Vista', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
   dismissed: { label: 'Descartada', cls: 'text-slate-500 bg-slate-50 border-slate-200' },
 }
 
@@ -81,8 +81,6 @@ export default function IntimationsPage() {
 
   const [statusFilter, setStatusFilter] = useState('')
   const [searchInput, setSearchInput] = useState('')
-  const [linkTarget, setLinkTarget] = useState<CourtCommunication | null>(null)
-  const [linkCaseId, setLinkCaseId] = useState('')
 
   const filters = useMemo(
     () => ({
@@ -100,46 +98,34 @@ export default function IntimationsPage() {
     enabled: orgId !== '' && session != null,
   })
 
-  const casesQuery = useCases({
-    organizationId: orgId,
-    enabled: session != null && linkTarget !== null,
-  })
-
   const resolve = useMutation<
     unknown,
     ApiError,
-    { id: string; body: { action: 'link'; executionCaseId: string } | { action: 'dismiss' } }
+    { id: string; body: { action: 'mark_seen' | 'mark_unseen' | 'dismiss' } }
   >({
     mutationFn: ({ id, body }) =>
       apiPost(`/api/v1/communications/${id}/resolve`, body, { organizationId: orgId }),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['communications', orgId] })
-      setLinkTarget(null)
-      setLinkCaseId('')
     },
   })
 
   const rows = query.data?.data ?? []
   const counters = query.data?.counters ?? null
-  const caseOptions = casesQuery.data?.pages.flatMap((p) => p.data) ?? []
 
   return (
     <div>
       <DashboardPageHeader
         eyebrow="Operacional"
         title="Intimações"
-        description="Comunicações oficiais recebidas — separadas de movimentações e autos."
+        description="Comunicações oficiais dos processos cadastrados — separadas de movimentações e autos."
       />
 
       {counters !== null && counters.total > 0 && (
-        <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+        <div className="mt-4 grid grid-cols-3 gap-2">
           <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-2.5">
             <p className="text-[18px] font-semibold text-slate-800">{counters.total}</p>
             <p className="text-[11px] text-slate-500">Recebidas</p>
-          </div>
-          <div className="rounded-xl border border-amber-200 bg-amber-50 px-3.5 py-2.5">
-            <p className="text-[18px] font-semibold text-amber-700">{counters.orphan}</p>
-            <p className="text-[11px] text-amber-700/80">Órfãs — precisam de triagem</p>
           </div>
           <div className="rounded-xl border border-blue-200 bg-blue-50 px-3.5 py-2.5">
             <p className="text-[18px] font-semibold text-blue-700">{counters.unprocessed}</p>
@@ -183,12 +169,13 @@ export default function IntimationsPage() {
         ) : rows.length === 0 ? (
           <EmptyState
             title="Nenhuma intimação"
-            description="As intimações recebidas via DJEN, InfoSimples (e outras fontes configuradas) aparecerão aqui automaticamente."
+            description="As intimações dos processos cadastrados, recebidas via DJEN, InfoSimples (e outras fontes configuradas), aparecerão aqui automaticamente."
           />
         ) : (
           <div className="space-y-2">
             {rows.map((comm) => {
               const badge = STATUS_BADGES[comm.status] ?? STATUS_BADGES['new']!
+              const isSeen = comm.status === 'processed'
               return (
                 <div
                   key={comm.id}
@@ -231,61 +218,33 @@ export default function IntimationsPage() {
                           Abrir caso
                         </Link>
                       )}
-                      {(comm.status === 'orphan' || comm.status === 'new') && (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => { setLinkTarget(comm); setLinkCaseId('') }}
-                            className="rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 transition-colors hover:bg-blue-100"
-                          >
-                            Vincular a caso
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => resolve.mutate({ id: comm.id, body: { action: 'dismiss' } })}
-                            disabled={resolve.isPending}
-                            className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 transition-colors hover:bg-slate-100"
-                          >
-                            Descartar
-                          </button>
-                        </>
+                      {comm.status !== 'dismissed' && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            resolve.mutate({
+                              id: comm.id,
+                              body: { action: isSeen ? 'mark_unseen' : 'mark_seen' },
+                            })
+                          }
+                          disabled={resolve.isPending}
+                          className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                        >
+                          {isSeen ? 'Marcar como não vista' : 'Marcar como vista'}
+                        </button>
+                      )}
+                      {comm.status !== 'dismissed' && (
+                        <button
+                          type="button"
+                          onClick={() => resolve.mutate({ id: comm.id, body: { action: 'dismiss' } })}
+                          disabled={resolve.isPending}
+                          className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 transition-colors hover:bg-slate-100"
+                        >
+                          Descartar
+                        </button>
                       )}
                     </div>
                   </div>
-
-                  {/* Painel inline de vínculo */}
-                  {linkTarget?.id === comm.id && (
-                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-blue-100 bg-blue-50/50 px-3 py-2.5">
-                      <select
-                        value={linkCaseId}
-                        onChange={(e) => setLinkCaseId(e.target.value)}
-                        className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] outline-none focus:border-blue-600"
-                      >
-                        <option value="">— selecionar caso —</option>
-                        {caseOptions.map((cs) => (
-                          <option key={cs.id} value={cs.id}>
-                            {cs.clientSummary.displayName ?? cs.clientSummary.fullName} — {cs.executionProcessNumber ?? cs.internalRef}
-                          </option>
-                        ))}
-                      </select>
-                      <Button
-                        variant="primary"
-                        size="md"
-                        onClick={() =>
-                          resolve.mutate({
-                            id: comm.id,
-                            body: { action: 'link', executionCaseId: linkCaseId },
-                          })
-                        }
-                        disabled={linkCaseId === '' || resolve.isPending}
-                      >
-                        {resolve.isPending ? 'Vinculando…' : 'Confirmar vínculo'}
-                      </Button>
-                      <Button size="md" onClick={() => setLinkTarget(null)}>
-                        Cancelar
-                      </Button>
-                    </div>
-                  )}
                 </div>
               )
             })}

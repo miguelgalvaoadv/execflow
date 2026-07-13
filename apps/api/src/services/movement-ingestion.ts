@@ -4,13 +4,25 @@
  * /api/v1/internal/case-movements. AASP foi removida em 13/07/2026 (nunca
  * teve credencial real — exige CNPJ que o Miguel não tem).
  *
+ * ESCOPO 13/07/2026 (decisão do Miguel): o painel só existe para os PROCESSOS
+ * CADASTRADOS. O DJEN varre pelo OAB do advogado (não pelo CNJ — ver
+ * djen-sync.ts), então itens de processos que ainda não viraram caso no
+ * ExecFlow aparecem na resposta bruta. Antes isso virava uma comunicação
+ * "órfã" visível em /intimations pedindo triagem manual; agora é descartado
+ * sem gravar (só log de auditoria) — ver `findRegisteredCase` abaixo. O
+ * matching tenta, nessa ordem: (1) CNJ de execução exato/normalizado,
+ * (2) CNJ do processo de origem, (3) nome EXATO de algum cliente cadastrado
+ * aparecendo no texto da comunicação — só usa esse último se bater em
+ * exatamente UM cliente (ambíguo é pior que descartar: nunca vincula errado).
+ *
  * O que a cadeia faz, dado um caso + uma movimentação nova:
  *   1. Dedup (não reprocessa a mesma movimentação).
  *   2. IA classifica a criticidade (tier 1/2/3) e cria oportunidades sugeridas.
  *   3. Insere o evento na timeline COM o tier (tabela append-only).
  *   4. Tier 1/2 → marca o caso 'stale' + registra QUAL movimentação causou
  *      (é o "foi por causa de tal movimentação" que trava a peça e pede autos).
- *   5. Intimação/possível prazo → court_communication + prazo PROVISÓRIO crítico.
+ *   5. Intimação/possível prazo → court_communication (status='new', ainda não
+ *      vista pelo advogado) + prazo PROVISÓRIO crítico.
  *   6. Emite domain event + notifica o escritório.
  *
  * Tudo entra como SUGESTÃO — o advogado valida ou descarta. Nada é definitivo.
@@ -27,8 +39,7 @@ import {
   deadlines,
   memberships,
   users,
-  organizations,
-  inventoryItems,
+  clients,
   type ExecutionCase,
 } from '@execflow/db/schema'
 import { NotificationService } from './notifications.ts'
@@ -340,7 +351,7 @@ export async function ingestMovementForCase(
         availableAt: item.occurredAt,
         publishedAt: item.occurredAt,
         possibleDeadline,
-        status: 'processed',
+        status: 'new',
         rawPayload: (item.rawPayload ?? null) as never,
         contentHash,
       })
@@ -430,35 +441,80 @@ export async function ingestMovementForCase(
   }
 }
 
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 /**
- * Encontra o caso pelo CNJ e processa uma lista de movimentações.
- * Usada pelo endpoint interno chamado pelos workers DataJud/DJEN.
+ * Acha o caso cadastrado correspondente a um CNJ vindo de uma fonte OAB-wide
+ * (DJEN). Três níveis, do mais confiável ao mais frágil — ver docstring do
+ * módulo para a justificativa completa:
+ *   1. CNJ de execução (exato, depois só dígitos — tolera pontuação diferente).
+ *   2. CNJ do processo de origem (mesmo critério).
+ *   3. Nome exato de um cliente cadastrado aparecendo no texto — só decide
+ *      se bater em exatamente UM caso (nunca vincula na dúvida).
+ * Retorna null quando nada bate: o item é de um processo não cadastrado e o
+ * chamador deve simplesmente ignorá-lo (sem gravar nada visível).
+ */
+async function findRegisteredCase(cnj: string, items: MovementItem[]): Promise<ExecutionCase | null> {
+  const trimmed = cnj.trim()
+  const normalized = trimmed.replace(/\D/g, '')
+  const all = await db.select().from(executionCases)
+
+  const byExactCnj = all.find(
+    (c) => c.executionProcessNumber === trimmed || c.originProcessNumber === trimmed
+  )
+  if (byExactCnj) return byExactCnj
+
+  if (normalized.length >= 15) {
+    const byDigits = all.find(
+      (c) =>
+        (c.executionProcessNumber ?? '').replace(/\D/g, '') === normalized ||
+        (c.originProcessNumber ?? '').replace(/\D/g, '') === normalized
+    )
+    if (byDigits) return byDigits
+  }
+
+  // Fallback: nome exato do cliente no texto da comunicação.
+  const text = normalizeForMatch(items.map((i) => `${i.tipo} ${i.conteudo}`).join(' '))
+  const withClients = await db
+    .select({ execCase: executionCases, fullName: clients.fullName })
+    .from(executionCases)
+    .innerJoin(clients, eq(executionCases.clientId, clients.id))
+  const nameMatches = withClients.filter((row) => {
+    const name = normalizeForMatch(row.fullName)
+    return name.length >= 6 && text.includes(name)
+  })
+  const uniqueCaseIds = new Set(nameMatches.map((r) => r.execCase.id))
+  if (uniqueCaseIds.size === 1) return nameMatches[0]!.execCase
+
+  return null
+}
+
+/**
+ * Encontra o caso cadastrado correspondente ao CNJ e processa a lista de
+ * movimentações. Usada pelo endpoint interno chamado pelos workers
+ * DataJud/DJEN. Se nenhum caso cadastrado corresponder, os itens são
+ * descartados (não geram órfã visível — ver docstring do módulo).
  */
 export async function ingestMovementsByCnj(
   cnj: string,
   items: MovementItem[]
 ): Promise<{ matched: boolean; results: MovementIngestResult[]; orphaned: number }> {
-  const normalized = cnj.replace(/\D/g, '')
-  const [execCase] = await db
-    .select()
-    .from(executionCases)
-    .where(eq(executionCases.executionProcessNumber, cnj.trim()))
-    .limit(1)
-
-  // Tenta também casar por dígitos (o caso pode estar salvo com pontuação diferente)
-  let target = execCase ?? null
-  if (!target && normalized.length === 20) {
-    const all = await db
-      .select()
-      .from(executionCases)
-    target = all.find((c) => (c.executionProcessNumber ?? '').replace(/\D/g, '') === normalized) ?? null
-  }
+  const target = await findRegisteredCase(cnj, items)
 
   if (!target) {
-    // Sem caso: registra as intimações como ÓRFÃS (triagem) — nada se perde.
-    // Vincula ao inventário se o CNJ bater com um item lá.
-    const orphaned = await recordOrphanCommunications(cnj.trim(), items)
-    return { matched: false, results: [], orphaned }
+    console.log(
+      `[movement-ingestion] CNJ ${cnj} não corresponde a nenhum processo cadastrado — ${items.length} item(ns) ignorado(s).`
+    )
+    // 'orphaned' aqui = itens IGNORADOS (não gravados), não itens registrados
+    // como órfã — mantido só como métrica pro log do sync (djen-sync.ts).
+    return { matched: false, results: [], orphaned: items.length }
   }
 
   const results: MovementIngestResult[] = []
@@ -466,61 +522,4 @@ export async function ingestMovementsByCnj(
     results.push(await ingestMovementForCase(target, item))
   }
   return { matched: true, results, orphaned: 0 }
-}
-
-/**
- * Intimações de processo SEM caso operacional → court_communications órfãs
- * (aparecem em /intimations para triagem). Vincula ao inventário se o CNJ bater.
- * Dedup por contentHash. Single-tenant: resolve a organização única.
- */
-async function recordOrphanCommunications(cnj: string, items: MovementItem[]): Promise<number> {
-  try {
-    const [org] = await db.select({ id: organizations.id }).from(organizations).limit(1)
-    if (!org) return 0
-    const normalized = cnj.replace(/\D/g, '')
-
-    const [invItem] = await db
-      .select({ id: inventoryItems.id })
-      .from(inventoryItems)
-      .where(
-        and(
-          eq(inventoryItems.organizationId, org.id),
-          eq(inventoryItems.processNumber, cnj)
-        )
-      )
-      .limit(1)
-
-    let count = 0
-    for (const item of items) {
-      const cleanText = stripHtml(item.conteudo).substring(0, 8000)
-      // Mesmo filtro do caminho com caso vinculado (ver isFormalCommunication):
-      // movimentação comum de um processo órfão vira ruído duplicado igual,
-      // sem virar comunicação de verdade — não grava.
-      if (item.kind !== 'intimacao' && !isFormalCommunication(item.tipo, cleanText)) continue
-      const contentHash = communicationHash(cnj, item.dedupKey)
-      const [inserted] = await db
-        .insert(courtCommunications)
-        .values({
-          organizationId: org.id,
-          inventoryItemId: invItem?.id ?? null,
-          processNumber: normalized.length === 20 ? cnj : cnj,
-          kind: item.kind === 'intimacao' ? 'intimacao' : 'publicacao',
-          source: item.source,
-          content: `${item.tipo}: ${cleanText}`.substring(0, 8000),
-          availableAt: item.occurredAt,
-          publishedAt: item.occurredAt,
-          possibleDeadline: item.kind === 'intimacao' || hasDeadlineSignal(item.tipo, cleanText),
-          status: invItem ? 'new' : 'orphan',
-          rawPayload: (item.rawPayload ?? null) as never,
-          contentHash,
-        })
-        .onConflictDoNothing()
-        .returning({ id: courtCommunications.id })
-      if (inserted) count++
-    }
-    return count
-  } catch (e) {
-    console.warn('[movement-ingestion] Falha ao registrar órfãs:', e)
-    return 0
-  }
 }
