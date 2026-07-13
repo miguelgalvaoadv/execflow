@@ -36,6 +36,8 @@ const ListQuerySchema = z.object({
   status: z.enum(['new', 'processed', 'dismissed']).optional(),
   kind: z.string().max(30).optional(),
   possibleDeadline: z.enum(['true', 'false']).optional(),
+  /** Filtra pra um caso específico — usada pela aba Intimações da tela do caso. */
+  executionCaseId: z.string().uuid().optional(),
   q: z.string().max(200).optional(),
   limit: z.coerce.number().int().min(1).max(300).default(100),
 })
@@ -56,6 +58,7 @@ communicationsRouter.get('/', requireMinRole('assistant'), async (c) => {
   if (q.status) conditions.push(eq(courtCommunications.status, q.status))
   if (q.kind) conditions.push(eq(courtCommunications.kind, q.kind))
   if (q.possibleDeadline === 'true') conditions.push(eq(courtCommunications.possibleDeadline, true))
+  if (q.executionCaseId) conditions.push(eq(courtCommunications.executionCaseId, q.executionCaseId))
   if (q.q) {
     const term = `%${q.q}%`
     const search = or(
@@ -84,6 +87,12 @@ communicationsRouter.get('/', requireMinRole('assistant'), async (c) => {
       results.map((r) => ({ ...r.comm, clientName: r.clientName, caseInternalRef: r.caseInternalRef }))
     )
 
+  // Contadores seguem o mesmo escopo (org, ou org+caso quando a aba é a de
+  // um caso específico) — mas ignoram status/kind/busca, senão os cards
+  // ficariam instáveis conforme o filtro da lista abaixo muda.
+  const counterConditions = [eq(courtCommunications.organizationId, organization.id)]
+  if (q.executionCaseId) counterConditions.push(eq(courtCommunications.executionCaseId, q.executionCaseId))
+
   const [counters] = await db
     .select({
       total: sql<number>`count(*)::int`,
@@ -91,7 +100,7 @@ communicationsRouter.get('/', requireMinRole('assistant'), async (c) => {
       withDeadline: sql<number>`count(*) filter (where ${courtCommunications.possibleDeadline} = true and ${courtCommunications.status} not in ('dismissed'))::int`,
     })
     .from(courtCommunications)
-    .where(eq(courtCommunications.organizationId, organization.id))
+    .where(and(...counterConditions))
 
   return c.json({ data: rows, counters: counters ?? null })
 })

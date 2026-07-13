@@ -4,6 +4,7 @@ import { borders, text } from '@/components/dashboard/surfaces'
 
 export type CaseTabId =
   | 'timeline'
+  | 'intimacoes'
   | 'documentos'
   | 'oportunidades'
   | 'prazos'
@@ -12,6 +13,7 @@ export type CaseTabId =
 
 export const CASE_TABS: { id: CaseTabId; label: string }[] = [
   { id: 'timeline', label: 'Movimentações' },
+  { id: 'intimacoes', label: 'Intimações' },
   { id: 'documentos', label: 'Documentos' },
   { id: 'oportunidades', label: 'Oportunidades' },
   { id: 'prazos', label: 'Prazos' },

@@ -17,6 +17,7 @@ import { useParams } from 'next/navigation'
 import { useSession } from '@/lib/hooks/use-session'
 import { useCase } from '@/lib/hooks/use-case'
 import { useCaseTimeline } from '@/lib/hooks/use-case-timeline'
+import { useCaseCommunications, useResolveCaseCommunication } from '@/lib/hooks/use-case-communications'
 import {
   useCaseDocuments,
   useRequestUpload,
@@ -206,6 +207,8 @@ export default function CaseWorkspacePage() {
   // Hooks — lazy per tab (unchanged)
   const caseQuery = useCase(orgId, caseId, session !== null && caseId !== '')
   const timelineQuery = useCaseTimeline(orgId, caseId, activeTab === 'timeline')
+  const communicationsQuery = useCaseCommunications(orgId, caseId, activeTab === 'intimacoes')
+  const resolveCommunicationMutation = useResolveCaseCommunication(orgId, caseId)
   const documentsQuery = useCaseDocuments(orgId, caseId, activeTab === 'documentos')
   const opportunitiesQuery = useCaseOpportunities(
     orgId,
@@ -425,6 +428,22 @@ export default function CaseWorkspacePage() {
                     errorMessage={timelineQuery.error?.message}
                     onRetry={() => { void timelineQuery.refetch() }}
                     items={timelineQuery.data?.data ?? []}
+                  />
+                </FadeIn>
+              )}
+
+              {activeTab === 'intimacoes' && (
+                <FadeIn>
+                  <IntimacoesTab
+                    isLoading={communicationsQuery.isLoading}
+                    isError={communicationsQuery.isError}
+                    errorMessage={communicationsQuery.error?.message}
+                    onRetry={() => { void communicationsQuery.refetch() }}
+                    items={communicationsQuery.data?.data ?? []}
+                    isMutating={resolveCommunicationMutation.isPending}
+                    onMarkSeen={(id) => resolveCommunicationMutation.mutate({ id, body: { action: 'mark_seen' } })}
+                    onMarkUnseen={(id) => resolveCommunicationMutation.mutate({ id, body: { action: 'mark_unseen' } })}
+                    onDismiss={(id) => resolveCommunicationMutation.mutate({ id, body: { action: 'dismiss' } })}
                   />
                 </FadeIn>
               )}
@@ -688,6 +707,103 @@ function TimelineTab({
           </div>
         </li>
       ))}
+    </ul>
+  )
+}
+
+/* ─── Tab Intimações — só as comunicações DESTE caso ─────────────────────── */
+
+const COMM_STATUS_BADGES: Record<string, { label: string; cls: string }> = {
+  new: { label: 'Nova', cls: 'text-blue-700 bg-blue-50 border-blue-200' },
+  processed: { label: 'Vista', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  dismissed: { label: 'Descartada', cls: 'text-slate-500 bg-slate-50 border-slate-200' },
+}
+
+type IntimacoesTabProps = TabProps<
+  import('@/lib/hooks/use-case-communications').CaseCommunicationItem
+> & {
+  isMutating: boolean
+  onMarkSeen: (id: string) => void
+  onMarkUnseen: (id: string) => void
+  onDismiss: (id: string) => void
+}
+
+function IntimacoesTab({
+  isLoading,
+  isError,
+  errorMessage,
+  onRetry,
+  items,
+  isMutating,
+  onMarkSeen,
+  onMarkUnseen,
+  onDismiss,
+}: IntimacoesTabProps) {
+  if (isLoading) return <LoadingState label="Carregando intimações…" />
+  if (isError) {
+    return <ErrorState message={errorMessage ?? 'Erro ao carregar intimações.'} onRetry={onRetry} />
+  }
+  if (items.length === 0) {
+    return (
+      <EmptyState
+        variant="tab"
+        title="Nenhuma intimação"
+        description="As intimações deste processo, recebidas via DJEN/InfoSimples, aparecerão aqui automaticamente."
+      />
+    )
+  }
+  const sorted = [...items].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  )
+  return (
+    <ul className="space-y-2" aria-label="Intimações">
+      {sorted.map((comm) => {
+        const badge = COMM_STATUS_BADGES[comm.status] ?? COMM_STATUS_BADGES['new']!
+        const isSeen = comm.status === 'processed'
+        return (
+          <li key={comm.id} className={`rounded-xl border ${borders.default} bg-white p-4 shadow-sm`}>
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${badge.cls}`}>
+                    {badge.label}
+                  </span>
+                  {comm.possibleDeadline && comm.status !== 'dismissed' && (
+                    <span className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-[11px] font-medium text-red-700">
+                      <TriangleAlert className="h-3 w-3" /> possível prazo
+                    </span>
+                  )}
+                  <span className={`text-[11px] uppercase ${text.faint}`}>{comm.source}</span>
+                  <span className={`text-[11px] ${text.faint} ml-auto tabular-nums shrink-0`}>
+                    {formatDateTime(comm.createdAt)}
+                  </span>
+                </div>
+                <p className={`text-[13px] ${text.secondary}`}>{comm.content ?? '(sem conteúdo)'}</p>
+              </div>
+              {comm.status !== 'dismissed' && (
+                <div className="flex shrink-0 flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => (isSeen ? onMarkUnseen(comm.id) : onMarkSeen(comm.id))}
+                    disabled={isMutating}
+                    className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                  >
+                    {isSeen ? 'Marcar como não vista' : 'Marcar como vista'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onDismiss(comm.id)}
+                    disabled={isMutating}
+                    className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 transition-colors hover:bg-slate-100"
+                  >
+                    Descartar
+                  </button>
+                </div>
+              )}
+            </div>
+          </li>
+        )
+      })}
     </ul>
   )
 }
