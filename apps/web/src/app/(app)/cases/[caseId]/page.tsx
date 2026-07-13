@@ -36,6 +36,7 @@ import { useAnalysisStatus } from '@/lib/hooks/use-case-crawlers'
 import { useQueryClient } from '@tanstack/react-query'
 import { CrawlerSyncButton } from '@/components/case-workspace/CrawlerSyncButton'
 import { AnalyzeAutosButton } from '@/components/case-workspace/AnalyzeAutosButton'
+import { ChatGptHybridButtons } from '@/components/case-workspace/ChatGptHybridButtons'
 import { useDeadline } from '@/lib/hooks/use-deadline'
 import {
   useCreateDeadline,
@@ -325,12 +326,13 @@ export default function CaseWorkspacePage() {
                   ) : undefined
                 }
                 actions={
-                  <div className="flex gap-2">
+                  <div className="flex flex-wrap gap-2">
                     <Button variant="secondary" onClick={() => setIsEditModalOpen(true)}>
                       Editar Caso
                     </Button>
                     <CrawlerSyncButton organizationId={orgId} caseId={caseId} />
                     <AnalyzeAutosButton organizationId={orgId} caseId={caseId} />
+                    <ChatGptHybridButtons organizationId={orgId} caseId={caseId} />
                   </div>
                 }
               />

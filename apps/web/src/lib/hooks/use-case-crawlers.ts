@@ -137,6 +137,51 @@ export function useAnalyzeAutos(organizationId: string, caseId: string) {
   })
 }
 
+// ── Modo híbrido ChatGPT (Direção 2) ──────────────────────────────────────
+export type AnalysisPackage = {
+  prompt: string
+  clientName: string
+  processNumber: string | null
+}
+
+/**
+ * "Preparar pacote pro ChatGPT" — busca sob demanda o texto que o advogado
+ * copia e cola no chatgpt.com (com o PDF dos autos), usando a assinatura fixa
+ * dele em vez da API do Claude. GET modelado como mutation porque é uma ação
+ * on-demand (sem cache útil).
+ */
+export function useAnalysisPackage(organizationId: string, caseId: string) {
+  return useMutation<{ data: AnalysisPackage }, ApiError, void>({
+    mutationFn: () =>
+      apiGet<{ data: AnalysisPackage }>(`/api/v1/cases/${caseId}/analysis-package`, { organizationId }),
+  })
+}
+
+/**
+ * "Importar do ChatGPT" — envia o relatório colado (JSON) pro backend, que o
+ * persiste igual a uma análise da IA (snapshot/oportunidades/prazos/alertas/
+ * fatos na fila de revisão). Invalida as queries afetadas ao concluir.
+ */
+export function useImportAnalysis(organizationId: string, caseId: string) {
+  const queryClient = useQueryClient()
+  return useMutation<
+    { data: { run: CaseAnalysisRunItem; result: CaseAnalysisResult } },
+    ApiError,
+    { report: string }
+  >({
+    mutationFn: (vars) =>
+      apiPost<{ data: { run: CaseAnalysisRunItem; result: CaseAnalysisResult } }>(
+        `/api/v1/cases/${caseId}/import-analysis`,
+        vars,
+        { organizationId }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['case-analysis-status', organizationId, caseId] })
+      invalidateAnalysisResults(queryClient, organizationId, caseId)
+    },
+  })
+}
+
 /** Invalida as queries que a análise concluída afeta (cálculo, oportunidades, prazos). */
 export function invalidateAnalysisResults(
   queryClient: ReturnType<typeof useQueryClient>,

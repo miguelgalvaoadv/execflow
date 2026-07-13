@@ -5,8 +5,9 @@ import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
 import { requireMinRole } from '../middleware/rbac.ts'
 import { db } from '../lib/db.ts'
-import { crawlerSyncLogs, domainEvents, caseAnalysisRuns } from '@execflow/db/schema'
-import { analyzeAutosForCase } from '../services/case-analysis.ts'
+import { crawlerSyncLogs, domainEvents, caseAnalysisRuns, documents } from '@execflow/db/schema'
+import { analyzeAutosForCase, persistAnalysisReport } from '../services/case-analysis.ts'
+import { buildAnalysisPackage } from '../services/analysis-package.ts'
 import type { HonoVariables } from '../context/types.ts'
 
 /**
@@ -193,4 +194,109 @@ crawlersRouter.post('/:caseId/analyze', async (c) => {
     })
 
   return c.json({ data: run }, 202)
+})
+
+/**
+ * GET /api/v1/cases/:caseId/analysis-package
+ * Modo híbrido ChatGPT (Direção 2): monta o texto que o advogado copia e cola
+ * no chatgpt.com (junto com o PDF dos autos) pra fazer a análise usando a
+ * assinatura fixa dele, sem gastar a API do Claude. A resposta volta pelo
+ * POST /import-analysis abaixo.
+ */
+crawlersRouter.get('/:caseId/analysis-package', async (c) => {
+  const caseId = c.req.param('caseId')
+  const { organization } = c.get('org')
+  const pkg = await buildAnalysisPackage(organization.id, caseId)
+  if (!pkg) return c.json({ error: { code: 'NOT_FOUND', message: 'Caso não encontrado.' } }, 404)
+  return c.json({ data: pkg })
+})
+
+/** Parser tolerante: aceita objeto, ou string com/sem cercas ```json. */
+function parseReportLoose(raw: unknown): any {
+  if (raw && typeof raw === 'object') return raw
+  if (typeof raw !== 'string') throw new Error('Relatório vazio ou em formato inesperado.')
+  let t = raw.trim()
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (fence) t = fence[1]!.trim()
+  const start = t.indexOf('{')
+  const end = t.lastIndexOf('}')
+  if (start >= 0 && end > start) t = t.slice(start, end + 1)
+  return JSON.parse(t)
+}
+
+/**
+ * POST /api/v1/cases/:caseId/import-analysis
+ * Recebe o relatório (JSON) que o ChatGPT gerou e o advogado colou, e persiste
+ * IGUAL a uma análise da IA (mesmo `persistAnalysisReport`): snapshot de pena,
+ * oportunidades sugeridas, prazos, alertas e fatos — tudo na fila de revisão
+ * normal (aba Oportunidades). Registra um case_analysis_run pra tela mostrar o
+ * resultado (alertas/fatos) do mesmo jeito que uma análise da IA.
+ */
+crawlersRouter.post('/:caseId/import-analysis', async (c) => {
+  const caseId = c.req.param('caseId')
+  const { organization, domainUserId } = c.get('org')
+
+  let body: any
+  try {
+    body = await c.req.json()
+  } catch {
+    return c.json({ error: { code: 'BAD_REQUEST', message: 'Corpo inválido.' } }, 400)
+  }
+
+  let parsed: any
+  try {
+    parsed = parseReportLoose(body?.report)
+  } catch (e) {
+    return c.json(
+      { error: { code: 'UNPROCESSABLE', message: `Não consegui ler o relatório colado como JSON válido: ${e instanceof Error ? e.message : String(e)}` } },
+      422
+    )
+  }
+  if (!parsed || typeof parsed !== 'object' || (!parsed.pena && !parsed.oportunidades && !parsed.prazos && !parsed.alertas && !parsed.fatos)) {
+    return c.json(
+      { error: { code: 'UNPROCESSABLE', message: 'O relatório colado não tem nenhum campo esperado (pena/oportunidades/prazos/alertas/fatos). Confira se copiou o JSON completo.' } },
+      422
+    )
+  }
+
+  // Autos confirmados atuais → viram o sourceDocumentIds do snapshot (pra a
+  // próxima análise incremental saber o que já foi "lido").
+  const confirmedAutos = await db
+    .select({ id: documents.id })
+    .from(documents)
+    .where(and(eq(documents.executionCaseId, caseId), eq(documents.status, 'confirmed')))
+
+  const [run] = await db
+    .insert(caseAnalysisRuns)
+    .values({
+      organizationId: organization.id,
+      executionCaseId: caseId,
+      status: 'running',
+      startedAt: new Date(),
+      createdByUserId: domainUserId,
+    })
+    .returning()
+  if (!run) {
+    return c.json({ error: { code: 'INTERNAL', message: 'Falha ao registrar a importação.' } }, 500)
+  }
+
+  try {
+    const result = await persistAnalysisReport(organization.id, caseId, domainUserId, parsed, {
+      isIncremental: false,
+      sourceDocumentIds: confirmedAutos.map((d) => d.id),
+      documentosLidos: confirmedAutos.length,
+    })
+    await db
+      .update(caseAnalysisRuns)
+      .set({ status: 'success', completedAt: new Date(), result })
+      .where(eq(caseAnalysisRuns.id, run.id))
+    return c.json({ data: { run, result } }, 200)
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Falha ao importar o relatório.'
+    await db
+      .update(caseAnalysisRuns)
+      .set({ status: 'failed', completedAt: new Date(), errorDetails: message })
+      .where(eq(caseAnalysisRuns.id, run.id))
+    return c.json({ error: { code: 'INTERNAL', message } }, 500)
+  }
 })

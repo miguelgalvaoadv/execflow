@@ -410,6 +410,29 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
     throw new Error('A IA não retornou um JSON válido. Tente novamente.')
   }
 
+  return persistAnalysisReport(organizationId, caseId, userId, parsed, {
+    isIncremental,
+    sourceDocumentIds: autos.map((d: any) => d.id),
+    documentosLidos: docsForFullRead.length + growthBlocks.length,
+  })
+}
+
+/**
+ * Persiste um relatório de análise no banco (snapshot de pena + oportunidades +
+ * prazos + alertas/fatos), com dedup e supersede das sugestões anteriores.
+ * Usado por DOIS caminhos, com o MESMO schema de `parsed`:
+ *   1. analyzeAutosForCase (Claude leu os autos) — acima.
+ *   2. "Importar do ChatGPT" (o advogado colou o relatório) — Direção 2, 12/07/2026.
+ * Como a aba Oportunidades já é a fila de revisão (suggested → qualified),
+ * não precisa de tabela nova: o relatório importado entra igual ao da IA.
+ */
+export async function persistAnalysisReport(
+  organizationId: string,
+  caseId: string,
+  userId: string,
+  parsed: any,
+  opts: { isIncremental: boolean; sourceDocumentIds: string[]; documentosLidos: number }
+): Promise<CaseAnalysisResult> {
   // 0. Supersede sugestões da IA de rodadas anteriores desta mesma análise.
   // Achado 08/07/2026: a dedup abaixo compara TÍTULO EXATO — como o Claude
   // varia a redação a cada rodada ("Progressão ao regime semiaberto" vs.
@@ -509,7 +532,7 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
         remainingDays: remaining,
         percentServed: pct,
         confidenceLevel: confianca,
-        calculationMethod: isIncremental
+        calculationMethod: opts.isIncremental
           ? 'Reanálise incremental dos autos por IA (Claude) — requer confirmação do advogado.'
           : 'Análise dos autos por IA (Claude) — requer confirmação do advogado.',
         crimesBreakdown,
@@ -518,7 +541,7 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
         // Grava o conjunto COMPLETO de autos considerados (não só os novos
         // desta rodada) — é contra essa lista que a PRÓXIMA análise decide o
         // que já foi lido e o que é de fato novo.
-        sourceDocumentIds: autos.map((d: any) => d.id),
+        sourceDocumentIds: opts.sourceDocumentIds,
         createdByUserId: userId,
       } as any)
       .returning({ id: sentenceSnapshots.id })
@@ -625,8 +648,8 @@ REANÁLISE INCREMENTAL: esta NÃO é a primeira análise deste caso. Você receb
     resumoPena: pena?.resumo ?? null,
     oportunidadesCriadas,
     prazosCriados,
-    incremental: isIncremental,
-    documentosLidos: docsForFullRead.length + growthBlocks.length,
+    incremental: opts.isIncremental,
+    documentosLidos: opts.documentosLidos,
     alertas,
     fatos,
   }
