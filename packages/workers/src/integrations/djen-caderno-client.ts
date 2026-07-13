@@ -45,7 +45,27 @@ function isoDate(d: Date): string {
   return d.toISOString().slice(0, 10)
 }
 
-async function fetchCadernoMeta(tribunal: string, date: string): Promise<CadernoMeta | null> {
+type CadernoMetaResult =
+  | { kind: 'ok'; meta: CadernoMeta }
+  | { kind: 'not_ready' }
+  | { kind: 'network_error' }
+
+/**
+ * Achado 12/07/2026: um dia recente ainda não processado pelo CNJ responde
+ * HTTP 404 com `{"erro":"Nenhum caderno encontrado..."}` — confirmado ao vivo
+ * (07/11 e 07/12 deram 404 nesse formato, enquanto 07/08-07/10 responderam
+ * 200 normalmente). Antes, QUALQUER `!res.ok` (inclusive esse 404 normal e
+ * esperado) virava `null` → o chamador tratava como `networkError: true`.
+ * Como o lookback padrão é só 3 dias e o CNJ pode demorar 2-4 dias pra
+ * processar, era comum a janela inteira cair em dias "ainda não prontos" —
+ * a sincronização de verdade (o dia mais antigo da janela, já processado)
+ * podia funcionar, mas o resultado global era reportado como "falha de
+ * rede" mesmo assim, disparando o status "Erro de autenticação" na tela de
+ * Integrações sem nenhum problema real acontecendo. Corrigido: 404 com esse
+ * formato de erro conta como "ainda não pronto" (silencioso, tenta nos
+ * próximos runs), não como falha.
+ */
+async function fetchCadernoMeta(tribunal: string, date: string): Promise<CadernoMetaResult> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 20_000)
   try {
@@ -53,12 +73,13 @@ async function fetchCadernoMeta(tribunal: string, date: string): Promise<Caderno
       headers: { Accept: 'application/json', 'User-Agent': 'ExecFlow/1.0' },
       signal: controller.signal,
     })
-    if (!res.ok) return null
+    if (res.status === 404) return { kind: 'not_ready' }
+    if (!res.ok) return { kind: 'network_error' }
     const body = (await res.json()) as Partial<CadernoMeta>
-    if (!body.url || !body.status) return null
-    return { status: body.status, url: body.url, total_comunicacoes: body.total_comunicacoes ?? 0 }
+    if (!body.url || !body.status) return { kind: 'network_error' }
+    return { kind: 'ok', meta: { status: body.status, url: body.url, total_comunicacoes: body.total_comunicacoes ?? 0 } }
   } catch {
-    return null
+    return { kind: 'network_error' }
   } finally {
     clearTimeout(timer)
   }
@@ -173,8 +194,10 @@ export async function fetchCadernoIntimacoes(
   if (targets.length === 0) return empty
 
   const dateStr = isoDate(date)
-  const meta = await fetchCadernoMeta(tribunal, dateStr)
-  if (!meta) return { ...empty, networkError: true }
+  const metaResult = await fetchCadernoMeta(tribunal, dateStr)
+  if (metaResult.kind === 'not_ready') return { ...empty, notReady: true }
+  if (metaResult.kind === 'network_error') return { ...empty, networkError: true }
+  const meta = metaResult.meta
   if (meta.status !== 'Processado') return { ...empty, notReady: true }
 
   let zipPath: string | null = null

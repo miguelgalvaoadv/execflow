@@ -11,6 +11,7 @@ import {
 import { hasAutosDocument, ingestAutosFromLinks } from '../integrations/autos-ingestion.ts'
 import { upsertTimelineEvent, emitMovementsReceived } from '../integrations/timeline-sync-helpers.ts'
 import { syncCaseByCnj } from './case-infosimples-sync.ts'
+import { runDjenSync } from './djen-sync.ts'
 
 /**
  * Payload expected by the crawler.sync.requested job.
@@ -31,6 +32,14 @@ export type CrawlerSyncRequestedEvent = {
  * extra opcional (capa/autos/webhook) só se `JUSBRASIL_API_KEY` estiver
  * configurada — hoje não está, e tudo bem, o InfoSimples já traz a
  * movimentação real.
+ *
+ * ATUALIZAÇÃO 12/07/2026: também força o DJEN (`runDjenSync`) na mesma
+ * chamada — antes só o InfoSimples era forçado, o DJEN dependia 100% do cron
+ * diário (08:00 UTC), então "Sincronizar Tribunal" não trazia intimação nova
+ * na hora, só movimentação. O DJEN é org-wide (baixa o caderno do dia e
+ * filtra por OAB, não dá pra pedir só 1 CNJ) — rodar aqui atualiza TODOS os
+ * casos da organização de uma vez, não só o que foi clicado, e é grátis (sem
+ * custo por chamada), então não há problema em rodar de novo a cada clique.
  *
  * `monitoringStatus` reflete o resultado real da busca:
  *   'monitored'      → InfoSimples achou o processo e trouxe movimentação.
@@ -86,6 +95,39 @@ export async function handleCrawlerSyncRequested(db: WorkersDb, job: Job<any>) {
         .update(executionCases)
         .set({ monitoringStatus: 'monitored', lastSyncedAt: new Date() })
         .where(eq(executionCases.id, execCase.id))
+    }
+
+    // DJEN: força a busca de intimações agora (org-wide, não só deste caso).
+    // Roda independente do resultado da InfoSimples acima (fontes
+    // independentes — uma falhar não deve impedir a outra de tentar).
+    let djenError: string | null = null
+    try {
+      const djenResult = await runDjenSync(db)
+      djenError = djenResult.error
+      if (djenResult.error) {
+        console.warn(`[Court Sync] DJEN falhou durante sync forçado: ${djenResult.error}`)
+      } else {
+        console.log(`[Court Sync] DJEN: ${djenResult.intimacoesFound} intimação(ões) encontrada(s) na organização.`)
+      }
+    } catch (e) {
+      djenError = e instanceof Error ? e.message : String(e)
+      console.warn('[Court Sync] DJEN lançou exceção durante sync forçado:', e)
+    }
+
+    // Achado 12/07/2026: até aqui, um erro real da InfoSimples (ex.: saldo
+    // esgotado, token inválido — mesma classe de falha silenciosa já vista
+    // com a Anthropic 3x nesta sessão) só gerava um console.warn e o job
+    // SEGUIA pro status 'success' no fim — a tela mostrava "Sincronizado"
+    // verde mesmo sem ter trazido a movimentação deste caso. "Não encontrado"
+    // (segredo de justiça/CNJ incorreto) continua tratado ACIMA como
+    // resultado válido, não é isso que está quebrado. InfoSimples é a fonte
+    // ESPECÍFICA deste caso (por CNJ) — se ela falhar de verdade, o log fica
+    // vermelho na tela, mesmo que o DJEN (org-wide, tipo de dado diferente,
+    // intimação) tenha ido bem. Erro do DJEN entra só como contexto extra.
+    if (infoResult.error) {
+      throw new Error(
+        `InfoSimples falhou para ${cnj}: ${infoResult.error}` + (djenError ? ` | DJEN também falhou: ${djenError}` : '')
+      )
     }
 
     // Jusbrasil: extra opcional, só roda se a chave estiver configurada.

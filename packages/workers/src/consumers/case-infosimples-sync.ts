@@ -31,7 +31,7 @@
  */
 
 import { eq, and, isNotNull } from 'drizzle-orm'
-import { executionCases, oabProfiles } from '@execflow/db/schema'
+import { executionCases, oabProfiles, integrationConnectors } from '@execflow/db/schema'
 import type { WorkersDb } from '../lib/db.ts'
 import { createInfosimplesConfig, fetchTjspByOab, type InfosimplesProcess } from '../integrations/infosimples-client.ts'
 import {
@@ -132,8 +132,22 @@ export type CaseInfosimplesSyncResult = {
  * Busca UM processo por CNJ, varrendo as páginas da OAB e saindo assim que
  * encontra (early-exit — no melhor caso custa 1 página). Empurra a
  * movimentação pela cadeia de reanálise. NUNCA cria caso novo.
+ *
+ * Achado 12/07/2026: este é o mecanismo que REALMENTE roda hoje (chamado pelo
+ * botão "Sincronizar Tribunal" e pelo cron curado abaixo), mas nunca
+ * atualizava `integration_connectors` — a tela de Integrações não refletia
+ * o estado real (ex.: saldo da InfoSimples esgotado, mesmo erro de classe já
+ * visto com a Anthropic, ficaria invisível ali). Corrigido: registra
+ * sucesso/erro no conector 'infosimples' ao final, igual ao padrão já usado
+ * em `infosimples-sync.ts`/`djen-sync.ts`.
  */
 export async function syncCaseByCnj(db: WorkersDb, cnj: string): Promise<CaseInfosimplesSyncResult> {
+  const result = await syncCaseByCnjCore(db, cnj)
+  await recordConnector(db, result.error, result.movementsFound)
+  return result
+}
+
+async function syncCaseByCnjCore(db: WorkersDb, cnj: string): Promise<CaseInfosimplesSyncResult> {
   const empty: CaseInfosimplesSyncResult = {
     found: false,
     notFound: false,
@@ -197,8 +211,18 @@ export type CuratedSyncResult = {
  * atualiza TODOS os casos curados (já cadastrados) encontrados na passada.
  * Nunca descobre/cadastra processo novo — o que não está em
  * execution_cases é ignorado, mesmo que apareça na busca da OAB.
+ *
+ * Achado 12/07/2026: registra saúde no conector 'infosimples' (ver
+ * `syncCaseByCnj` acima) — a tela de Integrações passa a refletir esta
+ * sincronização de verdade, inclusive se o saldo da InfoSimples acabar.
  */
 export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedSyncResult> {
+  const result = await runCuratedInfosimplesSyncCore(db)
+  await recordConnector(db, result.error, result.movementsFound)
+  return result
+}
+
+async function runCuratedInfosimplesSyncCore(db: WorkersDb): Promise<CuratedSyncResult> {
   const result: CuratedSyncResult = {
     casesCurated: 0,
     found: 0,
@@ -245,6 +269,8 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
   }
 
   const foundThisRun = new Set<string>()
+  let anyPageOk = false
+  let lastBadCode: string | null = null
 
   try {
     for (const oab of oabs) {
@@ -257,9 +283,13 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
           break
         }
         if (!res.ok) {
-          if (res.code !== 612) console.warn(`[case-infosimples-sync] OAB ${oab.numero}: code ${res.code} ${res.message}`)
+          if (res.code !== 612) {
+            lastBadCode = `InfoSimples code ${res.code}: ${res.message}`
+            console.warn(`[case-infosimples-sync] OAB ${oab.numero}: code ${res.code} ${res.message}`)
+          }
           break
         }
+        anyPageOk = true
         result.pagesFetched++
         result.estimatedCostBrl += 0.2
         totalPages = res.totalPages
@@ -283,6 +313,15 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
         page++
         if (page <= totalPages && page <= MAX_PAGES) await sleep(INFOSIMPLES_THROTTLE_MS)
       } while (page <= totalPages && page <= MAX_PAGES)
+    }
+
+    // Nenhuma página respondeu OK e teve pelo menos um código de erro (ex.:
+    // saldo esgotado, auth) — a rodada inteira falhou, mesmo sem exceção.
+    // Antes disso ficava mudo (só console.warn), a tela de Integrações nunca
+    // saberia. Rede instável isolada (sem lastBadCode) não conta como erro
+    // sistêmico — só reflete se for um código de erro real da API.
+    if (!anyPageOk && lastBadCode) {
+      result.error = lastBadCode
     }
 
     result.notFound = curatedDigits.size - foundThisRun.size
@@ -314,4 +353,36 @@ export async function runCuratedInfosimplesSync(db: WorkersDb): Promise<CuratedS
   }
 
   return result
+}
+
+/**
+ * Registra saúde no conector 'infosimples' (lido pela tela /settings/integracoes)
+ * — mesmo padrão de `infosimples-sync.ts`/`djen-sync.ts`. Só atualiza (não
+ * semeia) um conector já existente; se nunca foi criado, não faz nada (mesma
+ * regra do arquivo original).
+ */
+async function recordConnector(db: WorkersDb, error: string | null, movementsFound: number): Promise<void> {
+  try {
+    const now = new Date()
+    const ok = error === null
+    const [existing] = await db
+      .select()
+      .from(integrationConnectors)
+      .where(eq(integrationConnectors.kind, 'infosimples'))
+      .limit(1)
+    if (!existing) return
+    await db
+      .update(integrationConnectors)
+      .set({
+        lastRunAt: now,
+        hasCredential: true,
+        ...(ok ? { lastSuccessAt: now, status: 'connected' } : { status: 'auth_error' }),
+        lastError: error,
+        recordsUpdated: existing.recordsUpdated + movementsFound,
+        updatedAt: now,
+      })
+      .where(eq(integrationConnectors.id, existing.id))
+  } catch (e) {
+    console.warn('[case-infosimples-sync] Falha ao registrar conector:', e)
+  }
 }

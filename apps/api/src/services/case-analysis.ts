@@ -104,6 +104,20 @@ export async function analyzeAutosForCase(
   const hasDossie = !!previousSnapshot?.explanation
   const isIncremental = hasDossie && newAutos.length > 0 && newAutos.length < autos.length
 
+  // Achado 12/07/2026 (pedido do Miguel: garantir que reanálise nunca gasta
+  // demais): se já existe um dossiê e NENHUM documento é novo desde então,
+  // clicar "Analisar autos" de novo não tem nada a acrescentar — mas sem essa
+  // checagem o código caía no modo integral (isIncremental exige
+  // newAutos.length > 0) e relia o PDF inteiro de novo, no preço cheio,
+  // gerando um dossiê idêntico ao anterior. Bloqueia ANTES de chamar o
+  // Claude (custo zero) com mensagem clara — o advogado só volta a pagar por
+  // uma análise nova depois de anexar autos atualizados de verdade.
+  if (hasDossie && newAutos.length === 0) {
+    throw new Error(
+      'Os autos não mudaram desde a última análise (nenhum documento novo foi anexado) — não há nada novo para reler. Anexe os autos atualizados na aba Documentos antes de analisar de novo.'
+    )
+  }
+
   // "Autos atualizados" quase sempre é o PDF INTEIRO do processo baixado de
   // novo (fls. numeradas sequencialmente, só cresce) — não um arquivo
   // separado pequeno. Sem tratar isso, um novo upload da mesma classe

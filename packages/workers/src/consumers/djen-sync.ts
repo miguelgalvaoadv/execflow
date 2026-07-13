@@ -11,8 +11,18 @@
  * bloqueadas). Trocado pelo endpoint de CADERNO diário (`/api/v1/caderno`), que
  * baixa o Diário do dia inteiro (ZIP) e filtra localmente pelas OABs — mais
  * pesado, mas funciona (testado ao vivo com resultados reais). Roda 1x/dia,
- * olhando os últimos DJEN_CADERNO_LOOKBACK_DAYS dias (padrão 3, cobre atraso de
- * processamento do CNJ) — dedup por hash evita reprocessar.
+ * olhando os últimos DJEN_CADERNO_LOOKBACK_DAYS dias — dedup por hash evita
+ * reprocessar.
+ *
+ * ATUALIZAÇÃO 12/07/2026: padrão subiu de 3 pra 6 dias. Testado ao vivo: o
+ * CNJ demorou ~3 dias pra marcar um caderno como "Processado" (07/10 ok,
+ * 07/11 e 07/12 ainda 404 "não encontrado" na mesma checagem). Com
+ * lookback=3, um dia só entra na janela de checagem uma vez bem na borda —
+ * se o atraso variar (feriado, pico de volume, etc.) um dia inteiro pode
+ * nunca cair dentro de nenhuma janela e sumir pra sempre, sem erro nenhum
+ * pra avisar (dedup por hash generalizado). 6 dias dá margem confortável
+ * sem custo real (é grátis; dias "ainda não prontos" só custam 1 request
+ * pequena de metadado, o ZIP grande só baixa quando o dia está pronto).
  */
 
 import { eq } from 'drizzle-orm'
@@ -26,7 +36,7 @@ import {
   type InternalMovementItem,
 } from '../integrations/internal-api-client.ts'
 
-const LOOKBACK_DAYS = Number(process.env['DJEN_CADERNO_LOOKBACK_DAYS'] ?? '3') || 3
+const LOOKBACK_DAYS = Number(process.env['DJEN_CADERNO_LOOKBACK_DAYS'] ?? '6') || 6
 const TRIBUNAIS = (process.env['DJEN_CADERNO_TRIBUNAIS'] ?? 'TJSP')
   .split(',')
   .map((s) => s.trim().toUpperCase())
