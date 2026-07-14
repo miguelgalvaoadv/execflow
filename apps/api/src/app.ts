@@ -52,6 +52,7 @@ import { astreaSealedCasesRouter } from './routes/astrea-sealed-cases.ts'
 import { communicationsRouter } from './routes/communications.ts'
 import { calendarRouter } from './routes/calendar.ts'
 import { financeRouter } from './routes/finance.ts'
+import { dashboardRouter } from './routes/dashboard.ts'
 import { integrationsRouter } from './routes/integrations.ts'
 import { aiLogsRouter } from './routes/ai-logs.ts'
 import { portalRouter } from './routes/portal.ts'
@@ -170,6 +171,7 @@ app.route('/api/v1/astrea', astreaSealedCasesRouter)
 app.route('/api/v1/communications', communicationsRouter)
 app.route('/api/v1/calendar', calendarRouter)
 app.route('/api/v1/finance', financeRouter)
+app.route('/api/v1/dashboard', dashboardRouter)
 app.route('/api/v1/integrations', integrationsRouter)
 app.route('/api/v1/ai-logs', aiLogsRouter)
 app.route('/api/v1/portal', portalRouter)

@@ -1,575 +1,378 @@
 'use client'
 
 /**
- * Operational Dashboard MVP — Início
+ * Início — centro operacional do ExecFlow.
  *
- * Route: /dashboard
- * Data: existing org-scoped APIs only (no new backend).
+ * Redesenhada em 14/07/2026 para refletir o que o advogado realmente usa no
+ * dia a dia (intimações, prazos, tarefas, oportunidades, agenda, casos) com
+ * NÚMEROS REAIS (COUNT no banco via /api/v1/dashboard/summary — não mais o
+ * tamanho da página limitado a 50). Removidos painéis internos que estavam
+ * vazios ou desconectados (fila de projeções por worker, pipeline de extração,
+ * motor de cálculo) e o link quebrado para a antiga central de Documentos.
  *
- * Architecture ref: Dashboard Product Readiness Report (2026-05-27).
+ * Cada bloco lê o endpoint real do módulo — em sincronia com o que acontece
+ * em cada caso.
  */
 
 import { useMemo } from 'react'
 import Link from 'next/link'
+import { useQuery } from '@tanstack/react-query'
+import { apiGet, ApiError } from '@/lib/api-client'
 import { useSession } from '@/lib/hooks/use-session'
-import { useQueueProjections, type QueueProjectionItem } from '@/lib/hooks/use-queue-projections'
+import { useDashboardSummary } from '@/lib/hooks/use-dashboard-summary'
 import { useDeadlines } from '@/lib/hooks/use-deadlines'
-import { useDocuments } from '@/lib/hooks/use-documents'
-import { useCases } from '@/lib/hooks/use-cases'
-import { useEngineRuns } from '@/lib/hooks/use-engine-runs'
-import {
-  DashboardPageHeader,
-  SummaryMetricCard,
-  QueueProjectionRow,
-  WorkspacePanel,
-} from '@/components/dashboard'
+import { useCalendar } from '@/lib/hooks/use-calendar'
+import { useOpportunities } from '@/lib/hooks/use-opportunities'
+import { DashboardPageHeader, WorkspacePanel } from '@/components/dashboard'
 import { borders, surfaces, text } from '@/components/dashboard/surfaces'
-import {
-  EmptyState,
-  ErrorState,
-  ListCard,
-  LoadingState,
-  StatusBadge,
-} from '@/components/ui'
-import {
-  deadlineCardAccentClass,
-  deadlineClassLabel,
-} from '@/lib/operational/deadline-display'
-import { documentStatusLabel } from '@/lib/operational/document-display'
-import {
-  engineTriggerLabel,
-  engineStatusLabel,
-  uncertaintyLevelLabel,
-} from '@/lib/operational/labels'
+import { EmptyState, ErrorState, ListCard, LoadingState, StatusBadge } from '@/components/ui'
+import { deadlineCardAccentClass, deadlineClassLabel } from '@/lib/operational/deadline-display'
 
-const COUNT_LIMIT = 50
+// ---------------------------------------------------------------------------
+// Tipos locais (respostas de endpoints reais)
+// ---------------------------------------------------------------------------
 
-const DOCUMENT_PIPELINE_GROUPS = [
-  { status: 'pending_extraction', label: 'Aguardando extração' },
-  { status: 'extraction_running', label: 'Extração em curso' },
-  { status: 'extraction_review', label: 'Em revisão' },
-  { status: 'confirmed', label: 'Confirmado' },
-] as const
-
-const QUICK_LINKS = [
-  { href: '/cases', label: 'Execuções', description: 'Casos e workspace' },
-  { href: '/clients', label: 'Clientes', description: 'Registro de clientes' },
-  { href: '/documents', label: 'Peças', description: 'Central documental' },
-  { href: '/deadlines', label: 'Prazos', description: 'Central de prazos' },
-  { href: '/queues', label: 'Filas', description: 'Fila de trabalho completa' },
-] as const
-
-function formatDateTime(iso: string): string {
-  return new Intl.DateTimeFormat('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(iso))
+type IntimationItem = {
+  id: string
+  processNumber: string | null
+  kind: string
+  status: string
+  clientName: string | null
+  caseInternalRef: string | null
+  executionCaseId: string | null
+  createdAt: string
+  availableAt: string | null
 }
 
-function mergePriorityQueueItems(items: QueueProjectionItem[]): QueueProjectionItem[] {
-  return [...items].sort((a, b) => {
-    if (a.priority !== b.priority) return a.priority - b.priority
-    const aKey = a.keyDate ?? a.slaDeadlineAt ?? a.createdAt
-    const bKey = b.keyDate ?? b.slaDeadlineAt ?? b.createdAt
-    return new Date(aKey).getTime() - new Date(bKey).getTime()
-  })
+type OpenTask = {
+  id: string
+  title: string
+  priority: 'critical' | 'high' | 'normal' | 'low'
+  status: string
+  dueAt: string | null
+  clientName: string | null
+  processNumber: string | null
+  executionCaseId: string | null
 }
 
-function isDueWithinWeek(dueAt: string): boolean {
-  const due = new Date(dueAt)
+const TASK_PRIORITY_BADGE: Record<string, string> = {
+  critical: 'text-red-700 bg-red-50 border-red-200',
+  high: 'text-orange-700 bg-orange-50 border-orange-200',
+  normal: 'text-slate-600 bg-slate-100 border-slate-200',
+  low: 'text-slate-500 bg-slate-50 border-slate-200',
+}
+const TASK_PRIORITY_LABEL: Record<string, string> = {
+  critical: 'Crítica', high: 'Alta', normal: 'Normal', low: 'Baixa',
+}
+
+function formatDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+}
+function formatTime(iso: string): string {
+  return new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit' }).format(new Date(iso))
+}
+function todayRangeIso(): { from: string; to: string } {
   const now = new Date()
-  const weekEnd = new Date(now)
-  weekEnd.setDate(weekEnd.getDate() + 7)
-  return due <= weekEnd
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0)
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999)
+  return { from: start.toISOString(), to: end.toISOString() }
+}
+
+// ---------------------------------------------------------------------------
+// Cartão de métrica (número REAL, com acento de urgência)
+// ---------------------------------------------------------------------------
+
+function MetricCard({
+  title, count, href, loading, tone = 'neutral', description,
+}: {
+  title: string; count: number | null; href: string; loading?: boolean
+  tone?: 'neutral' | 'alert'; description?: string
+}) {
+  const alert = tone === 'alert' && (count ?? 0) > 0
+  return (
+    <Link
+      href={href}
+      className={[
+        'group flex flex-col justify-between rounded-xl border px-4 py-4 shadow-sm transition-all duration-200 hover:-translate-y-0.5 hover:shadow-md',
+        alert ? 'border-red-200 bg-red-50' : 'border-slate-200 bg-white',
+      ].join(' ')}
+    >
+      <p className={`text-[11px] font-medium uppercase tracking-[0.06em] ${alert ? 'text-red-600' : 'text-slate-500'}`}>
+        {title}
+      </p>
+      <p className={`mt-2 text-[30px] font-semibold leading-none tabular-nums tracking-[-0.02em] ${alert ? 'text-red-700' : 'text-slate-900'}`}>
+        {loading || count === null ? '—' : count}
+      </p>
+      {description && <p className="mt-1.5 text-[11px] text-slate-400">{description}</p>}
+    </Link>
+  )
 }
 
 function PanelFooterLink({ href, label }: { href: string; label: string }) {
   return (
     <div className={`mt-4 border-t ${borders.subtle} pt-3`}>
-      <Link
-        href={href}
-        className={`text-[12px] ${text.faint} hover:text-slate-700 transition-colors`}
-      >
+      <Link href={href} className={`text-[12px] ${text.faint} hover:text-slate-700 transition-colors`}>
         {label} →
       </Link>
     </div>
   )
 }
 
+const QUICK_LINKS = [
+  { href: '/cases', label: 'Execuções' },
+  { href: '/clients', label: 'Clientes' },
+  { href: '/intimations', label: 'Intimações' },
+  { href: '/deadlines', label: 'Prazos' },
+  { href: '/opportunities', label: 'Oportunidades' },
+  { href: '/calendar', label: 'Agenda' },
+  { href: '/tasks', label: 'Tarefas' },
+  { href: '/finance', label: 'Financeiro' },
+] as const
+
 export default function DashboardPage() {
   const { data: session, isLoading: sessionLoading } = useSession()
   const orgId = session?.organization.id ?? ''
-  const sessionReady = session !== null && session !== undefined
+  const ready = session !== null && session !== undefined
 
-  const workQueue = useQueueProjections({
-    organizationId: orgId,
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
+  const summary = useDashboardSummary(orgId, ready)
+
+  const overdue = useDeadlines({ organizationId: orgId, filters: { status: 'overdue' }, limit: 20, enabled: ready })
+  const weekQuery = useDeadlines({ organizationId: orgId, limit: 50, enabled: ready })
+  const opportunities = useOpportunities({ organizationId: orgId, filters: { status: 'suggested' }, limit: 5, enabled: ready })
+
+  const { from, to } = useMemo(() => todayRangeIso(), [])
+  const todayAgenda = useCalendar(orgId, from, to, ['manual'], ready)
+
+  const newIntimations = useQuery<{ data: IntimationItem[] }, ApiError>({
+    queryKey: ['dash-intimations', orgId],
+    queryFn: ({ signal }) => apiGet('/api/v1/communications', { organizationId: orgId, signal, params: { status: 'new', limit: 8 } }),
+    enabled: ready && orgId !== '',
+    staleTime: 30 * 1000,
   })
 
-  const intakeReview = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'intake_review',
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
+  const openTasks = useQuery<{ data: OpenTask[] }, ApiError>({
+    queryKey: ['dash-tasks', orgId],
+    queryFn: ({ signal }) => apiGet('/api/v1/queue/workflow-tasks', { organizationId: orgId, signal, params: { limit: 6 } }),
+    enabled: ready && orgId !== '',
+    staleTime: 30 * 1000,
   })
 
-  const extractionReviewQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'extraction_review',
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
-  })
-
-  const snapshotReviewQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'snapshot_review',
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
-  })
-
-  const libertyQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'urgent_liberty_risks',
-    limit: 15,
-    enabled: sessionReady,
-  })
-
-  const overdueQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'overdue_deadlines',
-    limit: 15,
-    enabled: sessionReady,
-  })
-
-  const opportunityQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'opportunity_review',
-    limit: 15,
-    enabled: sessionReady,
-  })
-
-  const extractionPriorityQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'extraction_review',
-    limit: 15,
-    enabled: sessionReady,
-  })
-
-  const snapshotPriorityQueue = useQueueProjections({
-    organizationId: orgId,
-    queueType: 'snapshot_review',
-    limit: 15,
-    enabled: sessionReady,
-  })
-
-  const overdueDeadlines = useDeadlines({
-    organizationId: orgId,
-    filters: { status: 'overdue' },
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
-  })
-
-  const weekDeadlinesQuery = useDeadlines({
-    organizationId: orgId,
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
-  })
-
-  const activeCases = useCases({
-    organizationId: orgId,
-    filters: { status: 'active' },
-    limit: COUNT_LIMIT,
-    enabled: sessionReady,
-  })
-
-  const pendingExtraction = useDocuments({
-    organizationId: orgId,
-    filters: { status: 'pending_extraction' },
-    limit: 5,
-    enabled: sessionReady,
-  })
-
-  const extractionRunning = useDocuments({
-    organizationId: orgId,
-    filters: { status: 'extraction_running' },
-    limit: 5,
-    enabled: sessionReady,
-  })
-
-  const extractionReviewDocs = useDocuments({
-    organizationId: orgId,
-    filters: { status: 'extraction_review' },
-    limit: 5,
-    enabled: sessionReady,
-  })
-
-  const confirmedDocs = useDocuments({
-    organizationId: orgId,
-    filters: { status: 'confirmed' },
-    limit: 5,
-    enabled: sessionReady,
-  })
-
-  const engineRuns = useEngineRuns(orgId, undefined, sessionReady, 5)
-
-  const reviewsPendingCount = useMemo(() => {
-    if (!intakeReview.data || !extractionReviewQueue.data || !snapshotReviewQueue.data) {
-      return null
-    }
-    return (
-      intakeReview.data.data.length +
-      extractionReviewQueue.data.data.length +
-      snapshotReviewQueue.data.data.length
-    )
-  }, [intakeReview.data, extractionReviewQueue.data, snapshotReviewQueue.data])
-
-  const priorityItems = useMemo(() => {
-    const batches = [
-      libertyQueue.data?.data ?? [],
-      overdueQueue.data?.data ?? [],
-      opportunityQueue.data?.data ?? [],
-      extractionPriorityQueue.data?.data ?? [],
-      snapshotPriorityQueue.data?.data ?? [],
-    ]
-    return mergePriorityQueueItems(batches.flat()).slice(0, 10)
-  }, [
-    libertyQueue.data,
-    overdueQueue.data,
-    opportunityQueue.data,
-    extractionPriorityQueue.data,
-    snapshotPriorityQueue.data,
-  ])
-
-  const priorityLoading =
-    libertyQueue.isLoading ||
-    overdueQueue.isLoading ||
-    opportunityQueue.isLoading ||
-    extractionPriorityQueue.isLoading ||
-    snapshotPriorityQueue.isLoading
-
-  const priorityError =
-    libertyQueue.error ??
-    overdueQueue.error ??
-    opportunityQueue.error ??
-    extractionPriorityQueue.error ??
-    snapshotPriorityQueue.error
+  const overdueItems = overdue.data?.pages.flatMap((p) => p.data) ?? []
+  const intimationItems = newIntimations.data?.data ?? []
 
   const weekDeadlines = useMemo(() => {
-    const items = weekDeadlinesQuery.data?.pages.flatMap((p) => p.data) ?? []
+    const items = weekQuery.data?.pages.flatMap((p) => p.data) ?? []
+    const now = new Date()
+    const weekEnd = new Date(now); weekEnd.setDate(weekEnd.getDate() + 7)
     return items
-      .filter(
-        (d) =>
-          !['completed', 'dismissed'].includes(d.status) && isDueWithinWeek(d.dueAt)
-      )
+      .filter((d) => !['completed', 'dismissed', 'overdue'].includes(d.status) && new Date(d.dueAt) <= weekEnd)
       .sort((a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime())
-      .slice(0, 5)
-  }, [weekDeadlinesQuery.data])
+      .slice(0, 6)
+  }, [weekQuery.data])
 
-  const documentPipeline = [
-    { ...DOCUMENT_PIPELINE_GROUPS[0], query: pendingExtraction },
-    { ...DOCUMENT_PIPELINE_GROUPS[1], query: extractionRunning },
-    { ...DOCUMENT_PIPELINE_GROUPS[2], query: extractionReviewDocs },
-    { ...DOCUMENT_PIPELINE_GROUPS[3], query: confirmedDocs },
-  ] as const
+  if (sessionLoading) return <LoadingState label="Carregando sessão…" />
+  if (session === null || session === undefined) return <ErrorState message="Sessão não encontrada. Faça login novamente." />
 
-  const pipelineLoading = documentPipeline.some((g) => g.query.isLoading)
-  const pipelineError = documentPipeline.find((g) => g.query.isError)?.query.error
+  const roleLabel = session.role === 'admin' ? 'Administrador' : session.role === 'lawyer' ? 'Advogado' : 'Assistente'
+  const s = summary.data
 
-  if (sessionLoading) {
-    return <LoadingState label="Carregando sessão…" />
-  }
-
-  if (session === null || session === undefined) {
-    return <ErrorState message="Sessão não encontrada. Faça login novamente." />
-  }
-
-  const roleLabel =
-    session.role === 'admin'
-      ? 'Administrador'
-      : session.role === 'lawyer'
-        ? 'Advogado'
-        : 'Assistente'
+  const attentionEmpty = overdueItems.length === 0 && intimationItems.length === 0
 
   return (
     <div>
-      <DashboardPageHeader
-        eyebrow="Início"
-        title={session.organization.name}
-        description={`Centro operacional · ${roleLabel}`}
-      />
+      <DashboardPageHeader eyebrow="Início" title={session.organization.name} description={`Centro operacional · ${roleLabel}`} />
 
       <div className="mt-6 space-y-6">
-        {/* Section 1 — Resumo operacional */}
+        {/* Resumo — números reais */}
         <section aria-label="Resumo operacional">
-          <h2 className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${text.muted} mb-3`}>
-            Resumo operacional
-          </h2>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <SummaryMetricCard
-              title="Trabalho pendente"
-              count={workQueue.data?.data.length ?? null}
-              countLimit={COUNT_LIMIT}
-              href="/queues"
-              loading={workQueue.isLoading}
-              description="Itens na fila operacional"
-            />
-            <SummaryMetricCard
-              title="Reviews pendentes"
-              count={reviewsPendingCount}
-              countLimit={COUNT_LIMIT * 3}
-              href="/queues"
-              loading={
-                intakeReview.isLoading ||
-                extractionReviewQueue.isLoading ||
-                snapshotReviewQueue.isLoading
-              }
-              description="Intake, extração e snapshot"
-            />
-            <SummaryMetricCard
-              title="Prazos vencidos"
-              count={overdueDeadlines.data?.pages[0]?.data.length ?? null}
-              countLimit={COUNT_LIMIT}
-              href="/deadlines"
-              loading={overdueDeadlines.isLoading}
-              description="Status vencido"
-            />
-            <SummaryMetricCard
-              title="Casos ativos"
-              count={activeCases.data?.pages[0]?.data.length ?? null}
-              countLimit={COUNT_LIMIT}
-              href="/cases"
-              loading={activeCases.isLoading}
-              description="Execuções em curso"
-            />
+          <h2 className={`text-[11px] font-semibold uppercase tracking-[0.12em] ${text.muted} mb-3`}>Resumo de hoje</h2>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+            <MetricCard title="Intimações novas" count={s?.newIntimations ?? null} href="/intimations" loading={summary.isLoading} tone="alert" description="Não vistas" />
+            <MetricCard title="Prazos vencidos" count={s?.overdueDeadlines ?? null} href="/deadlines" loading={summary.isLoading} tone="alert" description="Ação imediata" />
+            <MetricCard title="Prazos em 7 dias" count={s?.weekDeadlines ?? null} href="/deadlines" loading={summary.isLoading} description="Próxima semana" />
+            <MetricCard title="Tarefas abertas" count={s?.openTasks ?? null} href="/tasks" loading={summary.isLoading} description="A fazer" />
+            <MetricCard title="Oportunidades" count={s?.openOpportunities ?? null} href="/opportunities" loading={summary.isLoading} description="Em aberto" />
+            <MetricCard title="Casos ativos" count={s?.activeCases ?? null} href="/cases" loading={summary.isLoading} description={`${s?.activeClients ?? '—'} clientes`} />
           </div>
         </section>
 
-        {/* Section 2 — Fila prioritária */}
-        <WorkspacePanel
-          title="Fila prioritária"
-          description="Riscos à liberdade, prazos vencidos, oportunidades e revisões críticas."
-          className="min-h-0"
-        >
-          {priorityLoading ? (
-            <LoadingState label="Carregando fila prioritária…" />
-          ) : priorityError !== null && priorityError !== undefined ? (
-            <ErrorState
-              message={priorityError.message ?? 'Erro ao carregar fila prioritária.'}
-              onRetry={() => {
-                void libertyQueue.refetch()
-                void overdueQueue.refetch()
-                void opportunityQueue.refetch()
-                void extractionPriorityQueue.refetch()
-                void snapshotPriorityQueue.refetch()
-              }}
-            />
-          ) : priorityItems.length === 0 ? (
-            <EmptyState
-              title="Sem itens prioritários"
-              description="Nenhum item nas filas críticas selecionadas."
-            />
+        {/* Precisa de atenção agora — prazos vencidos + intimações novas */}
+        <WorkspacePanel title="Precisa de atenção agora" description="Prazos vencidos e intimações novas — o que não pode esperar.">
+          {overdue.isLoading || newIntimations.isLoading ? (
+            <LoadingState label="Carregando…" />
+          ) : overdue.isError ? (
+            <ErrorState message={overdue.error?.message ?? 'Erro ao carregar.'} onRetry={() => { void overdue.refetch() }} />
+          ) : attentionEmpty ? (
+            <EmptyState title="Nada urgente" description="Nenhum prazo vencido e nenhuma intimação nova. Tudo em dia." />
           ) : (
             <>
-              <ul className="space-y-2" aria-label="Fila prioritária">
-                {priorityItems.map((item) => (
-                  <QueueProjectionRow key={item.id} item={item} />
+              <ul className="space-y-2">
+                {overdueItems.slice(0, 6).map((d) => (
+                  <li key={`dl-${d.id}`}>
+                    <ListCard href={d.executionCaseId ? `/cases/${d.executionCaseId}?tab=prazos` : `/deadlines/${d.id}`} accentClassName="border-red-200 bg-red-50">
+                      <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                        <StatusBadge variant="deadline" status={d.status} />
+                        <span className={`text-[11px] ${text.faint}`}>{deadlineClassLabel(d.deadlineClass)}</span>
+                      </div>
+                      <p className={`text-[13px] font-medium ${text.secondary}`}>{d.title}</p>
+                      <p className={`mt-0.5 text-[11px] ${text.faint}`}>
+                        Venceu em {formatDate(d.dueAt)}{d.clientName ? ` · ${d.clientName}` : ''}
+                      </p>
+                    </ListCard>
+                  </li>
+                ))}
+                {intimationItems.slice(0, 6).map((it) => (
+                  <li key={`int-${it.id}`}>
+                    <ListCard href={it.executionCaseId ? `/cases/${it.executionCaseId}?tab=intimacoes` : '/intimations'} accentClassName="border-blue-200 bg-blue-50">
+                      <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                        <span className="rounded-md border border-blue-200 bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">Intimação nova</span>
+                        <span className={`text-[11px] ${text.faint}`}>{it.kind}</span>
+                      </div>
+                      <p className={`text-[13px] font-medium ${text.secondary}`}>{it.clientName ?? it.processNumber ?? 'Comunicação'}</p>
+                      <p className={`mt-0.5 text-[11px] ${text.faint}`}>
+                        {it.processNumber ?? '—'} · recebida {formatDate(it.availableAt ?? it.createdAt)}
+                      </p>
+                    </ListCard>
+                  </li>
                 ))}
               </ul>
-              <PanelFooterLink href="/queues" label="Ver fila completa" />
+              <PanelFooterLink href="/queues" label="Ver Radar completo" />
             </>
           )}
         </WorkspacePanel>
 
         <div className="grid grid-cols-1 gap-4 xl:grid-cols-2">
-          {/* Section 3 — Prazos da semana */}
-          <WorkspacePanel
-            title="Prazos da semana"
-            description="Vencimentos nos próximos 7 dias (inclui vencidos recentes)."
-          >
-            {weekDeadlinesQuery.isLoading ? (
+          {/* Prazos da semana */}
+          <WorkspacePanel title="Prazos da semana" description="Vencimentos nos próximos 7 dias.">
+            {weekQuery.isLoading ? (
               <LoadingState label="Carregando prazos…" />
-            ) : weekDeadlinesQuery.isError ? (
-              <ErrorState
-                message={weekDeadlinesQuery.error.message ?? 'Erro ao carregar prazos.'}
-                onRetry={() => { void weekDeadlinesQuery.refetch() }}
-              />
+            ) : weekQuery.isError ? (
+              <ErrorState message={weekQuery.error.message ?? 'Erro ao carregar prazos.'} onRetry={() => { void weekQuery.refetch() }} />
             ) : weekDeadlines.length === 0 ? (
-              <EmptyState
-                title="Sem prazos esta semana"
-                description="Nenhum prazo ativo vence nos próximos 7 dias."
-              />
+              <EmptyState title="Sem prazos esta semana" description="Nenhum prazo ativo vence nos próximos 7 dias." />
             ) : (
               <>
-                <ul className="space-y-2" aria-label="Prazos da semana">
-                  {weekDeadlines.map((deadline) => {
-                    const accent = deadlineCardAccentClass(deadline.status, deadline.priority)
-                    return (
-                      <li key={deadline.id}>
-                        <ListCard
-                          href={`/deadlines/${deadline.id}`}
-                          accentClassName={accent}
-                        >
-                          <div className="flex flex-wrap items-center gap-2 mb-1">
-                            <StatusBadge variant="deadline" status={deadline.status} />
-                            <span className={`text-[11px] ${text.faint}`}>
-                              {deadlineClassLabel(deadline.deadlineClass)}
-                            </span>
-                          </div>
-                          <p className={`text-[13px] font-medium ${text.secondary}`}>
-                            {deadline.title}
-                          </p>
-                          <p className={`mt-0.5 text-[11px] ${text.faint}`}>
-                            Vencimento: {formatDateTime(deadline.dueAt)}
-                            {deadline.caseInternalRef !== null
-                              ? ` · ${deadline.caseInternalRef}`
-                              : ''}
-                          </p>
-                        </ListCard>
-                      </li>
-                    )
-                  })}
+                <ul className="space-y-2">
+                  {weekDeadlines.map((d) => (
+                    <li key={d.id}>
+                      <ListCard href={d.executionCaseId ? `/cases/${d.executionCaseId}?tab=prazos` : `/deadlines/${d.id}`} accentClassName={deadlineCardAccentClass(d.status, d.priority)}>
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <StatusBadge variant="deadline" status={d.status} />
+                          <span className={`text-[11px] ${text.faint}`}>{deadlineClassLabel(d.deadlineClass)}</span>
+                        </div>
+                        <p className={`text-[13px] font-medium ${text.secondary}`}>{d.title}</p>
+                        <p className={`mt-0.5 text-[11px] ${text.faint}`}>Vence {formatDate(d.dueAt)}{d.clientName ? ` · ${d.clientName}` : ''}</p>
+                      </ListCard>
+                    </li>
+                  ))}
                 </ul>
                 <PanelFooterLink href="/deadlines" label="Ver todos os prazos" />
               </>
             )}
           </WorkspacePanel>
 
-          {/* Section 4 — Pipeline documental */}
-          <WorkspacePanel
-            title="Pipeline documental"
-            description="Peças por estado do pipeline de extração."
-          >
-            {pipelineLoading ? (
-              <LoadingState label="Carregando peças…" />
-            ) : pipelineError !== null && pipelineError !== undefined ? (
-              <ErrorState
-                message={pipelineError.message ?? 'Erro ao carregar pipeline.'}
-                onRetry={() => {
-                  void pendingExtraction.refetch()
-                  void extractionRunning.refetch()
-                  void extractionReviewDocs.refetch()
-                  void confirmedDocs.refetch()
-                }}
-              />
+          {/* Agenda de hoje */}
+          <WorkspacePanel title="Agenda de hoje" description="Audiências, reuniões e lembretes de hoje.">
+            {todayAgenda.isLoading ? (
+              <LoadingState label="Carregando agenda…" />
+            ) : todayAgenda.isError ? (
+              <ErrorState message="Erro ao carregar a agenda." onRetry={() => { void todayAgenda.refetch() }} />
+            ) : (todayAgenda.data?.data ?? []).length === 0 ? (
+              <EmptyState title="Nada agendado hoje" description="Sem eventos manuais para hoje." />
             ) : (
               <>
-                <div className="space-y-4">
-                  {documentPipeline.map((group) => {
-                    const items = group.query.data?.pages.flatMap((p) => p.data) ?? []
-                    return (
-                      <div key={group.status}>
-                        <div className="flex items-baseline justify-between gap-2 mb-2">
-                          <h3 className={`text-[12px] font-medium ${text.secondary}`}>
-                            {group.label}
-                          </h3>
-                          <span className={`text-[11px] tabular-nums ${text.faint}`}>
-                            {items.length}
-                            {items.length >= 5 ? '+' : ''}
-                          </span>
-                        </div>
-                        {items.length === 0 ? (
-                          <p className={`text-[11px] ${text.faint}`}>Nenhuma peça.</p>
-                        ) : (
-                          <ul className="space-y-1.5">
-                            {items.slice(0, 3).map((doc) => (
-                            <li key={doc.id}>
-                            <ListCard href={`/documents/${doc.id}`}>
-                              <p className={`text-[12px] font-medium ${text.secondary} truncate`}>
-                                {doc.fileName}
-                              </p>
-                              <p className={`text-[10px] ${text.faint}`}>
-                                {documentStatusLabel(doc.status)}
-                              </p>
-                            </ListCard>
-                          </li>
-                            ))}
-                          </ul>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-                <PanelFooterLink href="/documents" label="Ver central documental" />
-              </>
-            )}
-          </WorkspacePanel>
-
-          {/* Section 5 — Motor */}
-          <WorkspacePanel
-            title="Atividade recente"
-            description="Últimas avaliações do motor de cálculo."
-          >
-            {engineRuns.isLoading ? (
-              <LoadingState label="Carregando avaliações…" />
-            ) : engineRuns.isError ? (
-              <ErrorState
-                message={engineRuns.error.message ?? 'Erro ao carregar motor.'}
-                onRetry={() => { void engineRuns.refetch() }}
-              />
-            ) : engineRuns.data === undefined || engineRuns.data.data.length === 0 ? (
-              <EmptyState
-                title="Sem avaliações recentes"
-                description="Execuções do motor aparecerão aqui."
-              />
-            ) : (
-              <>
-                <ul className="space-y-2" aria-label="Atividade do motor">
-                  {engineRuns.data.data.map((run) => (
-                    <li key={run.id}>
-                      <ListCard href={`/cases/${run.executionCaseId}`}>
-                        <div className="flex flex-wrap items-center gap-2 mb-1">
-                          <StatusBadge>{engineTriggerLabel(run.trigger)}</StatusBadge>
-                          <span className={`text-[11px] ${text.faint}`}>{engineStatusLabel(run.status)}</span>
-                          {run.uncertaintyLevel !== null && (
-                            <span className={`text-[11px] ${text.faint}`}>
-                              Incerteza: {uncertaintyLevelLabel(run.uncertaintyLevel)}
-                            </span>
-                          )}
-                        </div>
-                        {run.evaluatedAt !== null && (
-                          <p className={`text-[11px] ${text.faint}`}>
-                            {formatDateTime(run.evaluatedAt)}
-                          </p>
-                        )}
-                        {run.opportunitiesCreated !== null &&
-                          Array.isArray(run.opportunitiesCreated) && (
-                            <p className={`mt-0.5 text-[11px] ${text.faint}`}>
-                              Oportunidades criadas: {run.opportunitiesCreated.length}
-                            </p>
-                          )}
+                <ul className="space-y-2">
+                  {(todayAgenda.data?.data ?? []).slice(0, 6).map((ev) => (
+                    <li key={ev.id}>
+                      <ListCard href={ev.executionCaseId ? `/cases/${ev.executionCaseId}` : '/calendar'}>
+                        <p className={`text-[13px] font-medium ${text.secondary}`}>{ev.title}</p>
+                        <p className={`mt-0.5 text-[11px] ${text.faint}`}>
+                          {ev.allDay ? 'Dia inteiro' : formatTime(ev.startsAt)}{ev.clientName ? ` · ${ev.clientName}` : ''}
+                        </p>
                       </ListCard>
                     </li>
                   ))}
                 </ul>
+                <PanelFooterLink href="/calendar" label="Abrir agenda" />
               </>
             )}
           </WorkspacePanel>
 
-          {/* Section 6 — Acesso rápido */}
-          <WorkspacePanel title="Acesso rápido" description="Módulos operacionais.">
-            <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-              {QUICK_LINKS.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className={[
-                      'block rounded-lg border px-4 py-3 transition-colors hover:bg-slate-50',
-                      borders.subtle,
-                      surfaces.panelInset,
-                    ].join(' ')}
-                  >
-                    <p className={`text-[13px] font-medium ${text.secondary}`}>{link.label}</p>
-                    <p className={`mt-0.5 text-[11px] ${text.faint}`}>{link.description}</p>
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          {/* Tarefas abertas */}
+          <WorkspacePanel title="Tarefas abertas" description="Suas próximas tarefas, por prioridade.">
+            {openTasks.isLoading ? (
+              <LoadingState label="Carregando tarefas…" />
+            ) : openTasks.isError ? (
+              <ErrorState message={openTasks.error?.message ?? 'Erro ao carregar tarefas.'} onRetry={() => { void openTasks.refetch() }} />
+            ) : (openTasks.data?.data ?? []).length === 0 ? (
+              <EmptyState title="Nenhuma tarefa aberta" description="Tudo concluído por aqui." />
+            ) : (
+              <>
+                <ul className="space-y-2">
+                  {(openTasks.data?.data ?? []).map((t) => (
+                    <li key={t.id}>
+                      <ListCard href={t.executionCaseId ? `/cases/${t.executionCaseId}?tab=tarefas` : '/tasks'}>
+                        <div className="flex flex-wrap items-center gap-2 mb-0.5">
+                          <span className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${TASK_PRIORITY_BADGE[t.priority] ?? ''}`}>
+                            {TASK_PRIORITY_LABEL[t.priority] ?? t.priority}
+                          </span>
+                          {t.dueAt && <span className={`text-[11px] ${text.faint}`}>Vence {formatDate(t.dueAt)}</span>}
+                        </div>
+                        <p className={`text-[13px] font-medium ${text.secondary}`}>{t.title}</p>
+                        {(t.clientName || t.processNumber) && (
+                          <p className={`mt-0.5 text-[11px] ${text.faint}`}>{[t.clientName, t.processNumber].filter(Boolean).join(' · ')}</p>
+                        )}
+                      </ListCard>
+                    </li>
+                  ))}
+                </ul>
+                <PanelFooterLink href="/tasks" label="Ver todas as tarefas" />
+              </>
+            )}
+          </WorkspacePanel>
+
+          {/* Oportunidades */}
+          <WorkspacePanel title="Oportunidades a revisar" description="Sugestões aguardando sua qualificação.">
+            {opportunities.isLoading ? (
+              <LoadingState label="Carregando oportunidades…" />
+            ) : opportunities.isError ? (
+              <ErrorState message={opportunities.error?.message ?? 'Erro ao carregar.'} onRetry={() => { void opportunities.refetch() }} />
+            ) : (opportunities.data?.pages.flatMap((p) => p.data) ?? []).length === 0 ? (
+              <EmptyState title="Sem oportunidades pendentes" description="Nenhuma sugestão aguardando revisão." />
+            ) : (
+              <>
+                <ul className="space-y-2">
+                  {(opportunities.data?.pages.flatMap((p) => p.data) ?? []).slice(0, 6).map((op) => (
+                    <li key={op.id}>
+                      <ListCard href={`/cases/${op.executionCaseId}?tab=oportunidades`}>
+                        <p className={`text-[13px] font-medium ${text.secondary}`}>{op.summary}</p>
+                        <p className={`mt-0.5 text-[11px] ${text.faint}`}>
+                          {op.clientName ?? op.caseInternalRef ?? '—'}
+                          {op.windowEndAt ? ` · janela até ${formatDate(op.windowEndAt)}` : ''}
+                        </p>
+                      </ListCard>
+                    </li>
+                  ))}
+                </ul>
+                <PanelFooterLink href="/opportunities" label="Ver todas as oportunidades" />
+              </>
+            )}
           </WorkspacePanel>
         </div>
+
+        {/* Acesso rápido */}
+        <WorkspacePanel title="Acesso rápido" description="Módulos do ExecFlow.">
+          <ul className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            {QUICK_LINKS.map((link) => (
+              <li key={link.href}>
+                <Link href={link.href} className={['block rounded-lg border px-4 py-3 text-center transition-colors hover:bg-slate-50', borders.subtle, surfaces.panelInset].join(' ')}>
+                  <p className={`text-[13px] font-medium ${text.secondary}`}>{link.label}</p>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </WorkspacePanel>
       </div>
     </div>
   )
