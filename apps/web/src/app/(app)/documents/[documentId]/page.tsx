@@ -79,10 +79,10 @@ export default function DocumentDetailPage() {
         <>
           <div className="mb-5">
             <Link
-              href="/documents"
+              href={doc.caseSummary !== null ? `/cases/${doc.caseSummary.id}?tab=documentos` : '/dashboard'}
               className={`inline-flex items-center gap-1.5 text-[12px] font-medium ${text.faint} hover:text-slate-700 transition-colors`}
             >
-              ← Peças
+              {doc.caseSummary !== null ? '← Voltar ao caso' : '← Início'}
             </Link>
           </div>
 
