@@ -2,6 +2,8 @@
  * Queue and workflow task routes.
  *
  * GET  /api/v1/queue-projections              — list active queue items (org-scoped)
+ * GET  /api/v1/queue/workflow-tasks           — list workflow tasks (tela de Tarefas)
+ * POST /api/v1/queue/workflow-tasks           — criar tarefa manual (taskType='generic')
  * POST /api/v1/workflow-tasks/:id/claim       — claim a workflow task
  * POST /api/v1/workflow-tasks/:id/release     — release a workflow task
  * POST /api/v1/workflow-tasks/:id/complete    — complete a workflow task
@@ -32,6 +34,7 @@ import { unprocessable } from '../lib/respond.ts'
 import {
   listQueueProjections,
 } from '../repositories/queue-projection.ts'
+import { insertWorkflowTask } from '../repositories/workflow-task.ts'
 import {
   claimTask,
   releaseTask,
@@ -141,8 +144,8 @@ router.get(
     const ctx = buildWriteContext(c, db)
     const q = parsed.data
 
-    const { workflowTasks } = await import('@execflow/db/schema')
-    const { eq, and, or, desc, sql, inArray } = await import('drizzle-orm')
+    const { workflowTasks, executionCases, clients } = await import('@execflow/db/schema')
+    const { eq, and, or, asc, sql, inArray } = await import('drizzle-orm')
 
     const conditions = [eq(workflowTasks.organizationId, ctx.organizationId)]
     if (q.status) {
@@ -162,17 +165,79 @@ router.get(
       if (mine) conditions.push(mine)
     }
 
-    const items = await db
-      .select()
+    // Achado 14/07/2026 (pedido do Miguel): a tela mostrava "Vence: dd/mm" em
+    // cada card mas a ordenação de verdade ignorava esse campo — só
+    // prioridade + mais recente primeiro. Uma tarefa normal vencendo amanhã
+    // ficava abaixo de uma normal criada há 5 minutos sem prazo nenhum.
+    // Agora: prioridade, depois prazo mais próximo primeiro (sem prazo vai
+    // pro fim, ordenado por criação mais antiga primeiro — não deixa
+    // esquecida). Mesmo padrão já usado em Oportunidades (windowEndAt).
+    const rows = await db
+      .select({
+        task: workflowTasks,
+        clientName: clients.fullName,
+        processNumber: executionCases.executionProcessNumber,
+      })
       .from(workflowTasks)
+      .leftJoin(executionCases, eq(workflowTasks.executionCaseId, executionCases.id))
+      .leftJoin(clients, eq(executionCases.clientId, clients.id))
       .where(and(...conditions))
       .orderBy(
         sql`case ${workflowTasks.priority} when 'critical' then 0 when 'high' then 1 when 'normal' then 2 else 3 end`,
-        desc(workflowTasks.createdAt)
+        sql`${workflowTasks.dueAt} IS NULL`,
+        asc(workflowTasks.dueAt),
+        asc(workflowTasks.createdAt)
       )
       .limit(q.limit)
 
+    const items = rows.map((r) => ({ ...r.task, clientName: r.clientName, processNumber: r.processNumber }))
+
     return c.json({ data: items })
+  }
+)
+
+// -------------------------------------------------------------------------
+// POST /api/v1/queue/workflow-tasks — criar tarefa manual (lembrete livre)
+// -------------------------------------------------------------------------
+
+const CreateWorkflowTaskSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().max(4000).optional(),
+  priority: z.enum(['critical', 'high', 'normal', 'low']).default('normal'),
+  executionCaseId: z.string().uuid().optional(),
+  dueAt: z.string().datetime({ offset: true }).optional(),
+})
+
+router.post(
+  '/workflow-tasks',
+  authMiddleware,
+  orgMiddleware,
+  requireMinRole('assistant'),
+  async (c) => {
+    const body = await safeJsonBody(c)
+    const parsed = parseBody(CreateWorkflowTaskSchema, body ?? {})
+    if (!parsed.success) {
+      return unprocessable(c, parsed.message)
+    }
+    const ctx = buildWriteContext(c, db)
+    const b = parsed.data
+
+    const result = await insertWorkflowTask(ctx.db, {
+      organizationId: ctx.organizationId,
+      taskType: 'generic',
+      title: b.title,
+      description: b.description ?? null,
+      priority: b.priority,
+      executionCaseId: b.executionCaseId ?? null,
+      dueAt: b.dueAt ? new Date(b.dueAt) : null,
+      createdByUserId: ctx.userId,
+    })
+
+    if (!result.success) {
+      return serviceErrorToResponse(c, { code: 'INTERNAL', message: result.error.message })
+    }
+
+    return c.json({ data: result.data }, 201)
   }
 )
 

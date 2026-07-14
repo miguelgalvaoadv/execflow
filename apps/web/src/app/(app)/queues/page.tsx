@@ -33,6 +33,7 @@ const QUEUE_FILTERS = [
   { id: 'opportunity_review', label: 'Oportunidades' },
   { id: 'progression_opportunities', label: 'Progresso' },
   { id: 'overdue_deadlines', label: 'Prazos' },
+  { id: 'workflow_tasks', label: 'Tarefas' },
 ] as const
 
 /** Accent visual por prioridade — helper local, não altera ListCard. */
@@ -62,8 +63,8 @@ export default function QueuesPage() {
     <div>
       <DashboardPageHeader
         eyebrow="Operacional"
-        title="Fila de trabalho"
-        description="Itens que requerem ação. Ordenados por prioridade e prazo."
+        title="Radar"
+        description="Visão ampla de tudo que pede atenção — prazos, oportunidades, tarefas — ordenada por prioridade e prazo. Só leitura; para assumir/concluir uma tarefa, abra o caso ou vá em Tarefas."
       />
 
       <div className="mt-6">

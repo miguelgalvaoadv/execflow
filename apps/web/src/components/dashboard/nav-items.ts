@@ -10,7 +10,8 @@ export type NavIcon =
   | "team"
   | "intimations"
   | "tasks"
-  | "calendar";
+  | "calendar"
+  | "radar";
 
 export type NavItem = {
   id: string;
@@ -34,6 +35,7 @@ export const primaryNavItems: NavItem[] = [
   { id: "deadlines", label: "Prazos", icon: "deadlines", href: "/deadlines", implemented: true },
   { id: "opportunities", label: "Oportunidades", icon: "opportunities", href: "/opportunities", implemented: true },
   { id: "calendar", label: "Agenda", icon: "calendar", href: "/calendar", implemented: true },
+  { id: "radar", label: "Radar", icon: "radar", href: "/queues", implemented: true },
   { id: "tasks", label: "Tarefas", icon: "tasks", href: "/tasks", implemented: true },
   { id: "finance", label: "Financeiro", icon: "finance", href: "/finance", implemented: false },
 ];

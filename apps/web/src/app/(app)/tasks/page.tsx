@@ -6,17 +6,24 @@
  * Diferente de Prazos (obrigações legais) e Oportunidades (vantagens
  * processuais): tarefas são coordenação interna. Máquina de estados completa
  * já existe no backend (claim/release/complete com lock otimista).
+ *
+ * Achado 14/07/2026 (pedido do Miguel — revisão da categoria): a ordenação
+ * ignorava o prazo mesmo mostrando "Vence: dd/mm" em cada card (corrigido no
+ * backend); não mostrava nome do cliente/processo (corrigido — join em
+ * queue.ts); não tinha botão de criar tarefa manual (adicionado abaixo).
  */
 
 import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { CalendarClock, CircleCheck, Hand, Undo2 } from 'lucide-react'
+import { CalendarClock, CircleCheck, Hand, Undo2, FileText, Plus, X } from 'lucide-react'
 import { apiGet, apiPost, ApiError } from '@/lib/api-client'
 import { useSession } from '@/lib/hooks/use-session'
+import { useCases } from '@/lib/hooks/use-cases'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
 import {
+  Button,
   EmptyState,
   ErrorState,
   FilterBar,
@@ -36,6 +43,8 @@ type WorkflowTask = {
   assignedToUserId: string | null
   dueAt: string | null
   createdAt: string
+  clientName: string | null
+  processNumber: string | null
 }
 
 const STATUS_OPTIONS = [
@@ -66,6 +75,13 @@ const PRIORITY_LABELS: Record<string, { label: string; cls: string }> = {
   low: { label: 'Baixa', cls: 'text-slate-500 bg-white border-slate-100' },
 }
 
+const PRIORITY_OPTIONS = [
+  { value: 'critical', label: 'Crítica' },
+  { value: 'high', label: 'Alta' },
+  { value: 'normal', label: 'Normal' },
+  { value: 'low', label: 'Baixa' },
+]
+
 const TASK_TYPE_LABELS: Record<string, string> = {
   review_extraction: 'Revisar extração',
   confirm_document: 'Confirmar documento',
@@ -89,6 +105,16 @@ function formatDate(iso: string | null): string {
   )
 }
 
+type NewTaskState = {
+  title: string
+  description: string
+  priority: string
+  dueAt: string
+  executionCaseId: string
+}
+
+const EMPTY_NEW_TASK: NewTaskState = { title: '', description: '', priority: 'normal', dueAt: '', executionCaseId: '' }
+
 export default function TasksPage() {
   const { data: session, isLoading: sessionLoading } = useSession()
   const orgId = session?.organization.id ?? ''
@@ -96,6 +122,8 @@ export default function TasksPage() {
 
   const [statusFilter, setStatusFilter] = useState('')
   const [onlyMine, setOnlyMine] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
+  const [newTask, setNewTask] = useState<NewTaskState>(EMPTY_NEW_TASK)
 
   const filters = useMemo(
     () => ({
@@ -121,6 +149,29 @@ export default function TasksPage() {
     },
   })
 
+  const createTask = useMutation<unknown, ApiError, NewTaskState>({
+    mutationFn: (t) =>
+      apiPost(
+        '/api/v1/queue/workflow-tasks',
+        {
+          title: t.title.trim(),
+          description: t.description.trim() || undefined,
+          priority: t.priority,
+          executionCaseId: t.executionCaseId || undefined,
+          dueAt: t.dueAt ? new Date(`${t.dueAt}T12:00:00`).toISOString() : undefined,
+        },
+        { organizationId: orgId }
+      ),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['workflow-tasks', orgId] })
+      setShowCreate(false)
+      setNewTask(EMPTY_NEW_TASK)
+    },
+  })
+
+  const casesQuery = useCases({ organizationId: orgId, enabled: session != null && showCreate })
+  const caseOptions = casesQuery.data?.pages.flatMap((p) => p.data) ?? []
+
   const tasks = query.data?.data ?? []
 
   return (
@@ -128,7 +179,7 @@ export default function TasksPage() {
       <DashboardPageHeader
         eyebrow="Operacional"
         title="Tarefas"
-        description="Itens de trabalho internos — separados de prazos legais e oportunidades."
+        description="Itens de trabalho internos — separados de prazos legais e oportunidades. Ordenadas por prioridade e prazo mais próximo."
       />
 
       <div className="mt-6 space-y-4">
@@ -149,6 +200,11 @@ export default function TasksPage() {
             />
             Só as minhas
           </label>
+          <div className="ml-auto">
+            <Button variant="primary" size="md" onClick={() => setShowCreate(true)}>
+              <Plus className="h-4 w-4" /> Nova tarefa
+            </Button>
+          </div>
         </FilterBar>
 
         {sessionLoading ? (
@@ -165,7 +221,7 @@ export default function TasksPage() {
         ) : tasks.length === 0 ? (
           <EmptyState
             title="Nenhuma tarefa"
-            description="Tarefas nascem de oportunidades validadas, prazos, revisões de documentos e rotinas automáticas."
+            description="Tarefas nascem de oportunidades validadas, prazos, revisões de documentos, rotinas automáticas — ou clique em 'Nova tarefa' pra anotar algo manualmente."
           />
         ) : (
           <div className="space-y-2">
@@ -189,6 +245,18 @@ export default function TasksPage() {
                           {TASK_TYPE_LABELS[task.taskType] ?? task.taskType}
                         </span>
                       </div>
+                      {(task.clientName !== null || task.processNumber !== null) && (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                          {task.clientName !== null && (
+                            <span className={`text-[12px] font-medium ${text.secondary}`}>{task.clientName}</span>
+                          )}
+                          {task.processNumber !== null && (
+                            <span className={`inline-flex items-center gap-1 text-[11px] ${text.faint}`}>
+                              <FileText className="h-3 w-3" /> {task.processNumber}
+                            </span>
+                          )}
+                        </div>
+                      )}
                       <p className={`mt-1.5 text-[14px] font-medium ${text.primary}`}>{task.title}</p>
                       {task.description !== null && (
                         <p className={`mt-0.5 line-clamp-2 text-[12px] ${text.muted}`}>{task.description}</p>
@@ -201,7 +269,7 @@ export default function TasksPage() {
                     <div className="flex shrink-0 flex-wrap gap-1.5">
                       {task.executionCaseId !== null && (
                         <Link
-                          href={`/cases/${task.executionCaseId}`}
+                          href={`/cases/${task.executionCaseId}?tab=tarefas`}
                           className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-600 hover:bg-slate-100"
                         >
                           Abrir caso
@@ -248,6 +316,103 @@ export default function TasksPage() {
           </div>
         )}
       </div>
+
+      {/* Modal criar tarefa manual */}
+      {showCreate && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4"
+          onClick={() => setShowCreate(false)}
+        >
+          <div className="w-full max-w-md rounded-xl bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-3 flex items-center justify-between">
+              <h2 className="text-[15px] font-semibold text-slate-800">Nova tarefa</h2>
+              <button type="button" onClick={() => setShowCreate(false)} className="text-slate-400 hover:text-slate-600">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Título</label>
+                <input
+                  type="text"
+                  autoFocus
+                  value={newTask.title}
+                  onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
+                  placeholder="Ex.: Ligar pra família do Marcelo sobre a audiência"
+                  className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-600"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Prioridade</label>
+                  <select
+                    value={newTask.priority}
+                    onChange={(e) => setNewTask({ ...newTask, priority: e.target.value })}
+                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-600"
+                  >
+                    {PRIORITY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-[11px] font-medium text-slate-600">Prazo (opcional)</label>
+                  <input
+                    type="date"
+                    value={newTask.dueAt}
+                    onChange={(e) => setNewTask({ ...newTask, dueAt: e.target.value })}
+                    className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-600"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Caso vinculado (opcional)</label>
+                <select
+                  value={newTask.executionCaseId}
+                  onChange={(e) => setNewTask({ ...newTask, executionCaseId: e.target.value })}
+                  className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-600"
+                >
+                  <option value="">— nenhum —</option>
+                  {caseOptions.map((cs) => (
+                    <option key={cs.id} value={cs.id}>
+                      {cs.clientSummary.displayName ?? cs.clientSummary.fullName} — {cs.executionProcessNumber ?? cs.internalRef}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-[11px] font-medium text-slate-600">Observações (opcional)</label>
+                <textarea
+                  value={newTask.description}
+                  onChange={(e) => setNewTask({ ...newTask, description: e.target.value })}
+                  rows={3}
+                  className="w-full resize-none rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-600"
+                />
+              </div>
+            </div>
+
+            {createTask.isError && (
+              <p className="mt-2 text-[11px] text-red-600">{createTask.error?.message}</p>
+            )}
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <Button size="md" onClick={() => setShowCreate(false)}>Cancelar</Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={() => createTask.mutate(newTask)}
+                disabled={createTask.isPending || newTask.title.trim() === ''}
+              >
+                {createTask.isPending ? 'Criando…' : 'Criar tarefa'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

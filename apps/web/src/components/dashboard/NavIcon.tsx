@@ -11,6 +11,7 @@ import {
   UsersRound,
   BellRing,
   ClipboardCheck,
+  Radar as RadarIcon,
   type LucideIcon,
 } from "lucide-react";
 import type { NavIcon as NavIconName } from "./nav-items";
@@ -28,6 +29,7 @@ const ICONS: Record<NavIconName, LucideIcon> = {
   intimations: BellRing,
   tasks: ClipboardCheck,
   calendar: CalendarDays,
+  radar: RadarIcon,
 };
 
 type NavIconProps = {

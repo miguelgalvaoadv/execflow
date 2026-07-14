@@ -12,12 +12,13 @@
 import { useState, useCallback, useEffect } from 'react'
 import { ExtractionReviewWorkspace } from '@/components/extraction/ExtractionReviewWorkspace'
 import Link from 'next/link'
-import { TriangleAlert, AlertCircle } from 'lucide-react'
+import { TriangleAlert, AlertCircle, CalendarClock, CircleCheck, Hand, Undo2, Plus, X } from 'lucide-react'
 import { useParams } from 'next/navigation'
 import { useSession } from '@/lib/hooks/use-session'
 import { useCase } from '@/lib/hooks/use-case'
 import { useCaseTimeline } from '@/lib/hooks/use-case-timeline'
 import { useCaseCommunications, useResolveCaseCommunication } from '@/lib/hooks/use-case-communications'
+import { useCaseTasks, useCaseTaskAction, useCreateCaseTask } from '@/lib/hooks/use-case-tasks'
 import {
   useCaseDocuments,
   useRequestUpload,
@@ -218,6 +219,9 @@ export default function CaseWorkspacePage() {
   )
   const deadlinesQuery = useCaseDeadlines(orgId, caseId, activeTab === 'prazos' || activeTab === 'calculos')
   const snapshotsQuery = useCaseSentenceSnapshots(orgId, caseId, activeTab === 'calculos')
+  const tasksQuery = useCaseTasks(orgId, caseId, activeTab === 'tarefas')
+  const taskActionMutation = useCaseTaskAction(orgId, caseId)
+  const createTaskMutation = useCreateCaseTask(orgId, caseId)
 
   const proposeMutation = useProposeSentenceSnapshot(orgId, caseId)
   const confirmMutation = useConfirmSentenceSnapshot(orgId, caseId)
@@ -544,6 +548,23 @@ export default function CaseWorkspacePage() {
                 </FadeIn>
               )}
 
+              {activeTab === 'tarefas' && (
+                <FadeIn>
+                  <TarefasTab
+                    isLoading={tasksQuery.isLoading}
+                    isError={tasksQuery.isError}
+                    errorMessage={tasksQuery.error?.message}
+                    onRetry={() => { void tasksQuery.refetch() }}
+                    items={tasksQuery.data?.data ?? []}
+                    isMutating={taskActionMutation.isPending || createTaskMutation.isPending}
+                    onClaim={(id) => taskActionMutation.mutate({ taskId: id, verb: 'claim' })}
+                    onRelease={(id) => taskActionMutation.mutate({ taskId: id, verb: 'release' })}
+                    onComplete={(id) => taskActionMutation.mutate({ taskId: id, verb: 'complete' })}
+                    onCreate={(input) => createTaskMutation.mutate(input)}
+                  />
+                </FadeIn>
+              )}
+
               {activeTab === 'calculos' && (
                 <FadeIn>
                   <CalculosTab
@@ -806,6 +827,211 @@ function IntimacoesTab({
         )
       })}
     </ul>
+  )
+}
+
+/* ─── Tab Tarefas — só as tarefas DESTE caso (pedido do Miguel 14/07/2026) ─ */
+
+const TASK_STATUS_BADGES: Record<string, { label: string; cls: string }> = {
+  pending: { label: 'Pendente', cls: 'text-blue-700 bg-blue-50 border-blue-200' },
+  claimed: { label: 'Assumida', cls: 'text-violet-700 bg-violet-50 border-violet-200' },
+  in_progress: { label: 'Em andamento', cls: 'text-violet-700 bg-violet-50 border-violet-200' },
+  blocked: { label: 'Bloqueada', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
+  released: { label: 'Liberada', cls: 'text-slate-600 bg-slate-50 border-slate-200' },
+  completed: { label: 'Concluída', cls: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+  cancelled: { label: 'Cancelada', cls: 'text-slate-500 bg-slate-50 border-slate-200' },
+  escalated: { label: 'Escalada', cls: 'text-red-700 bg-red-50 border-red-200' },
+}
+
+const TASK_PRIORITY_BADGES: Record<string, { label: string; cls: string }> = {
+  critical: { label: 'Crítica', cls: 'text-red-700 bg-red-50 border-red-200' },
+  high: { label: 'Alta', cls: 'text-amber-700 bg-amber-50 border-amber-200' },
+  normal: { label: 'Normal', cls: 'text-slate-600 bg-slate-50 border-slate-200' },
+  low: { label: 'Baixa', cls: 'text-slate-500 bg-white border-slate-100' },
+}
+
+function taskFormatDate(iso: string | null): string {
+  if (!iso) return '—'
+  return new Intl.DateTimeFormat('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' }).format(new Date(iso))
+}
+
+type CaseTaskItem = {
+  id: string
+  taskType: string
+  title: string
+  description: string | null
+  status: string
+  priority: 'critical' | 'high' | 'normal' | 'low'
+  claimedByUserId: string | null
+  dueAt: string | null
+  createdAt: string
+}
+
+type TarefasTabProps = TabProps<CaseTaskItem> & {
+  isMutating: boolean
+  onClaim: (id: string) => void
+  onRelease: (id: string) => void
+  onComplete: (id: string) => void
+  onCreate: (input: { title: string; priority?: string; dueAt?: string }) => void
+}
+
+function TarefasTab({
+  isLoading,
+  isError,
+  errorMessage,
+  onRetry,
+  items,
+  isMutating,
+  onClaim,
+  onRelease,
+  onComplete,
+  onCreate,
+}: TarefasTabProps) {
+  const [showCreate, setShowCreate] = useState(false)
+  const [title, setTitle] = useState('')
+  const [priority, setPriority] = useState('normal')
+  const [dueAt, setDueAt] = useState('')
+
+  function submit() {
+    if (title.trim() === '') return
+    onCreate({
+      title: title.trim(),
+      priority,
+      ...(dueAt ? { dueAt: new Date(`${dueAt}T12:00:00`).toISOString() } : {}),
+    })
+    setTitle('')
+    setPriority('normal')
+    setDueAt('')
+    setShowCreate(false)
+  }
+
+  if (isLoading) return <LoadingState label="Carregando tarefas…" />
+  if (isError) {
+    return <ErrorState message={errorMessage ?? 'Erro ao carregar tarefas.'} onRetry={onRetry} />
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="flex justify-end">
+        <button
+          type="button"
+          onClick={() => setShowCreate((v) => !v)}
+          className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2.5 py-1.5 text-[12px] font-medium text-blue-700 hover:bg-blue-100"
+        >
+          {showCreate ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
+          {showCreate ? 'Cancelar' : 'Nova tarefa'}
+        </button>
+      </div>
+
+      {showCreate && (
+        <div className="rounded-lg border border-blue-100 bg-blue-50/50 p-3 space-y-2">
+          <input
+            type="text"
+            value={title}
+            autoFocus
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Título da tarefa"
+            className="w-full rounded-lg border border-slate-200 px-2.5 py-1.5 text-[13px] outline-none focus:border-blue-600"
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[12px] outline-none focus:border-blue-600"
+            >
+              <option value="critical">Crítica</option>
+              <option value="high">Alta</option>
+              <option value="normal">Normal</option>
+              <option value="low">Baixa</option>
+            </select>
+            <input
+              type="date"
+              value={dueAt}
+              onChange={(e) => setDueAt(e.target.value)}
+              className="rounded-lg border border-slate-200 px-2 py-1.5 text-[12px] outline-none focus:border-blue-600"
+            />
+            <Button variant="primary" size="md" onClick={submit} disabled={isMutating || title.trim() === ''}>
+              Criar
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {items.length === 0 ? (
+        <EmptyState
+          variant="tab"
+          title="Nenhuma tarefa"
+          description="Tarefas deste processo — automáticas (prazo crítico, autos faltando, oportunidade a revisar) ou manuais — aparecerão aqui."
+        />
+      ) : (
+        <ul className="space-y-2" aria-label="Tarefas">
+          {items.map((task) => {
+            const st = TASK_STATUS_BADGES[task.status] ?? TASK_STATUS_BADGES['pending']!
+            const pr = TASK_PRIORITY_BADGES[task.priority] ?? TASK_PRIORITY_BADGES['normal']!
+            const isMineClaimed = task.claimedByUserId !== null
+            const isTerminal = task.status === 'completed' || task.status === 'cancelled'
+            return (
+              <li key={task.id} className={`rounded-xl border ${borders.default} bg-white p-4 shadow-sm`}>
+                <div className="flex flex-wrap items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${pr.cls}`}>
+                        {pr.label}
+                      </span>
+                      <span className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium ${st.cls}`}>
+                        {st.label}
+                      </span>
+                    </div>
+                    <p className={`mt-1.5 text-[13px] font-medium ${text.secondary}`}>{task.title}</p>
+                    {task.description !== null && (
+                      <p className={`mt-0.5 line-clamp-2 text-[12px] ${text.faint}`}>{task.description}</p>
+                    )}
+                    <p className={`mt-1 inline-flex items-center gap-1 text-[11px] ${text.faint}`}>
+                      <CalendarClock className="h-3 w-3" /> Vence: {taskFormatDate(task.dueAt)} · Criada:{' '}
+                      {taskFormatDate(task.createdAt)}
+                    </p>
+                  </div>
+                  {!isTerminal && (
+                    <div className="flex shrink-0 flex-wrap gap-1.5">
+                      {!isMineClaimed && (
+                        <button
+                          type="button"
+                          onClick={() => onClaim(task.id)}
+                          disabled={isMutating}
+                          className="inline-flex items-center gap-1 rounded-md border border-blue-200 bg-blue-50 px-2 py-1 text-[11px] font-medium text-blue-700 hover:bg-blue-100"
+                        >
+                          <Hand className="h-3 w-3" /> Assumir
+                        </button>
+                      )}
+                      {isMineClaimed && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => onComplete(task.id)}
+                            disabled={isMutating}
+                            className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[11px] font-medium text-emerald-700 hover:bg-emerald-100"
+                          >
+                            <CircleCheck className="h-3 w-3" /> Concluir
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => onRelease(task.id)}
+                            disabled={isMutating}
+                            className="inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
+                          >
+                            <Undo2 className="h-3 w-3" /> Liberar
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 }
 
