@@ -43,6 +43,7 @@ import { betterAuth } from 'better-auth'
 import { drizzleAdapter } from 'better-auth/adapters/drizzle'
 import { admin } from 'better-auth/plugins'
 import { eq } from 'drizzle-orm'
+import { randomUUID } from 'node:crypto'
 import type { DbClient } from '@execflow/db/client'
 import {
   authUsers,
@@ -99,6 +100,42 @@ export function createAuth(db: DbClient): any {
        * This is enforced by Better Auth before password storage.
        */
       minPasswordLength: 12,
+      /**
+       * NÃO logar automaticamente quem acabou de ser criado.
+       *
+       * O provisionamento de membros é feito pelo admin do escritório
+       * (POST /api/v1/orgs/members chama auth.api.signUpEmail no servidor).
+       * Sem isto, cada criação de acesso geraria uma sessão órfã para o
+       * novo usuário. Com autoSignIn:false, signUpEmail só cria a conta —
+       * a sessão do admin que está criando permanece intacta, e o novo
+       * membro entra depois com as credenciais que o admin repassa.
+       * Não há auto-cadastro público, então isto não afeta nenhum fluxo
+       * de usuário final.
+       */
+      autoSignIn: false,
+    },
+
+    // -------------------------------------------------------------------------
+    // Geração de IDs — UUID (não o nanoid padrão do Better Auth)
+    // -------------------------------------------------------------------------
+
+    /**
+     * O modelo de dois usuários (ba_user + users) compartilha o MESMO id: o
+     * ba_user.id é `text` guardando um UUID, e o users.id é `uuid` nativo. O
+     * databaseHook user.create.after copia ba_user.id → users.id. Se o Better
+     * Auth gerar seu id padrão (nanoid, ex.: "iacwPlnrH9wm..."), a cópia para a
+     * coluna `uuid` FALHA ("invalid input syntax for type uuid"), o registro de
+     * domínio não nasce, e qualquer vínculo/consulta por esse id quebra.
+     *
+     * As contas-semente funcionavam por terem UUID inserido à mão. Este projeto
+     * nunca havia exercitado o cadastro real (signUpEmail) até o módulo de
+     * Equipe — por isso o bug estava latente. Forçando UUID aqui, todo id novo
+     * (user/session/account) nasce compatível com as colunas de domínio.
+     */
+    advanced: {
+      database: {
+        generateId: () => randomUUID(),
+      },
     },
 
     // -------------------------------------------------------------------------
