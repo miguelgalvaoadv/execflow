@@ -11,12 +11,12 @@
  */
 
 import { Hono } from 'hono'
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { authMiddleware } from '../middleware/auth.ts'
 import { orgMiddleware } from '../middleware/organization.ts'
 import { requireMinRole } from '../middleware/rbac.ts'
 import { db } from '../lib/db.ts'
-import { integrationConnectors, systemHealthChecks } from '@execflow/db/schema'
+import { integrationConnectors } from '@execflow/db/schema'
 import type { HonoVariables } from '../context/types.ts'
 
 export const integrationsRouter = new Hono<{ Variables: HonoVariables }>()
@@ -44,16 +44,6 @@ const CONNECTOR_SEEDS: ConnectorSeed[] = [
     notes:
       'API pública do CNJ por número de processo conhecido. Credencial vive no serviço de workers — o status aqui usa evidência de execução registrada.',
     credentialCheck: () => Boolean(process.env['DATAJUD_API_KEY']),
-  },
-  {
-    kind: 'astrea_email',
-    name: 'Astrea — notificações por e-mail (IMAP)',
-    category: 'movimentacoes',
-    manualImportAvailable: false,
-    notes:
-      'Pausado operacionalmente (ASTREA_EMAIL_POLL_ENABLED=false no worker). Código mantido como contingência; credencial vive no serviço de workers.',
-    credentialCheck: () => Boolean(process.env['ASTREA_IMAP_USER'] && process.env['ASTREA_IMAP_PASS']),
-    enabledCheck: () => process.env['ASTREA_EMAIL_POLL_ENABLED'] !== 'false',
   },
   {
     kind: 'jusbrasil',
@@ -171,32 +161,6 @@ integrationsRouter.get('/', requireMinRole('assistant'), async (c) => {
         .set({ hasCredential: effectiveCredential, status: derivedStatus, updatedAt: new Date() })
         .where(eq(integrationConnectors.id, existing.id))
     }
-  }
-
-  // Astrea: mesma evidência via health checks do poll IMAP.
-  const [lastAstrea] = await db
-    .select()
-    .from(systemHealthChecks)
-    .where(
-      and(
-        eq(systemHealthChecks.organizationId, organization.id),
-        eq(systemHealthChecks.checkType, 'astrea_email_poll'),
-        eq(systemHealthChecks.status, 'success')
-      )
-    )
-    .orderBy(desc(systemHealthChecks.createdAt))
-    .limit(1)
-
-  if (lastAstrea) {
-    await db
-      .update(integrationConnectors)
-      .set({ lastRunAt: lastAstrea.createdAt, lastSuccessAt: lastAstrea.createdAt, updatedAt: new Date() })
-      .where(
-        and(
-          eq(integrationConnectors.organizationId, organization.id),
-          eq(integrationConnectors.kind, 'astrea_email')
-        )
-      )
   }
 
   const connectors = await db

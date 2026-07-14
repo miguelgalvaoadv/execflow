@@ -62,3 +62,41 @@ aiLogsRouter.get('/', requireMinRole('lawyer'), async (c) => {
 
   return c.json({ data: rows, totals: totals ?? null })
 })
+
+// ---------------------------------------------------------------------------
+// GET /api/v1/ai-logs/summary — resumo de uso do Claude (card das Configurações)
+// Mês corrente + todo o período. Sem prompts/respostas — só números.
+// ---------------------------------------------------------------------------
+
+aiLogsRouter.get('/summary', requireMinRole('lawyer'), async (c) => {
+  const { organization } = c.get('org')
+
+  const agg = (whereMonth: boolean) =>
+    db
+      .select({
+        calls: sql<number>`count(*)::int`,
+        errors: sql<number>`count(*) filter (where ${aiInteractionLogs.status} = 'error')::int`,
+        inputTokens: sql<number>`coalesce(sum(${aiInteractionLogs.inputTokens}), 0)::int`,
+        outputTokens: sql<number>`coalesce(sum(${aiInteractionLogs.outputTokens}), 0)::int`,
+        costUsd: sql<string>`coalesce(sum(${aiInteractionLogs.estimatedCostUsd}), 0)::text`,
+        lastAt: sql<string | null>`max(${aiInteractionLogs.createdAt})`,
+      })
+      .from(aiInteractionLogs)
+      .where(
+        whereMonth
+          ? and(
+              eq(aiInteractionLogs.organizationId, organization.id),
+              sql`${aiInteractionLogs.createdAt} >= date_trunc('month', now())`
+            )
+          : eq(aiInteractionLogs.organizationId, organization.id)
+      )
+
+  const [month] = await agg(true)
+  const [allTime] = await agg(false)
+
+  return c.json({
+    month: month ?? null,
+    allTime: allTime ?? null,
+    hasCredential: Boolean(process.env['ANTHROPIC_API_KEY']),
+  })
+})
