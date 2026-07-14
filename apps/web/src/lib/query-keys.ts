@@ -135,6 +135,10 @@ export const queryKeys = {
   caseSentenceSnapshots: (orgId: string, caseId: string) =>
     ['case-sentence-snapshots', orgId, caseId] as const,
 
+  // Financeiro — lançamentos manuais por cliente
+  financialEntries: (orgId: string, clientId: string) =>
+    ['financial-entries', orgId, clientId] as const,
+
   // Inventário por OAB
   inventoryProfiles: (orgId: string) => ['inventory-profiles', orgId] as const,
   inventoryItems: (

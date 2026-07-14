@@ -124,6 +124,7 @@ export { aiInteractionLogs } from './ai-interaction-log.ts'
 export { caseNotes } from './case-note.ts'
 export { caseAnalysisRuns, caseAnalysisStatusEnum } from './case-analysis-run.ts'
 export { calendarEvents } from './calendar-event.ts'
+export { financialEntries } from './financial-entry.ts'
 export type { OabProfile, NewOabProfile, InventoryItem, NewInventoryItem } from './oab-inventory.ts'
 export type { CourtCommunication, NewCourtCommunication } from './court-communication.ts'
 export type { IntegrationConnector, NewIntegrationConnector } from './integration-connector.ts'
@@ -131,6 +132,7 @@ export type { AiInteractionLog, NewAiInteractionLog } from './ai-interaction-log
 export type { CaseNote, NewCaseNote } from './case-note.ts'
 export type { CaseAnalysisRun, NewCaseAnalysisRun } from './case-analysis-run.ts'
 export type { CalendarEvent, NewCalendarEvent } from './calendar-event.ts'
+export type { FinancialEntry, NewFinancialEntry } from './financial-entry.ts'
 
 // Re-export inferred types — Phase 1
 export type { Organization, NewOrganization } from './organization.ts'

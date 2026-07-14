@@ -14,6 +14,7 @@ import { useSession } from '@/lib/hooks/use-session'
 import { useClient } from '@/lib/hooks/use-client'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { EditClientModal } from '@/components/modals/EditClientModal'
+import { FinanceTab } from '@/components/finance/FinanceTab'
 import {
   ErrorState,
   FieldRow,
@@ -22,6 +23,8 @@ import {
   Button,
 } from '@/components/ui'
 import { text, borders } from '@/components/dashboard/surfaces'
+
+type ClientProfileTab = 'perfil' | 'financeiro'
 
 const STATUS_LABELS: Record<string, string> = {
   active: 'Ativo',
@@ -60,6 +63,7 @@ export default function ClientProfilePage() {
 
   const headerTitle = client?.displayName ?? client?.fullName ?? 'Cliente'
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<ClientProfileTab>('perfil')
 
   return (
     <div>
@@ -112,7 +116,46 @@ export default function ClientProfilePage() {
             client={client}
           />
 
-          <div className="mt-6 space-y-4">
+          <div
+            className={`mt-6 flex gap-6 border-b ${borders.default} mb-6`}
+            role="tablist"
+            aria-label="Secções do cliente"
+          >
+            {([
+              { id: 'perfil', label: 'Perfil' },
+              { id: 'financeiro', label: 'Financeiro' },
+            ] as const).map((tab) => {
+              const isActive = activeTab === tab.id
+              return (
+                <button
+                  key={tab.id}
+                  role="tab"
+                  type="button"
+                  aria-selected={isActive}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={[
+                    'relative pb-3 text-[14px] font-medium transition-colors',
+                    isActive ? text.primary : `${text.muted} hover:text-slate-700`,
+                  ].join(' ')}
+                >
+                  {tab.label}
+                  {isActive && (
+                    <span
+                      className="absolute bottom-0 left-0 right-0 h-[2px] rounded-t-full bg-blue-600"
+                      aria-hidden
+                    />
+                  )}
+                </button>
+              )
+            })}
+          </div>
+
+          {activeTab === 'financeiro' && (
+            <FinanceTab organizationId={orgId} clientId={client.id} />
+          )}
+
+          {activeTab === 'perfil' && (
+          <div className="space-y-4">
             <ProfileSection title="Identificação">
               <dl>
                 <FieldRow labelWidth="40" label="Nome completo" value={client.fullName} />
@@ -191,6 +234,7 @@ export default function ClientProfilePage() {
               </dl>
             </ProfileSection>
           </div>
+          )}
         </>
       )}
     </div>
