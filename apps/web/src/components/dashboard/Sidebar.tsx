@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { SidebarBrand } from "./SidebarBrand";
 import { SidebarNavItem } from "./SidebarNavItem";
+import { NotificationBell } from "./NotificationBell";
 import { footerNavItem, navSections } from "./nav-sections";
 import { borders, surfaces, text } from "./surfaces";
 
@@ -11,8 +12,9 @@ type SidebarProps = Record<string, never>;
 function SidebarPanel({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex h-full flex-col">
-      <div className={`border-b ${borders.default} px-5 py-5`}>
+      <div className={`flex items-center justify-between gap-2 border-b ${borders.default} px-5 py-5`}>
         <SidebarBrand />
+        <NotificationBell />
       </div>
 
       <nav
@@ -63,21 +65,24 @@ export function Sidebar(_props: SidebarProps) {
         className={`fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b ${borders.default} bg-white/95 px-4 backdrop-blur-md lg:hidden`}
       >
         <SidebarBrand compact />
-        <button
-          type="button"
-          onClick={() => setMobileOpen(true)}
-          className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${borders.default} bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900`}
-          aria-label="Abrir menu"
-        >
-          <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
-            <path
-              d="M4 7h16M4 12h16M4 17h16"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-            />
-          </svg>
-        </button>
+        <div className="flex items-center gap-1">
+          <NotificationBell />
+          <button
+            type="button"
+            onClick={() => setMobileOpen(true)}
+            className={`inline-flex h-9 w-9 items-center justify-center rounded-lg border ${borders.default} bg-white text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900`}
+            aria-label="Abrir menu"
+          >
+            <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" aria-hidden>
+              <path
+                d="M4 7h16M4 12h16M4 17h16"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+        </div>
       </header>
 
       {mobileOpen ? (

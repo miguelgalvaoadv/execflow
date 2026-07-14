@@ -1,12 +1,14 @@
 'use client'
 
 /**
- * Agenda — calendário mensal do escritório (pedido do Miguel 13/07/2026).
+ * Agenda — calendário do escritório (pedido do Miguel 13/07/2026).
  *
- * Grid de mês de verdade (quadradinhos por dia), com navegação ‹ › e "Hoje".
- * Mescla três camadas: eventos manuais + prazos + oportunidades, cada uma
- * ligável/desligável. Clicar num dia cria evento; clicar num evento manual
- * edita; clicar num prazo/oportunidade abre o caso de origem.
+ * Duas visões: Mês (grid de 42 quadradinhos) e Semana (7 colunas, mais
+ * espaço por dia, mostra horário quando não é dia inteiro). Navegação ‹ ›
+ * + "Hoje" funciona nas duas. Mescla três camadas: eventos manuais + prazos
+ * + oportunidades, cada uma ligável/desligável. Clicar num dia cria evento;
+ * clicar num evento manual edita; clicar num prazo/oportunidade abre o caso
+ * de origem.
  */
 
 import { useMemo, useState } from 'react'
@@ -93,8 +95,10 @@ export default function CalendarPage() {
   const router = useRouter()
 
   const today = useMemo(() => new Date(), [])
+  const [viewMode, setViewMode] = useState<'month' | 'week'>('month')
   const [viewYear, setViewYear] = useState(today.getFullYear())
   const [viewMonth, setViewMonth] = useState(today.getMonth())
+  const [weekAnchor, setWeekAnchor] = useState(today)
   const [layers, setLayers] = useState<CalendarLayer[]>(['manual', 'deadlines', 'opportunities'])
   const [editor, setEditor] = useState<EditorState>(null)
 
@@ -115,17 +119,35 @@ export default function CalendarPage() {
     })
   }, [gridStart])
 
+  // Semana: 7 dias a partir do domingo da semana que contém weekAnchor.
+  const weekStart = useMemo(() => {
+    const start = new Date(weekAnchor)
+    start.setDate(weekAnchor.getDate() - weekAnchor.getDay())
+    start.setHours(0, 0, 0, 0)
+    return start
+  }, [weekAnchor])
+
+  const weekDays = useMemo(() => {
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date(weekStart)
+      d.setDate(weekStart.getDate() + i)
+      return d
+    })
+  }, [weekStart])
+
   const rangeFrom = useMemo(() => {
-    const d = new Date(gridStart)
+    const base = viewMode === 'week' ? weekStart : gridStart
+    const d = new Date(base)
     d.setHours(0, 0, 0, 0)
     return d.toISOString()
-  }, [gridStart])
+  }, [viewMode, weekStart, gridStart])
   const rangeTo = useMemo(() => {
-    const d = new Date(gridStart)
-    d.setDate(d.getDate() + 41)
+    const base = viewMode === 'week' ? weekStart : gridStart
+    const d = new Date(base)
+    d.setDate(d.getDate() + (viewMode === 'week' ? 6 : 41))
     d.setHours(23, 59, 59, 999)
     return d.toISOString()
-  }, [gridStart])
+  }, [viewMode, weekStart, gridStart])
 
   const query = useCalendar(orgId, rangeFrom, rangeTo, layers, session != null)
   const createMutation = useCreateCalendarEvent(orgId)
@@ -150,17 +172,39 @@ export default function CalendarPage() {
   function goToday() {
     setViewYear(today.getFullYear())
     setViewMonth(today.getMonth())
+    setWeekAnchor(today)
   }
   function goPrev() {
+    if (viewMode === 'week') {
+      const d = new Date(weekAnchor)
+      d.setDate(d.getDate() - 7)
+      setWeekAnchor(d)
+      return
+    }
     const d = new Date(viewYear, viewMonth - 1, 1)
     setViewYear(d.getFullYear())
     setViewMonth(d.getMonth())
   }
   function goNext() {
+    if (viewMode === 'week') {
+      const d = new Date(weekAnchor)
+      d.setDate(d.getDate() + 7)
+      setWeekAnchor(d)
+      return
+    }
     const d = new Date(viewYear, viewMonth + 1, 1)
     setViewYear(d.getFullYear())
     setViewMonth(d.getMonth())
   }
+
+  const weekRangeLabel = useMemo(() => {
+    const end = weekDays[6]!
+    const start = weekDays[0]!
+    const sameMonth = start.getMonth() === end.getMonth()
+    const startLabel = `${start.getDate()}${sameMonth ? '' : ' ' + MONTHS[start.getMonth()]!.slice(0, 3)}`
+    const endLabel = `${end.getDate()} ${MONTHS[end.getMonth()]!.slice(0, 3)} ${end.getFullYear()}`
+    return `${startLabel} – ${endLabel}`
+  }, [weekDays])
 
   function openCreate(date: Date) {
     setEditor({
@@ -245,18 +289,18 @@ export default function CalendarPage() {
             type="button"
             onClick={goPrev}
             className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
-            aria-label="Mês anterior"
+            aria-label={viewMode === 'week' ? 'Semana anterior' : 'Mês anterior'}
           >
             <ChevronLeft className="h-4 w-4" />
           </button>
           <span className="min-w-[170px] text-center text-[15px] font-semibold text-slate-800">
-            {MONTHS[viewMonth]} {viewYear}
+            {viewMode === 'week' ? weekRangeLabel : `${MONTHS[viewMonth]} ${viewYear}`}
           </span>
           <button
             type="button"
             onClick={goNext}
             className="rounded-lg border border-slate-200 bg-white p-1.5 text-slate-600 hover:bg-slate-50"
-            aria-label="Próximo mês"
+            aria-label={viewMode === 'week' ? 'Próxima semana' : 'Próximo mês'}
           >
             <ChevronRight className="h-4 w-4" />
           </button>
@@ -267,13 +311,29 @@ export default function CalendarPage() {
           >
             Hoje
           </button>
+          <div className="ml-1 flex items-center rounded-lg border border-slate-200 bg-slate-50 p-0.5">
+            <button
+              type="button"
+              onClick={() => setViewMode('month')}
+              className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${viewMode === 'month' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            >
+              Mês
+            </button>
+            <button
+              type="button"
+              onClick={() => setViewMode('week')}
+              className={`rounded-md px-2.5 py-1 text-[12px] font-medium transition-colors ${viewMode === 'week' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-500'}`}
+            >
+              Semana
+            </button>
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
           <LayerToggle label="Prazos" color="bg-red-500" active={layers.includes('deadlines')} onClick={() => toggleLayer('deadlines')} />
           <LayerToggle label="Oportunidades" color="bg-emerald-500" active={layers.includes('opportunities')} onClick={() => toggleLayer('opportunities')} />
           <LayerToggle label="Eventos" color="bg-blue-500" active={layers.includes('manual')} onClick={() => toggleLayer('manual')} />
-          <Button variant="primary" size="md" onClick={() => openCreate(new Date(viewYear, viewMonth, today.getDate()))}>
+          <Button variant="primary" size="md" onClick={() => openCreate(viewMode === 'week' ? weekAnchor : new Date(viewYear, viewMonth, today.getDate()))}>
             <Plus className="h-4 w-4" /> Novo evento
           </Button>
         </div>
@@ -283,6 +343,67 @@ export default function CalendarPage() {
         <div className="mt-6"><LoadingState label="Carregando…" /></div>
       ) : session === null ? (
         <div className="mt-6"><ErrorState message="Sessão não encontrada." /></div>
+      ) : viewMode === 'week' ? (
+        <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
+          {/* Cabeçalho dos dias da semana */}
+          <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
+            {weekDays.map((day, i) => {
+              const isToday = isSameDay(day, today)
+              return (
+                <div key={i} className="px-2 py-2 text-center">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{WEEKDAYS[i]}</p>
+                  <span
+                    className={[
+                      'mt-0.5 inline-flex h-6 w-6 items-center justify-center rounded-full text-[12px]',
+                      isToday ? 'bg-blue-600 font-semibold text-white' : 'text-slate-700',
+                    ].join(' ')}
+                  >
+                    {day.getDate()}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Colunas dos 7 dias — mais espaço vertical que a visão mês */}
+          <div className="grid grid-cols-7">
+            {weekDays.map((day, idx) => {
+              const items = (itemsByDay.get(dayKey(day)) ?? []).slice().sort((a, b) => a.startsAt.localeCompare(b.startsAt))
+              return (
+                <div
+                  key={idx}
+                  className={[
+                    'min-h-[420px] border-r border-slate-100 p-2 last:border-r-0',
+                    isSameDay(day, today) ? 'bg-blue-50/30' : 'bg-white',
+                  ].join(' ')}
+                  onClick={() => openCreate(day)}
+                  role="button"
+                  tabIndex={-1}
+                >
+                  <div className="space-y-1.5">
+                    {items.map((item) => (
+                      <button
+                        key={`${item.kind}-${item.id}`}
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openItem(item) }}
+                        className={`block w-full rounded border px-2 py-1.5 text-left text-[11px] font-medium ${chipClass(item)}`}
+                        title={`${item.clientName ? item.clientName + ' — ' : ''}${item.title}`}
+                      >
+                        {!item.allDay && (
+                          <span className="mb-0.5 block text-[10px] font-normal opacity-70">
+                            {new Date(item.startsAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        )}
+                        {item.clientName && <span className="block truncate">{item.clientName}</span>}
+                        <span className="block truncate font-normal opacity-90">{item.title}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       ) : (
         <div className="mt-4 overflow-hidden rounded-xl border border-slate-200 bg-white">
           {/* Cabeçalho dos dias da semana */}
