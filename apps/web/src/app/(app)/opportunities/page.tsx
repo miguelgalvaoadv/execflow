@@ -18,6 +18,7 @@ import { useOpportunities } from '@/lib/hooks/use-opportunities'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
 import { OPPORTUNITY_TYPE_LABELS } from '@/lib/operational/queue-display'
+import { AddToAgendaButton } from '@/components/calendar/AddToAgendaButton'
 import Link from 'next/link'
 import { ChevronRight, FileText } from 'lucide-react'
 import {
@@ -138,10 +139,13 @@ export default function OpportunitiesPage() {
                           ? `Janela: ${new Intl.DateTimeFormat('pt-BR').format(new Date(item.windowEndAt))}`
                           : 'Sem janela definida'}
                       </span>
-                      <span className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600">
-                        Ver no caso
-                        <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
-                      </span>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <AddToAgendaButton organizationId={orgId} opportunityId={item.id} />
+                        <span className="inline-flex items-center gap-1 font-medium text-blue-600">
+                          Ver no caso
+                          <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />
+                        </span>
+                      </div>
                     </div>
                   </Link>
                 )

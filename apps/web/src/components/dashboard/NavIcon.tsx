@@ -3,6 +3,7 @@ import {
   Gavel,
   Users,
   CalendarClock,
+  CalendarDays,
   Lightbulb,
   FileText,
   Wallet,
@@ -26,6 +27,7 @@ const ICONS: Record<NavIconName, LucideIcon> = {
   team: UsersRound,
   intimations: BellRing,
   tasks: ClipboardCheck,
+  calendar: CalendarDays,
 };
 
 type NavIconProps = {

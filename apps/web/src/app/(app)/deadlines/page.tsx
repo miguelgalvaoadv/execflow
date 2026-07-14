@@ -9,6 +9,7 @@ import { useSession } from '@/lib/hooks/use-session'
 import { useDeadlines } from '@/lib/hooks/use-deadlines'
 import Link from 'next/link'
 import { ChevronRight, FileText } from 'lucide-react'
+import { AddToAgendaButton } from '@/components/calendar/AddToAgendaButton'
 import { DashboardPageHeader } from '@/components/dashboard'
 import { text } from '@/components/dashboard/surfaces'
 import {
@@ -42,6 +43,7 @@ function formatDateTime(iso: string): string {
 
 export default function DeadlinesPage() {
   const { data: session, isLoading: sessionLoading } = useSession()
+  const orgId = session?.organization.id ?? ''
   const [searchInput, setSearchInput] = useState('')
   const [debouncedQ, setDebouncedQ] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -75,7 +77,7 @@ export default function DeadlinesPage() {
     hasNextPage,
     isFetchingNextPage,
   } = useDeadlines({
-    organizationId: session?.organization.id ?? '',
+    organizationId: orgId,
     filters,
     enabled: session !== null && session !== undefined,
   })
@@ -187,7 +189,8 @@ export default function DeadlinesPage() {
                         {item.processNumber ?? <span className="text-amber-700">Processo pendente</span>}
                       </span>
                     </div>
-                    <div className="mt-auto flex items-center justify-end gap-2 border-t border-slate-100 pt-3 text-[12px]">
+                    <div className="mt-auto flex items-center justify-between gap-2 border-t border-slate-100 pt-3 text-[12px]">
+                      <AddToAgendaButton organizationId={orgId} deadlineId={item.id} />
                       <span className="inline-flex shrink-0 items-center gap-1 font-medium text-blue-600">
                         Abrir
                         <ChevronRight className="h-4 w-4 transition-transform duration-150 group-hover:translate-x-0.5" />

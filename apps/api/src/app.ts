@@ -50,6 +50,7 @@ import { orgsRouter } from './routes/orgs.ts'
 import { astreaTriageRouter } from './routes/astrea-triage.ts'
 import { astreaSealedCasesRouter } from './routes/astrea-sealed-cases.ts'
 import { communicationsRouter } from './routes/communications.ts'
+import { calendarRouter } from './routes/calendar.ts'
 import { integrationsRouter } from './routes/integrations.ts'
 import { aiLogsRouter } from './routes/ai-logs.ts'
 import { portalRouter } from './routes/portal.ts'
@@ -166,6 +167,7 @@ app.route('/api/v1/astrea', astreaTriageRouter)
 app.route('/api/v1/astrea', astreaSealedCasesRouter)
 
 app.route('/api/v1/communications', communicationsRouter)
+app.route('/api/v1/calendar', calendarRouter)
 app.route('/api/v1/integrations', integrationsRouter)
 app.route('/api/v1/ai-logs', aiLogsRouter)
 app.route('/api/v1/portal', portalRouter)

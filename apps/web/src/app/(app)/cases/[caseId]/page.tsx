@@ -35,6 +35,7 @@ import {
 import { useCaseDeadlines } from '@/lib/hooks/use-case-deadlines'
 import { useAnalysisStatus } from '@/lib/hooks/use-case-crawlers'
 import { useQueryClient } from '@tanstack/react-query'
+import { AddToAgendaButton } from '@/components/calendar/AddToAgendaButton'
 import { CrawlerSyncButton } from '@/components/case-workspace/CrawlerSyncButton'
 import { AnalyzeAutosButton } from '@/components/case-workspace/AnalyzeAutosButton'
 import { ChatGptHybridButtons } from '@/components/case-workspace/ChatGptHybridButtons'
@@ -1482,6 +1483,9 @@ function OportunidadesTab({
                       Janela até {formatDate(opp.windowEndAt)}
                     </p>
                   )}
+                  <div className="mt-2 flex justify-end">
+                    <AddToAgendaButton organizationId={organizationId} opportunityId={opp.id} />
+                  </div>
                 </div>
               </li>
             )
@@ -2256,6 +2260,9 @@ function PrazosTab({
                           Atrasado
                         </span>
                       )}
+                    </div>
+                    <div className="mt-2 flex justify-end">
+                      <AddToAgendaButton organizationId={organizationId} deadlineId={deadline.id} />
                     </div>
                   </div>
                 </li>

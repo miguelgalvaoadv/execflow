@@ -51,6 +51,10 @@ export const queryKeys = {
     ['case-timeline', orgId, caseId] as const,
   caseCommunications: (orgId: string, caseId: string) =>
     ['case-communications', orgId, caseId] as const,
+
+  // Agenda / calendário — chaveado por intervalo visível (mês)
+  calendar: (orgId: string, from: string, to: string, layers: string) =>
+    ['calendar', orgId, from, to, layers] as const,
   caseDocuments: (orgId: string, caseId: string) =>
     ['case-documents', orgId, caseId] as const,
   caseOpportunities: (orgId: string, caseId: string) =>
