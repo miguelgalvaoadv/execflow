@@ -34,10 +34,28 @@ import { sql } from '@execflow/db/client'
 import type { PgBoss } from 'pg-boss'
 import type { WorkersDb } from '../lib/db.ts'
 import { DOMAIN_EVENT_SEND_OPTIONS } from '../queues/config.ts'
+import * as QUEUE_NAMES from '../queues/names.ts'
 
 const BATCH_SIZE = 50
 const MAX_RETRIES = 5
 const LOCK_DURATION_MINUTES = 5
+
+/**
+ * Filas que realmente existem no pg-boss (criadas no boot pelo worker-registry
+ * a partir de queues/names.ts). Evento cujo event_type NÃO está aqui é
+ * "só-registro" (notificação/auditoria sem consumidor) — ex.:
+ * case.movements.received, ocr.running, client.created. Antes desta guarda,
+ * cada um desses era enviado ao pg-boss, estourava "Queue does not exist",
+ * era retentado 5x e virava lixo permanente com status 'failed' — foram
+ * 15.440 eventos assim entre 21/06 e 13/07/2026, poluindo o sinal de saúde
+ * do outbox. Agora: marca 'published' direto (o registro em domain_events É
+ * o produto final desses eventos), sem tentativa de publicação.
+ */
+const KNOWN_QUEUES: ReadonlySet<string> = new Set(
+  Object.values(QUEUE_NAMES as Record<string, unknown>).filter(
+    (v): v is string => typeof v === 'string'
+  )
+)
 
 /**
  * Runs one relay cycle: picks up pending events and publishes them.
@@ -113,8 +131,16 @@ async function relayOnce(db: WorkersDb, boss: PgBoss): Promise<number> {
     // -------------------------------------------------------------------------
     const published: string[] = []
     const failed: Array<{ id: string; error: string }> = []
+    let notificationOnly = 0
 
     for (const row of rows) {
+      // Evento sem fila/consumidor: o registro em domain_events já é o
+      // produto final — marca como publicado sem tentar enviar ao pg-boss.
+      if (!KNOWN_QUEUES.has(row.event_type)) {
+        published.push(row.id)
+        notificationOnly++
+        continue
+      }
       try {
         await boss.send(
           row.event_type,
@@ -177,6 +203,9 @@ async function relayOnce(db: WorkersDb, boss: PgBoss): Promise<number> {
 
     if (failed.length > 0) {
       console.error(`[outbox-relay] ${failed.length} events failed to publish`)
+    }
+    if (notificationOnly > 0) {
+      console.info(`[outbox-relay] ${notificationOnly} evento(s) só-registro (sem consumidor) marcados como published sem envio`)
     }
 
     return published.length
