@@ -1,0 +1,748 @@
+<title>Rancho da Vó Vera — Casa de temporada em Bariri/SP | Reserve</title>
+<meta name="description" content="Rancho da Vó Vera: casa recém-reformada à beira do rio em Bariri/SP. 5 quartos, até 17 hóspedes, piscina, forno de pizza a lenha e churrasqueira. ★5,0 no Airbnb.">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#24382a">
+<style>
+/*__FONTS__*/
+
+:root{
+  --bg:#f7f1e6;
+  --bg-2:#efe6d5;
+  --paper:#fffdf8;
+  --ink:#2a2620;
+  --muted:#6e655a;
+  --line:#e4d8c4;
+  --forest:#2f4a35;
+  --forest-deep:#22362a;
+  --forest-soft:#3d5b43;
+  --terra:#b45f38;
+  --terra-deep:#9c4f2d;
+  --gold:#c39a55;
+  --gold-soft:#dcc087;
+  --wa:#25d366;
+  --wa-deep:#1da851;
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+  --shadow:0 18px 50px -22px rgba(34,54,42,.45);
+  --shadow-sm:0 6px 20px -10px rgba(34,54,42,.35);
+  --radius:18px;
+  --maxw:1200px;
+  --header-h:66px;
+}
+
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{
+  margin:0;
+  background:var(--bg);
+  color:var(--ink);
+  font-family:var(--sans);
+  font-size:17px;
+  line-height:1.65;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+img{max-width:100%;display:block}
+a{color:inherit;text-decoration:none}
+h1,h2,h3{font-family:var(--serif);font-weight:600;line-height:1.08;margin:0;letter-spacing:-.01em}
+p{margin:0 0 1em}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+.serif{font-family:var(--serif)}
+.eyebrow{
+  font-family:var(--sans);font-weight:600;font-size:.76rem;letter-spacing:.22em;
+  text-transform:uppercase;color:var(--terra);
+}
+.section{padding:clamp(56px,8vw,104px) 0}
+.section-head{max-width:720px;margin:0 auto clamp(30px,5vw,54px);text-align:center}
+.section-head h2{font-size:clamp(2rem,5vw,3.1rem);margin:.35em 0 .3em}
+.section-head p{color:var(--muted);font-size:1.06rem}
+
+/* ---------- HEADER (fixo, sólido, nunca transparente) ---------- */
+header.nav{
+  position:fixed;top:0;left:0;right:0;z-index:100;
+  height:var(--header-h);
+  background:var(--forest-deep);
+  border-bottom:1px solid rgba(220,192,135,.22);
+  box-shadow:0 8px 30px -18px rgba(0,0,0,.7);
+}
+.nav-inner{
+  max-width:var(--maxw);margin:0 auto;height:100%;
+  display:flex;align-items:center;justify-content:space-between;gap:16px;padding:0 22px;
+}
+.brand{display:flex;align-items:center;gap:11px;color:#fdfaf2;min-width:0}
+.brand .mark{
+  width:38px;height:38px;border-radius:50%;flex:none;
+  background:radial-gradient(circle at 32% 28%,var(--gold-soft),var(--gold) 55%,var(--terra-deep));
+  display:grid;place-items:center;color:#22362a;font-family:var(--serif);font-weight:700;font-size:1.18rem;
+  box-shadow:inset 0 0 0 1.5px rgba(255,255,255,.35);
+}
+.brand .bt{display:flex;flex-direction:column;line-height:1;min-width:0}
+.brand .bt b{font-family:var(--serif);font-weight:600;font-size:1.05rem;letter-spacing:.01em;white-space:nowrap}
+.brand .bt span{font-size:.62rem;letter-spacing:.24em;text-transform:uppercase;color:var(--gold-soft);margin-top:3px}
+.nav-links{display:flex;align-items:center;gap:26px}
+.nav-links a{color:#e9e2d3;font-size:.9rem;font-weight:500;opacity:.9;transition:opacity .2s}
+.nav-links a:hover{opacity:1}
+.nav-cta{display:flex;align-items:center;gap:10px}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  font-family:var(--sans);font-weight:600;font-size:.92rem;
+  padding:11px 18px;border-radius:999px;cursor:pointer;border:0;white-space:nowrap;
+  transition:transform .15s ease,box-shadow .2s ease,background .2s;
+}
+.btn:active{transform:translateY(1px)}
+.btn-wa{background:var(--wa);color:#08361c}
+.btn-wa:hover{background:var(--wa-deep);color:#fff}
+.btn-air{background:var(--terra);color:#fff}
+.btn-air:hover{background:var(--terra-deep)}
+.btn-ghost{background:transparent;color:#fdfaf2;border:1.5px solid rgba(255,255,255,.4)}
+.btn-ghost:hover{background:rgba(255,255,255,.1)}
+.btn-lg{padding:15px 28px;font-size:1rem}
+.btn svg{width:18px;height:18px}
+.hamb{display:none;background:transparent;border:0;cursor:pointer;padding:8px;color:#fdfaf2}
+.hamb svg{width:26px;height:26px}
+
+/* mobile menu overlay */
+.mmenu{
+  position:fixed;inset:0;z-index:99;background:var(--forest-deep);
+  display:none;flex-direction:column;justify-content:center;gap:8px;padding:32px 26px;
+  opacity:0;transition:opacity .25s;
+}
+.mmenu.open{display:flex;opacity:1}
+.mmenu a{color:#f2ecdd;font-family:var(--serif);font-size:1.7rem;padding:12px 0;border-bottom:1px solid rgba(220,192,135,.14)}
+.mmenu .mcta{display:flex;gap:12px;margin-top:22px}
+.mmenu .mcta .btn{flex:1}
+
+/* ---------- HERO ---------- */
+.hero{
+  position:relative;min-height:100svh;display:flex;align-items:flex-end;
+  padding-top:var(--header-h);color:#fff;overflow:hidden;
+}
+.hero-bg{position:absolute;inset:0;z-index:0}
+.hero-bg img{width:100%;height:100%;object-fit:cover}
+.hero-bg::after{
+  content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,rgba(20,32,24,.55) 0%,rgba(20,32,24,.18) 34%,rgba(18,28,21,.62) 78%,rgba(15,24,18,.9) 100%);
+}
+.hero-inner{position:relative;z-index:2;width:100%;max-width:var(--maxw);margin:0 auto;padding:0 22px clamp(40px,7vw,86px)}
+.hero-inner .eyebrow{color:var(--gold-soft)}
+.hero h1{font-size:clamp(2.7rem,8.5vw,6rem);color:#fff;text-shadow:0 3px 40px rgba(0,0,0,.4);margin:.18em 0 .1em;font-weight:600}
+.hero .lead{font-size:clamp(1.05rem,2.4vw,1.4rem);max-width:640px;color:#f3eee3;text-shadow:0 2px 18px rgba(0,0,0,.45);margin-bottom:26px}
+.hero .lead b{color:#fff;font-weight:600}
+.rating-pill{
+  display:inline-flex;align-items:center;gap:10px;flex-wrap:wrap;
+  background:rgba(255,253,248,.14);backdrop-filter:blur(6px);
+  border:1px solid rgba(255,255,255,.28);border-radius:999px;padding:9px 17px;
+  font-size:.92rem;font-weight:500;margin-bottom:22px;
+}
+.rating-pill .stars{color:var(--gold-soft);letter-spacing:2px}
+.rating-pill .dot{opacity:.5}
+.hero-cta{display:flex;flex-wrap:wrap;gap:13px;margin-bottom:26px}
+.hero-facts{display:flex;flex-wrap:wrap;gap:10px}
+.fact{
+  display:inline-flex;align-items:center;gap:8px;background:rgba(0,0,0,.28);
+  border:1px solid rgba(255,255,255,.18);border-radius:12px;padding:9px 14px;font-size:.9rem;font-weight:500;
+}
+.fact svg{width:17px;height:17px;color:var(--gold-soft);flex:none}
+
+/* ---------- QUICK HIGHLIGHTS BAR ---------- */
+.highlights{background:var(--forest);color:#f4eede}
+.highlights .wrap{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;padding-top:26px;padding-bottom:26px}
+.hl{display:flex;flex-direction:column;align-items:center;text-align:center;gap:9px;padding:8px 6px}
+.hl .ic{width:44px;height:44px;border-radius:12px;background:rgba(220,192,135,.14);display:grid;place-items:center;color:var(--gold-soft)}
+.hl .ic svg{width:24px;height:24px}
+.hl b{font-family:var(--serif);font-weight:600;font-size:1rem}
+.hl span{font-size:.76rem;color:#cfc6b4}
+
+/* ---------- ABOUT / STORY ---------- */
+.story{background:var(--bg)}
+.story-grid{display:grid;grid-template-columns:1.05fr 1fr;gap:clamp(30px,5vw,64px);align-items:center}
+.story-txt .eyebrow{color:var(--terra)}
+.story-txt h2{font-size:clamp(2rem,4.6vw,3rem);margin:.3em 0 .5em}
+.story-txt p{color:#4a443b}
+.story-sign{font-family:var(--serif);font-style:italic;font-size:1.28rem;color:var(--forest);margin-top:10px}
+.story-media{position:relative}
+.story-media .m-main{border-radius:var(--radius);box-shadow:var(--shadow);aspect-ratio:4/5;object-fit:cover;width:100%}
+.story-media .m-badge{
+  position:absolute;left:-18px;bottom:-18px;background:var(--paper);border-radius:16px;
+  box-shadow:var(--shadow-sm);padding:16px 20px;text-align:center;border:1px solid var(--line);
+}
+.story-media .m-badge b{display:block;font-family:var(--serif);font-size:2rem;color:var(--terra);line-height:1}
+.story-media .m-badge span{font-size:.72rem;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+/* ---------- STATS ---------- */
+.stats{background:var(--forest-deep);color:#f4eede}
+.stats .wrap{display:grid;grid-template-columns:repeat(5,1fr);gap:14px}
+.stat{text-align:center;padding:10px}
+.stat b{display:block;font-family:var(--serif);font-size:clamp(2.1rem,5vw,3rem);color:var(--gold-soft);font-weight:600;line-height:1}
+.stat span{font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;color:#cbc2b0;margin-top:8px;display:block}
+
+/* ---------- EXPERIENCES ---------- */
+.exp{background:var(--bg-2)}
+.exp-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:20px}
+.exp-card{
+  position:relative;border-radius:var(--radius);overflow:hidden;min-height:290px;
+  display:flex;align-items:flex-end;box-shadow:var(--shadow-sm);color:#fff;
+}
+.exp-card.big{grid-column:span 2;min-height:340px}
+.exp-card img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transition:transform .6s ease}
+.exp-card:hover img{transform:scale(1.05)}
+.exp-card::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 30%,rgba(0,0,0,.72) 100%)}
+.exp-card .cap{position:relative;z-index:2;padding:24px}
+.exp-card .cap h3{font-size:1.5rem;color:#fff;margin-bottom:4px}
+.exp-card .cap p{margin:0;font-size:.92rem;color:#ece6da}
+
+/* ---------- GALLERY (mosaico masonry) ---------- */
+.gallery{background:var(--bg)}
+.masonry{column-count:4;column-gap:14px}
+.masonry img{
+  width:100%;border-radius:12px;margin-bottom:14px;cursor:zoom-in;
+  box-shadow:var(--shadow-sm);break-inside:avoid;transition:transform .25s,box-shadow .25s;
+  background:var(--bg-2);
+}
+.masonry img:hover{transform:translateY(-3px) scale(1.01);box-shadow:var(--shadow)}
+.gallery-more{text-align:center;margin-top:34px}
+
+/* lightbox */
+.lb{position:fixed;inset:0;z-index:200;background:rgba(16,22,17,.94);display:none;align-items:center;justify-content:center}
+.lb.open{display:flex}
+.lb img{max-width:92vw;max-height:86vh;border-radius:8px;box-shadow:0 30px 80px -20px #000}
+.lb-btn{position:absolute;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;
+  width:52px;height:52px;border-radius:50%;cursor:pointer;display:grid;place-items:center;transition:background .2s}
+.lb-btn:hover{background:rgba(255,255,255,.24)}
+.lb-btn svg{width:24px;height:24px}
+.lb-prev{left:16px;top:50%;transform:translateY(-50%)}
+.lb-next{right:16px;top:50%;transform:translateY(-50%)}
+.lb-close{top:16px;right:16px;width:46px;height:46px}
+.lb-count{position:absolute;bottom:20px;left:0;right:0;text-align:center;color:#e7e1d4;font-size:.9rem;letter-spacing:.05em}
+
+/* ---------- ACCOMMODATION / rooms ---------- */
+.rooms{background:var(--bg-2)}
+.rooms-grid{display:grid;grid-template-columns:1fr 1fr;gap:clamp(30px,4vw,54px);align-items:center}
+.room-list{display:grid;gap:14px}
+.room{display:flex;gap:16px;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:16px 18px;box-shadow:var(--shadow-sm)}
+.room .rn{width:40px;height:40px;flex:none;border-radius:10px;background:var(--forest);color:var(--gold-soft);
+  font-family:var(--serif);font-weight:600;display:grid;place-items:center;font-size:1.1rem}
+.room b{font-family:var(--serif);font-weight:600;font-size:1.08rem}
+.room p{margin:2px 0 0;color:var(--muted);font-size:.92rem}
+.plan-media img{border-radius:var(--radius);box-shadow:var(--shadow);background:#fff;padding:10px}
+.plan-cap{text-align:center;color:var(--muted);font-size:.85rem;margin-top:12px}
+
+/* ---------- AMENITIES ---------- */
+.amen{background:var(--bg)}
+.amen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:26px 34px}
+.amen-col h3{font-size:1.15rem;color:var(--forest);margin-bottom:12px;display:flex;align-items:center;gap:9px}
+.amen-col h3 svg{width:20px;height:20px;color:var(--terra)}
+.amen-col ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.amen-col li{display:flex;align-items:flex-start;gap:9px;font-size:.95rem;color:#4a443b}
+.amen-col li svg{width:16px;height:16px;color:var(--forest-soft);flex:none;margin-top:4px}
+.amen-note{margin-top:30px;background:var(--paper);border:1px solid var(--line);border-left:4px solid var(--gold);
+  border-radius:12px;padding:16px 20px;font-size:.9rem;color:var(--muted)}
+
+/* ---------- REVIEWS ---------- */
+.reviews{background:var(--forest-deep);color:#f2ecdd}
+.reviews .section-head h2{color:#fff}
+.reviews .section-head p{color:#cbc2b0}
+.rev-top{display:flex;justify-content:center;gap:26px;flex-wrap:wrap;margin-bottom:38px}
+.rev-badge{text-align:center}
+.rev-badge b{font-family:var(--serif);font-size:2.6rem;color:var(--gold-soft);display:block;line-height:1}
+.rev-badge .stars{color:var(--gold-soft);letter-spacing:3px;font-size:1.1rem;margin-top:4px}
+.rev-badge span{font-size:.8rem;color:#cbc2b0;letter-spacing:.06em;display:block;margin-top:4px}
+.rev-masonry{column-count:3;column-gap:18px}
+.rev-card{
+  break-inside:avoid;background:rgba(255,253,248,.06);border:1px solid rgba(220,192,135,.16);
+  border-radius:16px;padding:20px 22px;margin-bottom:18px;
+}
+.rev-card .stars{color:var(--gold-soft);letter-spacing:2px;font-size:.9rem}
+.rev-card p{font-size:.95rem;color:#e7e1d4;margin:10px 0 14px}
+.rev-card .who{display:flex;align-items:center;gap:11px}
+.rev-card .av{width:38px;height:38px;border-radius:50%;flex:none;display:grid;place-items:center;
+  font-family:var(--serif);font-weight:600;color:#22362a;background:linear-gradient(140deg,var(--gold-soft),var(--gold))}
+.rev-card .who b{font-size:.92rem;color:#fff;font-weight:600}
+.rev-card .who span{font-size:.76rem;color:#b9b0a0}
+.rev-collapsed{max-height:1160px;overflow:hidden;position:relative;transition:max-height .5s ease}
+.rev-collapsed::after{content:"";position:absolute;left:0;right:0;bottom:0;height:180px;
+  background:linear-gradient(180deg,rgba(34,54,42,0),var(--forest-deep))}
+.rev-collapsed.expanded{max-height:6000px}
+.rev-collapsed.expanded::after{display:none}
+.reviews .gallery-more{margin-top:26px}
+
+/* ---------- LOCATION ---------- */
+.loc{background:var(--bg-2)}
+.loc-card{
+  display:grid;grid-template-columns:1fr 1fr;gap:0;border-radius:var(--radius);overflow:hidden;
+  box-shadow:var(--shadow);background:var(--paper);border:1px solid var(--line);
+}
+.loc-map{position:relative;min-height:340px;background:var(--forest-soft);display:grid;place-items:center;overflow:hidden}
+.loc-map img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.9}
+.loc-map .pin{position:relative;z-index:2;text-align:center;color:#fff}
+.loc-map .pin svg{width:56px;height:56px;filter:drop-shadow(0 6px 12px rgba(0,0,0,.5))}
+.loc-info{padding:clamp(26px,4vw,44px)}
+.loc-info h2{font-size:clamp(1.8rem,4vw,2.6rem);margin-bottom:.4em}
+.loc-info p{color:#4a443b}
+.loc-feats{display:grid;gap:12px;margin:20px 0 26px}
+.loc-feats div{display:flex;align-items:center;gap:11px;font-size:.95rem}
+.loc-feats svg{width:20px;height:20px;color:var(--terra);flex:none}
+
+/* ---------- FINAL CTA ---------- */
+.cta{position:relative;color:#fff;text-align:center;overflow:hidden}
+.cta-bg{position:absolute;inset:0;z-index:0}
+.cta-bg img{width:100%;height:100%;object-fit:cover}
+.cta-bg::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(20,32,24,.78),rgba(15,24,18,.86))}
+.cta .wrap{position:relative;z-index:2;padding:clamp(64px,9vw,110px) 22px}
+.cta h2{font-size:clamp(2.1rem,5.5vw,3.6rem);color:#fff;margin-bottom:.3em}
+.cta p{max-width:560px;margin:0 auto 30px;color:#eee6d8;font-size:1.1rem}
+.cta-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+
+/* ---------- FOOTER ---------- */
+footer{background:#1b2b21;color:#c9c0af;padding:52px 0 30px}
+.foot-grid{display:flex;justify-content:space-between;gap:30px;flex-wrap:wrap;align-items:flex-start}
+.foot-brand{max-width:340px}
+.foot-brand .brand{margin-bottom:14px}
+.foot-brand p{font-size:.9rem;color:#a49b8b}
+.foot-links{display:flex;gap:54px;flex-wrap:wrap}
+.foot-col h4{font-family:var(--sans);font-size:.78rem;letter-spacing:.16em;text-transform:uppercase;color:var(--gold-soft);margin:0 0 14px}
+.foot-col a{display:flex;align-items:center;gap:9px;font-size:.92rem;color:#c9c0af;padding:5px 0;transition:color .2s}
+.foot-col a:hover{color:#fff}
+.foot-col a svg{width:17px;height:17px;color:var(--gold-soft)}
+.foot-bottom{border-top:1px solid rgba(220,192,135,.14);margin-top:38px;padding-top:20px;
+  display:flex;justify-content:space-between;gap:14px;flex-wrap:wrap;font-size:.8rem;color:#8f8676}
+
+/* floating whatsapp */
+.wa-float{
+  position:fixed;right:18px;bottom:18px;z-index:90;width:58px;height:58px;border-radius:50%;
+  background:var(--wa);display:grid;place-items:center;box-shadow:0 10px 30px -6px rgba(0,0,0,.5);
+  transition:transform .2s;animation:wapulse 2.6s infinite;
+}
+.wa-float:hover{transform:scale(1.08)}
+.wa-float svg{width:32px;height:32px;color:#fff}
+@keyframes wapulse{0%{box-shadow:0 0 0 0 rgba(37,211,102,.5)}70%{box-shadow:0 0 0 16px rgba(37,211,102,0)}100%{box-shadow:0 0 0 0 rgba(37,211,102,0)}}
+
+/* reveal */
+.reveal{opacity:0;transform:translateY(28px);transition:opacity .7s ease,transform .7s ease}
+.reveal.in{opacity:1;transform:none}
+
+/* ---------- RESPONSIVE ---------- */
+@media(max-width:1000px){
+  .masonry{column-count:3}
+  .rev-masonry{column-count:2}
+  .highlights .wrap{grid-template-columns:repeat(3,1fr);row-gap:20px}
+}
+@media(max-width:860px){
+  .nav-links{display:none}
+  .nav-cta .btn-air{display:none}
+  .hamb{display:inline-flex}
+  .story-grid{grid-template-columns:1fr;gap:40px}
+  .story-media{max-width:440px;margin:0 auto}
+  .story-media .m-badge{left:0}
+  .rooms-grid{grid-template-columns:1fr;gap:36px}
+  .exp-grid{grid-template-columns:1fr}
+  .exp-card.big{grid-column:span 1}
+  .amen-grid{grid-template-columns:repeat(2,1fr)}
+  .loc-card{grid-template-columns:1fr}
+  .loc-map{min-height:240px}
+  .stats .wrap{grid-template-columns:repeat(3,1fr);row-gap:22px}
+}
+@media(max-width:560px){
+  body{font-size:16px}
+  .wrap{padding:0 16px}
+  .nav-inner{padding:0 16px}
+  .brand .bt b{font-size:.95rem}
+  .masonry{column-count:2;column-gap:10px}
+  .masonry img{margin-bottom:10px;border-radius:9px}
+  .rev-masonry{column-count:1}
+  .highlights .wrap{grid-template-columns:repeat(2,1fr)}
+  .amen-grid{grid-template-columns:1fr}
+  .stats .wrap{grid-template-columns:repeat(2,1fr)}
+  .nav-cta{display:none}
+  .brand .bt b{font-size:1rem}
+  .hero-cta{flex-direction:column;gap:11px}
+  .hero-cta .btn{width:100%}
+  .lb-prev{left:6px}.lb-next{right:6px}
+  .lb-btn{width:44px;height:44px}
+  .foot-links{gap:34px}
+}
+</style>
+
+<!-- ============ HEADER ============ -->
+<header class="nav">
+  <div class="nav-inner">
+    <a class="brand" href="#top" aria-label="Rancho da Vó Vera">
+      <span class="mark">V</span>
+      <span class="bt"><b>Rancho da Vó Vera</b><span>Bariri · SP</span></span>
+    </a>
+    <nav class="nav-links">
+      <a href="#sobre">A casa</a>
+      <a href="#experiencias">Lazer</a>
+      <a href="#galeria">Galeria</a>
+      <a href="#acomodacoes">Acomodações</a>
+      <a href="#avaliacoes">Avaliações</a>
+      <a href="#localizacao">Localização</a>
+    </nav>
+    <div class="nav-cta">
+      <a class="btn btn-air" data-air href="#">Ver no Airbnb</a>
+      <a class="btn btn-wa" data-wa href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.82L2 22l4.42-1.7a9.9 9.9 0 0 0 5.62 1.74h.01c5.45 0 9.9-4.45 9.9-9.9C21.95 6.45 17.5 2 12.04 2Zm0 18.1h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-2.62 1 .7-2.56-.2-.32a8.22 8.22 0 0 1-1.26-4.35c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.23-8.23 8.23Zm4.52-6.16c-.25-.13-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.42l-.48-.01c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.13.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>WhatsApp</a>
+    </div>
+    <button class="hamb" aria-label="Menu" id="hambBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  </div>
+</header>
+
+<div class="mmenu" id="mmenu">
+  <a href="#sobre">A casa</a>
+  <a href="#experiencias">Lazer & experiências</a>
+  <a href="#galeria">Galeria</a>
+  <a href="#acomodacoes">Acomodações</a>
+  <a href="#avaliacoes">Avaliações</a>
+  <a href="#localizacao">Localização</a>
+  <div class="mcta">
+    <a class="btn btn-air" data-air href="#">Airbnb</a>
+    <a class="btn btn-wa" data-wa href="#">WhatsApp</a>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="top">
+  <div class="hero-bg"><img data-img="82-L" alt="Rancho da Vó Vera ao entardecer, com piscina iluminada"></div>
+  <div class="hero-inner">
+    <p class="eyebrow reveal">Casa de temporada · Beira do rio · Bariri / SP</p>
+    <h1 class="reveal">Rancho da Vó Vera</h1>
+    <p class="lead reveal">Um refúgio de família <b>recém-reformado</b>, à beira do rio — onde piscina, forno de pizza a lenha e o sossego do interior recebem até <b>17 pessoas</b> com o conforto de uma casa completa.</p>
+    <div class="rating-pill reveal"><span class="stars">★★★★★</span> <b>5,0</b> <span class="dot">·</span> 20 avaliações <span class="dot">·</span> Superhost no Airbnb</div>
+    <div class="hero-cta reveal">
+      <a class="btn btn-wa btn-lg" data-wa href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.82L2 22l4.42-1.7a9.9 9.9 0 0 0 5.62 1.74h.01c5.45 0 9.9-4.45 9.9-9.9C21.95 6.45 17.5 2 12.04 2Zm0 18.1h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-2.62 1 .7-2.56-.2-.32a8.22 8.22 0 0 1-1.26-4.35c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.23-8.23 8.23Zm4.52-6.16c-.25-.13-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.42l-.48-.01c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.13.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>Reservar pelo WhatsApp</a>
+      <a class="btn btn-ghost btn-lg" data-air href="#">Ver no Airbnb</a>
+    </div>
+    <div class="hero-facts reveal">
+      <span class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 20v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2M10 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm11 12v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/></svg>Até 17 hóspedes</span>
+      <span class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20M6 8v-.01"/></svg>5 quartos · 15 camas</span>
+      <span class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 6 6.5 3.5a1.4 1.4 0 0 0-2 0 1.4 1.4 0 0 0 0 2L7 8M4 12h17a1 1 0 0 1 1 1 6 6 0 0 1-6 6H9a6 6 0 0 1-6-6 1 1 0 0 1 1-1ZM6 19l-1 2M18 19l1 2"/></svg>5,5 banheiros</span>
+      <span class="fact"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20M4.5 6a15 15 0 0 0 15 0M4.5 18a15 15 0 0 1 15 0"/><circle cx="12" cy="12" r="10"/></svg>Piscina & rio</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ HIGHLIGHTS ============ -->
+<section class="highlights">
+  <div class="wrap">
+    <div class="hl reveal"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 15c1.5 0 2-1 3.5-1s2 1 3.5 1 2-1 3.5-1 2 1 3.5 1 2-1 3.5-1M2 19c1.5 0 2-1 3.5-1s2 1 3.5 1 2-1 3.5-1 2 1 3.5 1 2-1 3.5-1M7 12V5a2 2 0 0 1 4 0v.5"/></svg></span><b>Piscina</b><span>área externa</span></div>
+    <div class="hl reveal"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3c2 2 3 4 1 6M8 5c1 1 1.5 2 .5 3M4 21h16M6 21l1-6h10l1 6M9 15a3 3 0 0 1 6 0"/></svg></span><b>Forno a lenha</b><span>pizza artesanal</span></div>
+    <div class="hl reveal"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 18c2 0 2-1.5 4.5-1.5S10 18 12 18s2-1.5 4.5-1.5S19 18 21 18M5 14l1.5-8h11L19 14M9 6V4h6v2"/></svg></span><b>Churrasqueira</b><span>+ área gourmet</span></div>
+    <div class="hl reveal"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v11H4zM2 20h20M9 20l1-2M15 20l-1-2"/></svg></span><b>Smart TV 75"</b><span>streaming</span></div>
+    <div class="hl reveal"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M10 5.5c0 3-4 3-4 6a2 2 0 0 0 4 0c0-3 4-3 4-6M14 9c1.5.5 4 1 4 4a3 3 0 0 1-6 0"/><circle cx="6.5" cy="4.5" r="1.5"/><circle cx="18" cy="6" r="1.5"/></svg></span><b>Pet-friendly</b><span>pets bem-vindos</span></div>
+    <div class="hl reveal"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 20s2-8 9-8 9 8 9 8M12 12V3M12 3c-2 0-4 1-4 3M12 3c2 0 4 1 4 3"/></svg></span><b>Beira do rio</b><span>natureza viva</span></div>
+  </div>
+</section>
+
+<!-- ============ STORY ============ -->
+<section class="section story" id="sobre">
+  <div class="wrap story-grid">
+    <div class="story-txt reveal">
+      <p class="eyebrow">A nossa história</p>
+      <h2>Um legado de carinho, aberto para você</h2>
+      <p>Em Bariri, no interior paulista, à beira do rio, fica o rancho da <b>Vó Vera</b> e do <b>Vô Walter</b> — cenário dos nossos melhores momentos em família e entre amigos.</p>
+      <p>Depois de uma reforma completa, decidimos abrir as portas deste tesouro. Design elegante, ambientes vastos, ar-condicionado nos quartos e infraestrutura completa: o charme do interior com o padrão de conforto e exclusividade que uma boa reunião merece.</p>
+      <p>Acolhemos você para que este lugar se torne parte da sua história e conquiste um espaço no seu coração — honrando o legado de amor que o construiu.</p>
+      <p class="story-sign">— Com carinho, a família da Vó Vera</p>
+    </div>
+    <div class="story-media reveal">
+      <img class="m-main" data-img="00-L" alt="Fachada do rancho com piscina ao entardecer">
+      <div class="m-badge"><b>100%</b><span>avaliações 5 estrelas</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ STATS ============ -->
+<section class="stats">
+  <div class="wrap">
+    <div class="stat reveal"><b>17</b><span>hóspedes</span></div>
+    <div class="stat reveal"><b>5</b><span>quartos</span></div>
+    <div class="stat reveal"><b>15</b><span>camas</span></div>
+    <div class="stat reveal"><b>5,5</b><span>banheiros</span></div>
+    <div class="stat reveal"><b>★5,0</b><span>no Airbnb</span></div>
+  </div>
+</section>
+
+<!-- ============ EXPERIENCES ============ -->
+<section class="section exp" id="experiencias">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Lazer & experiências</p>
+      <h2>Tudo para reunir quem você ama</h2>
+      <p>Da piscina ao pôr do sol na beira do rio: espaços pensados para o descanso e a diversão de todas as idades.</p>
+    </div>
+    <div class="exp-grid">
+      <div class="exp-card big reveal"><img data-img="12-L" alt="Piscina"><div class="cap"><h3>Piscina & sol o dia todo</h3><p>Área externa com piscina, gramado amplo e muito espaço para as crianças brincarem.</p></div></div>
+      <div class="exp-card reveal"><img data-img="13-L" alt="Forno de pizza a lenha"><div class="cap"><h3>Forno de pizza a lenha</h3><p>Noites de pizza artesanal com a turma toda.</p></div></div>
+      <div class="exp-card reveal"><img data-img="15-L" alt="Área gourmet com churrasqueira"><div class="cap"><h3>Área gourmet & churrasqueira</h3><p>Espaço coberto para o almoço de domingo.</p></div></div>
+      <div class="exp-card reveal"><img data-img="02-L" alt="Píer na beira do rio"><div class="cap"><h3>Beira do rio</h3><p>Rede, píer e o sossego da natureza a poucos passos.</p></div></div>
+      <div class="exp-card reveal"><img data-img="64-L" alt="Cozinha equipada"><div class="cap"><h3>Cozinha completa</h3><p>Equipada de verdade — de panelas a cafeteira e utensílios.</p></div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ GALLERY ============ -->
+<section class="section gallery" id="galeria">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Galeria completa</p>
+      <h2>Conheça cada cantinho</h2>
+      <p>Todas as fotos do rancho — clique em qualquer imagem para ampliar.</p>
+    </div>
+    <div class="masonry" id="masonry"></div>
+  </div>
+</section>
+
+<!-- ============ ACCOMMODATION ============ -->
+<section class="section rooms" id="acomodacoes">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Acomodações</p>
+      <h2>Espaço de sobra para todos</h2>
+      <p>Cinco quartos e 15 camas, distribuídos com conforto para famílias e grupos de até 17 pessoas.</p>
+    </div>
+    <div class="rooms-grid">
+      <div class="room-list reveal">
+        <div class="room"><span class="rn">1</span><div><b>Mezanino</b><p>1 cama de casal + 1 de solteiro · ar-condicionado</p></div></div>
+        <div class="room"><span class="rn">2</span><div><b>Quarto 2</b><p>2 camas de solteiro, cada uma com bicama auxiliar</p></div></div>
+        <div class="room"><span class="rn">3</span><div><b>Quarto 3</b><p>1 cama queen</p></div></div>
+        <div class="room"><span class="rn">4</span><div><b>Quarto 4</b><p>2 camas de solteiro + bicamas · banheiro conjugado</p></div></div>
+        <div class="room"><span class="rn">5</span><div><b>Quarto 5</b><p>2 camas de solteiro + bicamas · banheiro conjugado</p></div></div>
+        <div class="room"><span class="rn">+</span><div><b>Banheiros</b><p>3 internos · 2 externos · 1 lavabo</p></div></div>
+      </div>
+      <div class="plan-media reveal">
+        <img data-img="81-L" alt="Planta baixa do Rancho da Vó Vera">
+        <p class="plan-cap">Planta baixa — disposição dos cômodos do rancho</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ AMENITIES ============ -->
+<section class="section amen">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow">Comodidades</p>
+      <h2>Já vem tudo pronto</h2>
+      <p>Enxoval completo de cama e banho, cozinha equipada e o que mais você precisa para relaxar.</p>
+    </div>
+    <div class="amen-grid reveal">
+      <div class="amen-col">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>Cozinha & jantar</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Cozinha completa equipada</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Geladeira, fogão e micro-ondas</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Cafeteira & café</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Panelas, pratos e talheres</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Utensílios para churrasco</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Mesa de jantar</li>
+        </ul>
+      </div>
+      <div class="amen-col">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 4v16M2 8h18a2 2 0 0 1 2 2v10M2 17h20"/></svg>Quartos & conforto</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Ar-condicionado</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Enxoval completo de cama e banho</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Cabides e espaço para roupas</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Ferro de passar</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Secador de cabelo</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Xampu & produtos de higiene</li>
+        </ul>
+      </div>
+      <div class="amen-col">
+        <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/></svg>Lazer & estrutura</h3>
+        <ul>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Piscina externa</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Forno de pizza a lenha & churrasqueira</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Smart TV 75" com streaming</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Wi-Fi & espaço de trabalho</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Estacionamento gratuito na propriedade</li>
+          <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M20 6 9 17l-5-5"/></svg>Quintal, varanda & acesso ao rio</li>
+        </ul>
+      </div>
+    </div>
+    <p class="amen-note reveal">Casa térrea (sem escadas nas áreas principais), em condomínio com vigilância 24h. Convive em harmonia com a natureza — atenção redobrada na piscina com crianças. Não incluso: máquina de lavar e aquecedor.</p>
+  </div>
+</section>
+
+<!-- ============ REVIEWS ============ -->
+<section class="section reviews" id="avaliacoes">
+  <div class="wrap">
+    <div class="section-head reveal">
+      <p class="eyebrow" style="color:var(--gold-soft)">Quem se hospedou, ama</p>
+      <h2>Avaliações reais do Airbnb</h2>
+    </div>
+    <div class="rev-top reveal">
+      <div class="rev-badge"><b>5,0</b><div class="stars">★★★★★</div><span>nota geral</span></div>
+      <div class="rev-badge"><b>20</b><div class="stars">avaliações</div><span>100% cinco estrelas</span></div>
+      <div class="rev-badge"><b>Superhost</b><div class="stars">★</div><span>anfitrião reconhecido</span></div>
+    </div>
+    <div class="rev-collapsed" id="revWrap">
+      <div class="rev-masonry" id="revMasonry"></div>
+    </div>
+    <div class="gallery-more">
+      <button class="btn btn-air" id="revToggle">Ver todas as 20 avaliações</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ LOCATION ============ -->
+<section class="section loc" id="localizacao">
+  <div class="wrap">
+    <div class="loc-card reveal">
+      <div class="loc-map">
+        <img data-img="70-L" alt="Vista da região do rancho, à beira do rio">
+        <div class="pin">
+          <svg viewBox="0 0 24 24" fill="var(--terra)" stroke="#fff" stroke-width="1.5"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z"/><circle cx="12" cy="9" r="2.4" fill="#fff" stroke="none"/></svg>
+        </div>
+      </div>
+      <div class="loc-info">
+        <p class="eyebrow">Localização</p>
+        <h2>No coração do interior paulista</h2>
+        <p>O Rancho da Vó Vera fica em um condomínio a cerca de <b>12 km do centro de Bariri (SP)</b> — imersão na natureza, ruas arborizadas e a tranquilidade do interior, a poucos minutos da cidade.</p>
+        <div class="loc-feats">
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z"/><circle cx="12" cy="9" r="2.5"/></svg>~12 km do centro de Bariri</div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2 4 6v6c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6z"/></svg>Condomínio com vigilância 24h</div>
+          <div><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 20s2-8 9-8 9 8 9 8"/><path d="M12 12V3"/></svg>À beira do rio, cercado de verde</div>
+        </div>
+        <a class="btn btn-air btn-lg" href="https://www.google.com/maps?q=-22.0759,-48.7391" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z"/><circle cx="12" cy="9" r="2.5"/></svg>Abrir no Google Maps</a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FINAL CTA ============ -->
+<section class="cta">
+  <div class="cta-bg"><img data-img="72-L" alt="Rancho da Vó Vera com piscina"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal" style="color:var(--gold-soft)">Reserve as suas datas</p>
+    <h2 class="reveal">Sua próxima reunião de família começa aqui</h2>
+    <p class="reveal">Consulte disponibilidade e valores agora mesmo. Respondemos rápido e ajudamos você a planejar cada detalhe da estadia.</p>
+    <div class="cta-btns reveal">
+      <a class="btn btn-wa btn-lg" data-wa href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.82L2 22l4.42-1.7a9.9 9.9 0 0 0 5.62 1.74h.01c5.45 0 9.9-4.45 9.9-9.9C21.95 6.45 17.5 2 12.04 2Zm0 18.1h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-2.62 1 .7-2.56-.2-.32a8.22 8.22 0 0 1-1.26-4.35c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.23-8.23 8.23Zm4.52-6.16c-.25-.13-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.42l-.48-.01c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.13.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z"/></svg>Falar no WhatsApp</a>
+      <a class="btn btn-ghost btn-lg" data-air href="#">Reservar no Airbnb</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top"><span class="mark">V</span><span class="bt"><b style="color:#fdfaf2">Rancho da Vó Vera</b><span>Bariri · SP</span></span></a>
+        <p>Casa de temporada recém-reformada à beira do rio, em Bariri, interior de São Paulo. Um refúgio de família para receber quem você ama.</p>
+      </div>
+      <div class="foot-links">
+        <div class="foot-col">
+          <h4>Reservas</h4>
+          <a data-wa href="#"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.82L2 22l4.42-1.7a9.9 9.9 0 0 0 5.62 1.74c5.46 0 9.91-4.45 9.91-9.9C21.95 6.45 17.5 2 12.04 2Z"/></svg>WhatsApp</a>
+          <a data-air href="#"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7Z"/><circle cx="12" cy="9" r="2.5"/></svg>Anúncio no Airbnb</a>
+          <a href="https://www.instagram.com/rancho.vovera/" target="_blank" rel="noopener"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4"/><circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/></svg>@rancho.vovera</a>
+        </div>
+        <div class="foot-col">
+          <h4>A casa</h4>
+          <a href="#sobre">Nossa história</a>
+          <a href="#galeria">Galeria de fotos</a>
+          <a href="#acomodacoes">Acomodações</a>
+          <a href="#localizacao">Localização</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 Rancho da Vó Vera · Bariri/SP</span>
+      <span>Check-in 16h · Checkout 13h · Aceita pets · Até 17 hóspedes</span>
+    </div>
+  </div>
+</footer>
+
+<a class="wa-float" data-wa href="#" aria-label="WhatsApp"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.9c0 2.1.55 4.06 1.6 5.82L2 22l4.42-1.7a9.9 9.9 0 0 0 5.62 1.74h.01c5.45 0 9.9-4.45 9.9-9.9C21.95 6.45 17.5 2 12.04 2Zm0 18.1h-.01a8.2 8.2 0 0 1-4.18-1.15l-.3-.18-2.62 1 .7-2.56-.2-.32a8.22 8.22 0 0 1-1.26-4.35c0-4.54 3.7-8.23 8.24-8.23 2.2 0 4.27.86 5.83 2.42a8.18 8.18 0 0 1 2.41 5.82c0 4.54-3.69 8.23-8.23 8.23Zm4.52-6.16c-.25-.13-1.47-.72-1.69-.8-.23-.09-.39-.13-.56.12-.16.25-.64.8-.79.97-.14.16-.29.18-.54.06-.25-.13-1.05-.39-1.99-1.23-.74-.66-1.23-1.47-1.38-1.72-.14-.25-.01-.38.11-.51.11-.11.25-.29.37-.43.13-.15.17-.25.25-.42.08-.16.04-.31-.02-.43-.06-.13-.56-1.35-.77-1.85-.2-.48-.41-.42-.56-.42l-.48-.01c-.16 0-.43.06-.66.31-.22.25-.86.85-.86 2.07 0 1.22.89 2.4 1.01 2.56.13.17 1.75 2.67 4.23 3.74.59.26 1.05.41 1.41.52.59.19 1.13.16 1.56.1.47-.07 1.47-.6 1.68-1.18.2-.58.2-1.07.14-1.18-.06-.1-.22-.16-.47-.28Z"/></svg></a>
+
+<div class="lb" id="lb">
+  <button class="lb-btn lb-close" id="lbClose" aria-label="Fechar"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  <button class="lb-btn lb-prev" id="lbPrev" aria-label="Anterior"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M15 18 9 12l6-6"/></svg></button>
+  <img id="lbImg" alt="">
+  <button class="lb-btn lb-next" id="lbNext" aria-label="Próxima"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="m9 18 6-6-6-6"/></svg></button>
+  <div class="lb-count" id="lbCount"></div>
+</div>
+
+<script>
+/*__IMG_MAP__*/
+
+/* ========= CONFIG DE CONTATO ========= */
+/*  >>> TROCAR AQUI o número do WhatsApp quando o cliente enviar (formato: 55 + DDD + número, só dígitos) <<<  */
+const WHATSAPP = "5599999999999";
+const WA_MSG = "Olá! Tenho interesse em reservar o Rancho da Vó Vera. Poderiam me passar disponibilidade e valores?";
+const AIRBNB_URL = "https://www.airbnb.com.br/rooms/1526039007608298198";
+
+const waHref = "https://wa.me/" + WHATSAPP + "?text=" + encodeURIComponent(WA_MSG);
+document.querySelectorAll("[data-wa]").forEach(a=>{a.href=waHref;a.target="_blank";a.rel="noopener";});
+document.querySelectorAll("[data-air]").forEach(a=>{a.href=AIRBNB_URL;a.target="_blank";a.rel="noopener";});
+
+/* ========= IMAGENS (data-img -> IMG map) ========= */
+document.querySelectorAll("[data-img]").forEach(el=>{
+  const k = el.getAttribute("data-img");
+  if(IMG[k]) el.src = IMG[k];
+});
+
+/* ========= GALERIA MOSAICO ========= */
+const GALLERY_ORDER = [
+  "82-L","00-L","12-L","14-L","46-L","72-L","15-L","78-L",
+  "01-L","02-L","44-L","45-L","69-L","70-L","74-L","75-L",
+  "08-L","09-L","10-L","11-L","03-L","04-L","71-L","73-L","76-L","77-L","56-P",
+  "13-L","41-L","42-L","43-L","37-L","39-L",
+  "05-L","16-L","40-L","62-L","64-L","65-L","66-L","67-L","68-L","63-L",
+  "18-L","53-P","58-L","61-L","57-P","60-P","17-L",
+  "06-L","07-P","38-P","59-L",
+  "19-L","20-L","21-L","22-L","23-L","24-L","25-L","26-L","27-L","30-L","31-L","32-L","33-L","35-L","36-L","49-L","34-P",
+  "28-L","29-L",
+  "47-L","48-L","50-L","51-P","52-P","54-L","55-P"
+];
+const allKeys = Object.keys(IMG);
+const gkeys = GALLERY_ORDER.filter(k=>IMG[k]);
+allKeys.forEach(k=>{ if(k!=="81-L" && !gkeys.includes(k)) gkeys.push(k); }); // garante todas
+const masonry = document.getElementById("masonry");
+gkeys.forEach((k,i)=>{
+  const img=document.createElement("img");
+  img.src=IMG[k]; img.loading="lazy"; img.alt="Rancho da Vó Vera — foto "+(i+1);
+  img.dataset.idx=i;
+  img.addEventListener("click",()=>openLb(i));
+  masonry.appendChild(img);
+});
+
+/* ========= LIGHTBOX ========= */
+const lb=document.getElementById("lb"), lbImg=document.getElementById("lbImg"), lbCount=document.getElementById("lbCount");
+let curIdx=0;
+function openLb(i){curIdx=i;lbImg.src=IMG[gkeys[i]];lbCount.textContent=(i+1)+" / "+gkeys.length;lb.classList.add("open");document.body.style.overflow="hidden";}
+function closeLb(){lb.classList.remove("open");document.body.style.overflow="";}
+function nav(d){curIdx=(curIdx+d+gkeys.length)%gkeys.length;lbImg.src=IMG[gkeys[curIdx]];lbCount.textContent=(curIdx+1)+" / "+gkeys.length;}
+document.getElementById("lbClose").onclick=closeLb;
+document.getElementById("lbPrev").onclick=e=>{e.stopPropagation();nav(-1);};
+document.getElementById("lbNext").onclick=e=>{e.stopPropagation();nav(1);};
+lb.addEventListener("click",e=>{if(e.target===lb)closeLb();});
+document.addEventListener("keydown",e=>{if(!lb.classList.contains("open"))return;if(e.key==="Escape")closeLb();if(e.key==="ArrowLeft")nav(-1);if(e.key==="ArrowRight")nav(1);});
+
+/* ========= AVALIAÇÕES ========= */
+const REVIEWS = /*__REVIEWS__*/[];
+const revM=document.getElementById("revMasonry");
+REVIEWS.forEach(r=>{
+  const c=document.createElement("div");c.className="rev-card";
+  const initial=(r.n||"?").trim().charAt(0).toUpperCase();
+  c.innerHTML='<div class="stars">'+"★".repeat(r.r||5)+'</div><p>'+r.c+'</p>'+
+    '<div class="who"><span class="av">'+initial+'</span><div><b>'+r.n+'</b><span>'+r.d+'</span></div></div>';
+  revM.appendChild(c);
+});
+const revWrap=document.getElementById("revWrap"), revToggle=document.getElementById("revToggle");
+revToggle.addEventListener("click",()=>{
+  const exp=revWrap.classList.toggle("expanded");
+  revToggle.textContent=exp?"Mostrar menos":"Ver todas as 20 avaliações";
+});
+
+/* ========= MENU MOBILE ========= */
+const mmenu=document.getElementById("mmenu"), hamb=document.getElementById("hambBtn");
+function toggleMenu(){const o=mmenu.classList.toggle("open");document.body.style.overflow=o?"hidden":"";}
+hamb.addEventListener("click",toggleMenu);
+mmenu.querySelectorAll("a").forEach(a=>a.addEventListener("click",()=>{mmenu.classList.remove("open");document.body.style.overflow="";}));
+
+/* ========= REVEAL ========= */
+const io=new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add("in");io.unobserve(e.target);}});},{threshold:.12,rootMargin:"0px 0px -8% 0px"});
+document.querySelectorAll(".reveal").forEach(el=>io.observe(el));
+</script>
