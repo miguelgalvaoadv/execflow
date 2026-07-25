@@ -1,0 +1,51 @@
+# Netlify — Cabana Afrodite (site estático + Functions)
+[build]
+  publish = "site"
+  functions = "netlify/functions"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Cache longo das imagens da galeria
+[[headers]]
+  for = "/assets/img/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Cabeçalhos de segurança básicos
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+# Rotas de API amigáveis -> Functions
+[[redirects]]
+  from = "/api/availability"
+  to = "/.netlify/functions/availability"
+  status = 200
+[[redirects]]
+  from = "/api/reservations"
+  to = "/.netlify/functions/create-reservation"
+  status = 200
+[[redirects]]
+  from = "/api/pay"
+  to = "/.netlify/functions/create-preference"
+  status = 200
+[[redirects]]
+  from = "/api/reservations/:token"
+  to = "/.netlify/functions/get-reservation?token=:token"
+  status = 200
+[[redirects]]
+  from = "/api/webhooks/mercadopago"
+  to = "/.netlify/functions/mercadopago-webhook"
+  status = 200
+[[redirects]]
+  from = "/api/calendar/:file"
+  to = "/.netlify/functions/ical-export?file=:file"
+  status = 200
+[[redirects]]
+  from = "/api/admin/*"
+  to = "/.netlify/functions/admin-:splat"
+  status = 200

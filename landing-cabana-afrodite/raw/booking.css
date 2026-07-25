@@ -1,0 +1,52 @@
+/* Widget de reserva — reutiliza as variáveis visuais da landing (--ember, --pine, --ink, --serif, --sans...) */
+.booking{padding-block:clamp(72px,11vw,128px);background:var(--pine);border-block:1px solid var(--line);}
+.booking .bk-head{max-width:60ch;margin-bottom:36px;}
+.booking .bk-card{background:var(--night);border:1px solid var(--line);border-radius:var(--r);
+  padding:clamp(20px,4vw,36px);max-width:720px;box-shadow:0 30px 70px -40px rgba(0,0,0,.5);}
+.bk-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:560px){.bk-row{grid-template-columns:1fr;}}
+.bk-field{display:flex;flex-direction:column;gap:7px;}
+.bk-field label{font-size:.74rem;text-transform:uppercase;letter-spacing:.16em;color:var(--dim);font-weight:500;}
+.bk-field input,.bk-field textarea{font-family:var(--sans);font-size:1rem;color:var(--ink);
+  background:var(--pine);border:1px solid var(--line);border-radius:10px;padding:13px 14px;width:100%;
+  transition:border-color .2s;}
+.bk-field input:focus,.bk-field textarea:focus{outline:none;border-color:var(--ember);}
+.bk-field input:invalid{border-color:#c0562f;}
+.bk-steppers{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;}
+.bk-step{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  background:var(--pine);border:1px solid var(--line);border-radius:10px;padding:10px 14px;}
+.bk-step .lbl{font-size:.9rem;color:var(--ink);}
+.bk-step .ctrl{display:flex;align-items:center;gap:12px;}
+.bk-step button{width:32px;height:32px;border-radius:100px;border:1px solid var(--line);background:transparent;
+  color:var(--ink);font-size:1.2rem;cursor:pointer;line-height:1;display:grid;place-items:center;}
+.bk-step button:hover:not(:disabled){border-color:var(--ember);color:var(--ember);}
+.bk-step button:disabled{opacity:.35;cursor:not-allowed;}
+.bk-step .val{min-width:1.5ch;text-align:center;font-variant-numeric:tabular-nums;}
+.bk-actions{margin-top:22px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;}
+.bk-btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-family:var(--sans);
+  font-weight:500;font-size:.95rem;letter-spacing:.03em;padding:14px 26px;border-radius:100px;cursor:pointer;
+  border:1px solid transparent;background:var(--ember);color:#fff;transition:transform .2s,filter .2s,opacity .2s;}
+.bk-btn:hover:not(:disabled){transform:translateY(-2px);filter:brightness(1.08);}
+.bk-btn:disabled{opacity:.5;cursor:progress;transform:none;}
+.bk-btn.ghost{background:transparent;color:var(--ink);border-color:var(--line);}
+.bk-btn.ghost:hover:not(:disabled){border-color:var(--ember);color:var(--ember);}
+.bk-msg{margin-top:16px;padding:12px 15px;border-radius:10px;font-size:.9rem;line-height:1.5;}
+.bk-msg.err{background:rgba(192,86,47,.12);border:1px solid rgba(192,86,47,.4);color:var(--ink);}
+.bk-msg.ok{background:rgba(60,140,80,.12);border:1px solid rgba(60,140,80,.4);color:var(--ink);}
+.bk-summary{margin-top:22px;border-top:1px solid var(--line);padding-top:20px;display:none;}
+.bk-summary.show{display:block;}
+.bk-line{display:flex;justify-content:space-between;gap:12px;padding:6px 0;color:var(--dim);font-size:.95rem;}
+.bk-line b{color:var(--ink);font-weight:500;}
+.bk-line.total{border-top:1px solid var(--line);margin-top:8px;padding-top:14px;font-size:1.15rem;}
+.bk-line.total b{font-family:var(--serif);}
+.bk-guest{display:none;margin-top:22px;border-top:1px solid var(--line);padding-top:22px;}
+.bk-guest.show{display:block;}
+.bk-consents{display:grid;gap:11px;margin-top:16px;}
+.bk-consent{display:flex;gap:11px;align-items:flex-start;font-size:.88rem;color:var(--dim);line-height:1.5;cursor:pointer;}
+.bk-consent input{margin-top:3px;width:18px;height:18px;accent-color:var(--ember);flex:none;}
+.bk-consent a{color:var(--ember);text-decoration:underline;}
+.bk-note{font-size:.82rem;color:var(--dim);margin-top:14px;}
+.bk-spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;
+  display:inline-block;animation:bkspin .7s linear infinite;}
+@keyframes bkspin{to{transform:rotate(360deg);}}
+@media(prefers-reduced-motion:reduce){.bk-spinner{animation:none;}.bk-btn:hover{transform:none;}}

@@ -1,0 +1,716 @@
+[
+ {
+  "i": 0,
+  "uuid": "f283d4db-bc38-4555-b45b-754e4363a30c",
+  "cat": "sala",
+  "label": "Sala de estar",
+  "orient": "landscape"
+ },
+ {
+  "i": 1,
+  "uuid": "b1770af7-7e22-4cb4-ba21-760995e1bb0b",
+  "cat": "sala",
+  "label": "Sala de estar",
+  "orient": "portrait"
+ },
+ {
+  "i": 2,
+  "uuid": "327440a9-6767-4f3c-85e6-c18d835f6863",
+  "cat": "sala",
+  "label": "Sala de estar",
+  "orient": "portrait"
+ },
+ {
+  "i": 3,
+  "uuid": "ecf7d95b-560a-415a-92c1-f6a673522329",
+  "cat": "sala",
+  "label": "Sala de estar",
+  "orient": "landscape"
+ },
+ {
+  "i": 4,
+  "uuid": "912cd848-46dd-499d-bf5f-194f450fb330",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "portrait"
+ },
+ {
+  "i": 5,
+  "uuid": "90cf5e27-8d4d-4395-86e0-053b36706beb",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "portrait"
+ },
+ {
+  "i": 6,
+  "uuid": "939be068-64a1-4434-9451-4815bc06b7a0",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "portrait"
+ },
+ {
+  "i": 7,
+  "uuid": "3439a402-666c-4e1b-a84c-d7bb66a5615c",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "portrait"
+ },
+ {
+  "i": 8,
+  "uuid": "8c7fa47d-a8f7-4274-859a-ec4d04542705",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "portrait"
+ },
+ {
+  "i": 9,
+  "uuid": "5120ce6f-7858-4086-8a83-46aaeaa8f08b",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "portrait"
+ },
+ {
+  "i": 10,
+  "uuid": "51c36473-8e7d-41d7-b98e-5231109b5fed",
+  "cat": "cozinha",
+  "label": "Cozinha",
+  "orient": "landscape"
+ },
+ {
+  "i": 11,
+  "uuid": "ebd8a17a-3eee-487d-8db2-4b45cc49cff6",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 12,
+  "uuid": "270f5180-1175-45fc-94c1-4c22a1f583d2",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 13,
+  "uuid": "337683b5-3561-460c-ba76-004cd091cd42",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 14,
+  "uuid": "0cc4a8dd-ddd5-4baa-ac0d-3d8b61cbf0bf",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 15,
+  "uuid": "47a05042-0c5f-4c99-96bd-b9964c9e301e",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 16,
+  "uuid": "843b42ad-041c-484b-8986-596c4f1a5407",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 17,
+  "uuid": "71d79223-32c2-42c1-9939-ef02bbc2a032",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 18,
+  "uuid": "9e82214d-012a-488e-abb0-00c2657f534a",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 19,
+  "uuid": "93bf57c2-0b4e-4abc-8d9d-4738570933c5",
+  "cat": "jantar",
+  "label": "Sala de jantar",
+  "orient": "portrait"
+ },
+ {
+  "i": 20,
+  "uuid": "771d35a6-347c-4f34-a95b-61dfa984348b",
+  "cat": "quarto",
+  "label": "Quarto",
+  "orient": "portrait"
+ },
+ {
+  "i": 21,
+  "uuid": "52771c68-009f-4125-8838-fed32b6abcef",
+  "cat": "quarto",
+  "label": "Quarto",
+  "orient": "portrait"
+ },
+ {
+  "i": 22,
+  "uuid": "0ceeca91-23f1-448c-bf64-9b4437f84fa3",
+  "cat": "quarto",
+  "label": "Quarto",
+  "orient": "portrait"
+ },
+ {
+  "i": 23,
+  "uuid": "79a7bfd6-b7b8-4b3d-a8e7-14eeadde9ffa",
+  "cat": "quarto",
+  "label": "Quarto",
+  "orient": "portrait"
+ },
+ {
+  "i": 24,
+  "uuid": "f5ed4dc4-98b4-435e-ad7d-182a719ec370",
+  "cat": "quarto",
+  "label": "Quarto",
+  "orient": "portrait"
+ },
+ {
+  "i": 25,
+  "uuid": "a1ae2796-2bb5-4a2a-9fae-8daef1c31ec6",
+  "cat": "banheiro",
+  "label": "Banheiro",
+  "orient": "portrait"
+ },
+ {
+  "i": 26,
+  "uuid": "a7013236-c996-4a53-9a2b-ec4ee629876a",
+  "cat": "banheiro",
+  "label": "Banheiro",
+  "orient": "portrait"
+ },
+ {
+  "i": 27,
+  "uuid": "fad2483a-04eb-4d0f-8f03-411fcd0c3887",
+  "cat": "banheiro",
+  "label": "Banheiro",
+  "orient": "portrait"
+ },
+ {
+  "i": 28,
+  "uuid": "33c73930-e1fc-4e7f-820a-03fa9de910f4",
+  "cat": "banheiro",
+  "label": "Banheiro",
+  "orient": "portrait"
+ },
+ {
+  "i": 29,
+  "uuid": "0d75edc3-ccb4-49f5-9802-e7833fc3d536",
+  "cat": "banheiro",
+  "label": "Banheiro",
+  "orient": "portrait"
+ },
+ {
+  "i": 30,
+  "uuid": "15b8ef58-7d00-4655-92da-db6dba3decad",
+  "cat": "banheiro",
+  "label": "Banheiro",
+  "orient": "portrait"
+ },
+ {
+  "i": 31,
+  "uuid": "eb600312-380a-4a7f-9638-1a72465aa156",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 32,
+  "uuid": "615014a3-27a1-42a8-888a-8e0498428697",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 33,
+  "uuid": "9990d19f-f39b-4ac8-ab42-35edef35c0de",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 34,
+  "uuid": "10110bf4-2afb-44c2-86fe-b7f4bf4f8958",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 35,
+  "uuid": "351231a6-7a42-49e7-ba6d-246d8011f17e",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 36,
+  "uuid": "da97d1b3-dc43-4935-ab08-2f1a40464209",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 37,
+  "uuid": "de818919-4d2e-45ae-ac93-109e9cc4b8d4",
+  "cat": "exterior",
+  "label": "Área externa",
+  "orient": "portrait"
+ },
+ {
+  "i": 38,
+  "uuid": "baf7b450-5f8b-4cbb-afc9-ce4304be958b",
+  "cat": "lareira",
+  "label": "Lareira",
+  "orient": "portrait"
+ },
+ {
+  "i": 39,
+  "uuid": "5d08d21b-0dcb-4539-b078-ac56cc0a9816",
+  "cat": "adega",
+  "label": "Adega / carrinho bar",
+  "orient": "portrait"
+ },
+ {
+  "i": 40,
+  "uuid": "b780f8a5-660d-4712-82f6-050f21349b95",
+  "cat": "adega",
+  "label": "Adega / carrinho bar",
+  "orient": "portrait"
+ },
+ {
+  "i": 41,
+  "uuid": "a6833cdf-8eb3-4508-a78f-a187213f2c95",
+  "cat": "adega",
+  "label": "Adega / carrinho bar",
+  "orient": "portrait"
+ },
+ {
+  "i": 42,
+  "uuid": "0a81dad4-6734-46d4-a86f-abcb84f2e3d7",
+  "cat": "adega",
+  "label": "Adega / carrinho bar",
+  "orient": "portrait"
+ },
+ {
+  "i": 43,
+  "uuid": "c9ee2688-0010-431d-ac6c-1342c15d199d",
+  "cat": "adega",
+  "label": "Adega / carrinho bar",
+  "orient": "portrait"
+ },
+ {
+  "i": 44,
+  "uuid": "9387f802-4ff9-4f01-bbb1-c834afb6fac6",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 45,
+  "uuid": "a56a99aa-782d-43bd-bfda-18a9b6031cef",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 46,
+  "uuid": "1b13145b-149b-4941-9fc4-f4e7fe9253d5",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 47,
+  "uuid": "784aa41b-2097-46fd-8642-e0bfe849016a",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 48,
+  "uuid": "0a0b6bc3-b255-42b9-b15d-cc0861571e58",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 49,
+  "uuid": "09f3e3e0-8018-4d65-b75b-a41bc53bfefe",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 50,
+  "uuid": "bdbc9bf9-77a1-48f3-8872-2434ae999dcf",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 51,
+  "uuid": "6e2f83e4-db39-4a09-ab7d-4b6416126546",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 52,
+  "uuid": "f5c2c67d-fbc5-435d-ace3-7831230a281f",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 53,
+  "uuid": "86f446ee-b790-4191-8b44-94ab12837ec7",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 54,
+  "uuid": "137370f8-774f-41bc-9240-a9a59eefb287",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 55,
+  "uuid": "27b1758c-2e6c-4546-8fdf-6e6bc4ff6df8",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 56,
+  "uuid": "3c046625-0a6b-41a0-958a-ff78c82163f9",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 57,
+  "uuid": "9468246e-53e7-4fd4-a196-681af907aba2",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 58,
+  "uuid": "10e78079-7523-48af-b244-8fa0d62f9ef5",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 59,
+  "uuid": "5e2a0061-9eda-4147-85bd-dd606d388f7c",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 60,
+  "uuid": "50e397a8-6191-4c59-adf4-76203efece65",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 61,
+  "uuid": "68de9416-4e6e-4ec6-b4f0-9b68dfa301be",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 62,
+  "uuid": "0ebd497a-2f9c-4ce8-b2d2-6aa737d74767",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 63,
+  "uuid": "40a92667-ff57-4151-b1eb-9db520543d33",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 64,
+  "uuid": "7d830e5a-5171-44aa-bd18-38dfc9d9a19f",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 65,
+  "uuid": "3ed603f4-0682-4017-b120-02f9ee68eb3f",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 66,
+  "uuid": "feb2e650-13d9-486a-9a45-112737ec306f",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 67,
+  "uuid": "196d039e-c951-44a1-aad7-c0bb3d908c7b",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 68,
+  "uuid": "2ad9d046-9954-4ad9-ae0c-fb125f90b5c3",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 69,
+  "uuid": "714261ca-81c4-4df2-8fe4-b3c466f30c6f",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 70,
+  "uuid": "fed39b69-26d9-4294-ab08-6c4987f53e50",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 71,
+  "uuid": "087aecfe-0676-4e94-b06f-9f11954de4eb",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 72,
+  "uuid": "63728c49-e1e0-4b80-ad09-2f0999cc5289",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 73,
+  "uuid": "f45bd25c-6e1a-4f65-9830-0ab6fd745422",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 74,
+  "uuid": "63f830d0-68c7-4d05-8903-a5ea65922813",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 75,
+  "uuid": "f97a9f01-67f4-42a6-89c9-f3f89af76c54",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 76,
+  "uuid": "11134b21-57d4-4059-a1cd-cfc06109ac1b",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 77,
+  "uuid": "e3b17131-19f5-42e2-ad23-34972b3780a4",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 78,
+  "uuid": "b18d86ea-76e6-4476-b2fc-af7c637452e9",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 79,
+  "uuid": "f825abf1-9d92-4979-a633-9e6f604cdfea",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 80,
+  "uuid": "335fa20d-54ad-4aad-b02b-964cad4d9366",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "landscape"
+ },
+ {
+  "i": 81,
+  "uuid": "de1ef6f3-9a37-45b4-89c3-79385d9a6df5",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "landscape"
+ },
+ {
+  "i": 82,
+  "uuid": "18ecb930-2a0e-4646-92fe-04b96363bfe5",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "landscape"
+ },
+ {
+  "i": 83,
+  "uuid": "bd660b36-31b0-409d-a201-24dcce011491",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 84,
+  "uuid": "8209cfd5-4830-44d9-a574-ce104fa632b7",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 85,
+  "uuid": "5968b75a-eb4f-42dd-899f-0410f9302ef7",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 86,
+  "uuid": "59fb9992-d724-472a-b153-dafcd72972f3",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "landscape"
+ },
+ {
+  "i": 87,
+  "uuid": "ec96c4dc-e82f-47b7-864c-c839bdcdc52b",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 88,
+  "uuid": "82fc161c-415c-4b14-9fc8-8fdcca90c7b9",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 89,
+  "uuid": "55c1d41a-b444-4dca-9142-32aad5700e4b",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 90,
+  "uuid": "2f47f7bd-7b4a-4c64-aaaa-1e7b84443c4b",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 91,
+  "uuid": "58f39045-4f3e-4bf9-a521-908a5f458560",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 92,
+  "uuid": "46b4cd71-3b3b-4718-aab6-718b21418909",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 93,
+  "uuid": "23460e70-1542-4ecf-9faf-8b346f22970b",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 94,
+  "uuid": "8a0e1e84-4830-459b-b178-36cba0d3c631",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 95,
+  "uuid": "2e50514f-6207-4ad2-a0d9-01663452d32a",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 96,
+  "uuid": "ce5d8102-bc8f-40f7-b52a-d45cfe80910a",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 97,
+  "uuid": "649c979b-a7cd-465b-b964-c7fc74387252",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 98,
+  "uuid": "82bab6fc-2e7d-4c72-973a-a1d6c21a4168",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 99,
+  "uuid": "86cb4033-7687-449a-b8f1-06b244e62868",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 100,
+  "uuid": "131b6f5e-48b8-4de1-8066-61c5422d32c7",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ },
+ {
+  "i": 101,
+  "uuid": "f03a3317-a00f-42e7-a978-9ce7c71600d6",
+  "cat": "extra",
+  "label": "Cabana Afrodite",
+  "orient": "portrait"
+ }
+]
