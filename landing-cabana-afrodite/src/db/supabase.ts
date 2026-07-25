@@ -195,6 +195,11 @@ export class SupabaseRepository implements Repository {
       periods_imported: log.periodsImported, duration_ms: log.durationMs, error_message: log.error ?? null, source_url: log.sourceUrl ?? null,
     });
   }
+  async lastIcalSyncAt(): Promise<Date | null> {
+    const { data } = await this.db.from("ical_sync_logs")
+      .select("started_at").eq("success", true).order("started_at", { ascending: false }).limit(1).maybeSingle();
+    return data?.started_at ? new Date(data.started_at) : null;
+  }
 
   async upsertPaymentTx(tx: PaymentTxRecord): Promise<void> {
     await this.db.from("payment_transactions").upsert({

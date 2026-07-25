@@ -118,11 +118,15 @@ export class InMemoryRepository implements Repository {
     if (b) b.active = false;
   }
 
+  private lastSync: Date | null = null;
   async replaceIcalEvents(events: BusyPeriod[], _sourceUrl: string | null): Promise<void> {
     this.icalEvents = events.map((e) => ({ ...e }));
   }
-  async logIcalSync(): Promise<void> {
-    /* memória: no-op de log */
+  async logIcalSync(log: { success: boolean }): Promise<void> {
+    if (log.success) this.lastSync = new Date();
+  }
+  async lastIcalSyncAt(): Promise<Date | null> {
+    return this.lastSync;
   }
 
   async upsertPaymentTx(tx: PaymentTxRecord): Promise<void> {

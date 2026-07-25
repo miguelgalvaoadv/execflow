@@ -9,6 +9,8 @@ import { buildStatusChange, type ReservationStatus } from "../domain/reservation
 import { publicToken, externalReference, friendlyCode } from "../domain/tokens.js";
 import { ConflictError, type Repository, type GuestData, type ReservationRecord } from "../db/repository.js";
 import type { PaymentProvider } from "../payments/types.js";
+import type { EmailProvider } from "../email/provider.js";
+import { renderTemplate, type TemplateData } from "../email/templates.js";
 import { randomUUID } from "node:crypto";
 
 export interface ServiceConfig {
@@ -23,6 +25,10 @@ export interface ServiceDeps {
   payments: PaymentProvider;
   config: ServiceConfig;
   now?: () => Date;
+  /** Atualiza o iCal do Airbnb (com cache/throttle). Best-effort; no-op em mock. */
+  refreshIcal?: () => Promise<void>;
+  email?: EmailProvider;
+  emailFrom?: string;
 }
 
 export interface RequestInput {
@@ -44,12 +50,42 @@ export class ReservationService {
   private payments: PaymentProvider;
   private config: ServiceConfig;
   private now: () => Date;
+  private refreshIcal: () => Promise<void>;
+  private email?: EmailProvider;
+  private emailFrom: string;
 
   constructor(deps: ServiceDeps) {
     this.repo = deps.repo;
     this.payments = deps.payments;
     this.config = deps.config;
     this.now = deps.now ?? (() => new Date());
+    this.refreshIcal = deps.refreshIcal ?? (async () => {});
+    this.email = deps.email;
+    this.emailFrom = deps.emailFrom ?? "Cabana Afrodite <reservas@exemplo.com>";
+  }
+
+  /** Sincroniza o Airbnb sem quebrar o fluxo se falhar (dados em cache seguem válidos). */
+  private async syncIcal(): Promise<void> {
+    try { await this.refreshIcal(); } catch { /* mantém cache; erro já registrado no log de sync */ }
+  }
+
+  private trackUrl(token: string): string {
+    return `${this.config.siteUrl}/?reserva=${encodeURIComponent(token)}`;
+  }
+
+  /** Registra a notificação e envia e-mail (best-effort — nunca quebra o fluxo). */
+  private async notify(template: string, opts: { to?: string | null; reservationId?: string | null; data?: TemplateData }): Promise<void> {
+    let status = "queued";
+    if (this.email && opts.to) {
+      try {
+        const rendered = renderTemplate(template, opts.data ?? {});
+        if (rendered) {
+          const r = await this.email.send({ to: opts.to, subject: rendered.subject, text: rendered.text }, this.emailFrom);
+          status = r.ok ? "sent" : "failed";
+        }
+      } catch { status = "failed"; }
+    }
+    await this.repo.logNotification({ reservationId: opts.reservationId ?? null, template, recipient: opts.to ?? null, status });
   }
 
   async priceQuote(input: { checkIn: string; checkOut: string; adults: number; children?: number }): Promise<Quote> {
@@ -58,6 +94,7 @@ export class ReservationService {
   }
 
   async checkAvailability(checkIn: string, checkOut: string): Promise<{ available: boolean; conflicts: number }> {
+    await this.syncIcal();
     const cfg = await this.repo.getActivePricingConfig();
     const busy = await this.repo.listBusyPeriods();
     const conflicts = findConflicts({ checkIn, checkOut }, busy, cfg.prepBufferNights);
@@ -66,6 +103,7 @@ export class ReservationService {
 
   /** Passos 1–15 do fluxo: cria a solicitação como pending_approval. */
   async requestReservation(input: RequestInput): Promise<{ reservation: ReservationRecord; quote: Quote }> {
+    await this.syncIcal();
     const cfg = await this.repo.getActivePricingConfig();
     const q = quote(input, cfg);
     if (!isBookable(q)) {
@@ -103,12 +141,13 @@ export class ReservationService {
       guest: g,
     };
     await this.repo.createReservation(rec);
-    await this.repo.logNotification({ reservationId: id, template: "request_received", recipient: g.email, status: "queued" });
+    await this.notify("request_received", { to: g.email, reservationId: id, data: { code: rec.friendlyCode, checkIn: rec.checkIn, checkOut: rec.checkOut, trackUrl: this.trackUrl(rec.publicToken), firstName: g.fullName.split(" ")[0] } });
     return { reservation: rec, quote: q };
   }
 
   /** Passos 16–18: admin aprova após re-checar disponibilidade. */
   async approveReservation(id: string, adminUser: string): Promise<ReservationRecord> {
+    await this.syncIcal();
     const cfg = await this.repo.getActivePricingConfig();
     const r = await this.repo.getReservationById(id);
     if (!r) throw new NotFoundError("Reserva não encontrada.");
@@ -120,7 +159,7 @@ export class ReservationService {
       buildStatusChange({ from: r.status, to: "awaiting_payment", origin: "admin", adminUser, technicalId: randomUUID(), note: "Aprovada; aguardando pagamento" }),
     );
     await this.repo.setReservationExpiry(id, expiresAt);
-    await this.repo.logNotification({ reservationId: id, template: "request_approved", recipient: r.guest.email, status: "queued" });
+    await this.notify("request_approved", { to: r.guest.email, reservationId: id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, payUrl: this.trackUrl(r.publicToken), trackUrl: this.trackUrl(r.publicToken) } });
     return { ...r, status: "awaiting_payment", paymentExpiresAt: expiresAt };
   }
 
@@ -132,11 +171,12 @@ export class ReservationService {
       "rejected",
       buildStatusChange({ from: r.status, to: "rejected", origin: "admin", adminUser, technicalId: randomUUID(), note: reason ?? null }),
     );
-    await this.repo.logNotification({ reservationId: id, template: "request_rejected", recipient: r.guest.email, status: "queued" });
+    await this.notify("request_rejected", { to: r.guest.email, reservationId: id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut } });
   }
 
   /** Passos 19–20: cria a preferência de pagamento (só após aprovação). */
   async createPaymentPreference(id: string): Promise<{ initPoint: string; preferenceId: string }> {
+    await this.syncIcal();
     const r = await this.repo.getReservationById(id);
     if (!r) throw new NotFoundError("Reserva não encontrada.");
     if (r.status !== "awaiting_payment") throw new ValidationError("Reserva não está aguardando pagamento.");
@@ -170,7 +210,7 @@ export class ReservationService {
       amountCents: amount,
       currency: "BRL",
     });
-    await this.repo.logNotification({ reservationId: r.id, template: "payment_link", recipient: r.guest.email, status: "queued" });
+    await this.notify("payment_link", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, payUrl: pref.initPoint, trackUrl: this.trackUrl(r.publicToken) } });
     return { initPoint: pref.initPoint, preferenceId: pref.id };
   }
 
@@ -208,7 +248,7 @@ export class ReservationService {
 
     // Confere moeda e valor esperado (o que deveria ser pago agora).
     if (payment.currency !== r.currency || payment.amountCents !== r.payNowCents) {
-      await this.repo.logNotification({ reservationId: r.id, template: "payment_mismatch", status: "queued" });
+      await this.notify("payment_mismatch", { reservationId: r.id });
       return { handled: true, status: "mismatch", detail: `esperado ${r.payNowCents} ${r.currency}, recebido ${payment.amountCents} ${payment.currency}` };
     }
 
@@ -219,6 +259,10 @@ export class ReservationService {
       externalReference: payment.externalReference, raw: payment.raw,
     });
 
+    // Re-sincroniza o Airbnb ANTES de confirmar: se surgiu uma reserva nova no
+    // Airbnb durante o pagamento, o exclusion check abaixo detecta o conflito.
+    await this.syncIcal();
+
     // paid -> confirmed (transitionStatus reforça anti-sobreposição).
     try {
       await this.repo.transitionStatus(r.id, "paid",
@@ -227,14 +271,14 @@ export class ReservationService {
         buildStatusChange({ from: "paid", to: "confirmed", origin: "webhook", externalEvent: `mp:${payment.id}`, technicalId: randomUUID() }));
     } catch (e) {
       if (e instanceof ConflictError) {
-        await this.repo.logNotification({ reservationId: r.id, template: "payment_after_conflict", status: "queued" });
+        await this.notify("payment_after_conflict", { reservationId: r.id });
         await this.repo.markWebhookProcessed(params.eventKey);
         return { handled: true, status: "mismatch", detail: "conflito de disponibilidade após pagamento — tratar manualmente" };
       }
       throw e;
     }
 
-    await this.repo.logNotification({ reservationId: r.id, template: "reservation_confirmed", recipient: r.guest.email, status: "queued" });
+    await this.notify("reservation_confirmed", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, trackUrl: this.trackUrl(r.publicToken) } });
     await this.repo.markWebhookProcessed(params.eventKey);
     return { handled: true, status: "confirmed", detail: r.id };
   }
@@ -247,7 +291,7 @@ export class ReservationService {
       if ((r.status === "awaiting_payment" || r.status === "payment_pending") && r.paymentExpiresAt && new Date(r.paymentExpiresAt) < now) {
         await this.repo.transitionStatus(r.id, "expired",
           buildStatusChange({ from: r.status, to: "expired", origin: "system", technicalId: randomUUID(), note: "Prazo de pagamento expirado" }));
-        await this.repo.logNotification({ reservationId: r.id, template: "reservation_expired", recipient: r.guest.email, status: "queued" });
+        await this.notify("reservation_expired", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode } });
         expired.push(r.id);
       }
     }

@@ -120,8 +120,9 @@ open(os.path.join(BASE, "index.html"), "w", encoding="utf-8").write(wrap(embed))
 print(f"WROTE index.html (self-contained)  {os.path.getsize(os.path.join(BASE,'index.html'))/1e6:.2f} MB")
 
 # ---------- SITE flavor (Netlify, external images) ----------
+# Não apagamos a pasta (rmtree é frágil no Windows e desnecessário): apenas
+# garantimos os diretórios e sobrescrevemos os arquivos gerados.
 SITE = os.path.join(BASE, "site")
-if os.path.exists(SITE): shutil.rmtree(SITE)
 os.makedirs(os.path.join(SITE, "assets", "img"), exist_ok=True)
 for i, b in BYTES.items():
     open(os.path.join(SITE, "assets", "img", f"{i:03d}.jpg"), "wb").write(b)

@@ -99,6 +99,8 @@ export interface Repository {
   // iCal
   replaceIcalEvents(events: BusyPeriod[], sourceUrl: string | null): Promise<void>;
   logIcalSync(log: { success: boolean; eventsFound: number; periodsImported: number; durationMs: number; error?: string | null; sourceUrl?: string | null }): Promise<void>;
+  /** Timestamp da última sincronização BEM-SUCEDIDA do iCal (para throttle/cache). */
+  lastIcalSyncAt(): Promise<Date | null>;
 
   // pagamentos
   upsertPaymentTx(tx: PaymentTxRecord): Promise<void>;

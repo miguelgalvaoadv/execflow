@@ -1,14 +1,15 @@
 import { getContext } from "../../src/runtime/context.js";
 import { isValidLocalDate, nights } from "../../src/domain/dates.js";
-import { json, methodGuard, readJson, requireAdmin, str } from "./_shared.js";
+import { authenticateAdmin } from "../../src/auth/admin.js";
+import { json, methodGuard, readJson, str } from "./_shared.js";
 
 /** Cria ou remove bloqueios manuais de datas. */
 export default async (req: Request): Promise<Response> => {
   const guard = methodGuard(req, ["POST"]);
   if (guard) return guard;
   const { cfg, repo } = getContext();
-  const auth = requireAdmin(req, cfg.admin.sessionSecret);
-  if (auth instanceof Response) return auth;
+  const auth = await authenticateAdmin(req, cfg);
+  if (!auth) return json({ error: "Não autorizado" }, 401);
 
   const body = await readJson<{ checkIn?: string; checkOut?: string; reason?: string; removeId?: string }>(req);
 

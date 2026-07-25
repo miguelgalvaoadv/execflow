@@ -1,13 +1,14 @@
 import { getContext } from "../../src/runtime/context.js";
 import { ConflictError } from "../../src/db/repository.js";
-import { json, methodGuard, readJson, requireAdmin, str } from "./_shared.js";
+import { authenticateAdmin } from "../../src/auth/admin.js";
+import { json, methodGuard, readJson, str } from "./_shared.js";
 
 export default async (req: Request): Promise<Response> => {
   const guard = methodGuard(req, ["POST"]);
   if (guard) return guard;
   const { cfg, repo, service } = getContext();
-  const auth = requireAdmin(req, cfg.admin.sessionSecret);
-  if (auth instanceof Response) return auth;
+  const auth = await authenticateAdmin(req, cfg);
+  if (!auth) return json({ error: "Não autorizado" }, 401);
 
   const token = str((await readJson<{ token?: string }>(req))?.token, 200);
   const r = token ? await repo.getReservationByToken(token) : null;

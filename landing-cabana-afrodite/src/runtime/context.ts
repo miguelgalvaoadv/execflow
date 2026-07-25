@@ -9,6 +9,8 @@ import { InMemoryRepository } from "../db/memory.js";
 import { SupabaseRepository } from "../db/supabase.js";
 import { createPaymentProvider } from "../payments/mercadopago.js";
 import { ReservationService } from "../services/reservation-service.js";
+import { ensureFreshIcal } from "../services/ical-sync.js";
+import { createEmailProvider } from "../email/provider.js";
 import type { Repository } from "../db/repository.js";
 
 let cached: { cfg: AppConfig; repo: Repository; service: ReservationService } | null = null;
@@ -23,6 +25,7 @@ export function getContext(env: NodeJS.ProcessEnv = process.env) {
       : new SupabaseRepository(cfg.supabase.url!, cfg.supabase.serviceRoleKey!);
 
   const payments = createPaymentProvider({ mode: cfg.mode, accessToken: cfg.mp.accessToken });
+  const email = createEmailProvider({ provider: cfg.email.provider, apiKey: cfg.email.apiKey });
 
   const service = new ReservationService({
     repo,
@@ -33,6 +36,9 @@ export function getContext(env: NodeJS.ProcessEnv = process.env) {
       mode: cfg.mode,
       webhookSecret: cfg.mp.webhookSecret,
     },
+    refreshIcal: async () => { await ensureFreshIcal(repo, cfg); },
+    email,
+    emailFrom: cfg.email.from,
   });
 
   cached = { cfg, repo, service };

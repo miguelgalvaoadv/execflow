@@ -1,5 +1,6 @@
 import { getContext } from "../../src/runtime/context.js";
-import { methodGuard, requireAdmin, json } from "./_shared.js";
+import { authenticateAdmin } from "../../src/auth/admin.js";
+import { methodGuard, json } from "./_shared.js";
 
 function csvCell(v: unknown): string {
   const s = v == null ? "" : String(v);
@@ -10,8 +11,8 @@ export default async (req: Request): Promise<Response> => {
   const guard = methodGuard(req, ["GET"]);
   if (guard) return guard;
   const { cfg, repo } = getContext();
-  const auth = requireAdmin(req, cfg.admin.sessionSecret);
-  if (auth instanceof Response) return auth;
+  const auth = await authenticateAdmin(req, cfg);
+  if (!auth) return json({ error: "Não autorizado" }, 401);
 
   const rows = await repo.listReservations();
   const header = ["codigo", "status", "check_in", "check_out", "adultos", "criancas", "total_brl", "pago_agora_brl", "hospede", "email", "telefone", "criada_em"];

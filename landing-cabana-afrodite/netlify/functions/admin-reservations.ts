@@ -1,13 +1,14 @@
 import { getContext } from "../../src/runtime/context.js";
-import { json, methodGuard, requireAdmin } from "./_shared.js";
+import { authenticateAdmin } from "../../src/auth/admin.js";
+import { json, methodGuard } from "./_shared.js";
 import type { ReservationStatus } from "../../src/domain/reservation-state.js";
 
 export default async (req: Request): Promise<Response> => {
   const guard = methodGuard(req, ["GET"]);
   if (guard) return guard;
   const { cfg, repo } = getContext();
-  const auth = requireAdmin(req, cfg.admin.sessionSecret);
-  if (auth instanceof Response) return auth;
+  const auth = await authenticateAdmin(req, cfg);
+  if (!auth) return json({ error: "Não autorizado" }, 401);
 
   const status = new URL(req.url).searchParams.get("status") as ReservationStatus | null;
   const list = await repo.listReservations(status ? { status } : undefined);
