@@ -209,6 +209,18 @@ export class SupabaseRepository implements Repository {
     }, { onConflict: "payment_id" });
   }
 
+  async latestPaymentForReservation(reservationId: string): Promise<PaymentTxRecord | null> {
+    const { data } = await this.db.from("payment_transactions")
+      .select("*").eq("reservation_id", reservationId).not("payment_id", "is", null)
+      .order("created_at", { ascending: false }).limit(1).maybeSingle();
+    if (!data) return null;
+    return {
+      reservationId, provider: data.provider, preferenceId: data.preference_id, paymentId: data.payment_id,
+      status: data.status, amountCents: data.amount_cents, currency: data.currency, liveMode: data.live_mode,
+      externalReference: data.external_reference, raw: data.raw,
+    };
+  }
+
   async recordWebhookEvent(eventKey: string, signatureOk: boolean, payload: unknown): Promise<WebhookRecordResult> {
     const { data: existing } = await this.db.from("payment_webhook_events").select("processed").eq("provider", "mercadopago").eq("event_key", eventKey).limit(1).maybeSingle();
     if (existing) return { alreadyProcessed: Boolean(existing.processed) };

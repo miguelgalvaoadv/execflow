@@ -9,7 +9,7 @@ import { InMemoryRepository } from "../db/memory.js";
 import { SupabaseRepository } from "../db/supabase.js";
 import { createPaymentProvider } from "../payments/mercadopago.js";
 import { ReservationService } from "../services/reservation-service.js";
-import { ensureFreshIcal } from "../services/ical-sync.js";
+import { requireFreshIcal } from "../services/ical-sync.js";
 import { createEmailProvider } from "../email/provider.js";
 import type { Repository } from "../db/repository.js";
 
@@ -36,7 +36,7 @@ export function getContext(env: NodeJS.ProcessEnv = process.env) {
       mode: cfg.mode,
       webhookSecret: cfg.mp.webhookSecret,
     },
-    refreshIcal: async () => { await ensureFreshIcal(repo, cfg); },
+    ensureIcalFresh: () => requireFreshIcal(repo, cfg),
     email,
     emailFrom: cfg.email.from,
   });

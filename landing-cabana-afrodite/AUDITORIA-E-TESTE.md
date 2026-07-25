@@ -20,15 +20,33 @@ O serviço consulta o iCal do Airbnb (`AIRBNB_ICAL_URL`) com **cache (5 min)** e
 Código: `src/services/ical-sync.ts` (`syncAirbnbIcal`, `ensureFreshIcal`) + integração em
 `src/services/reservation-service.ts` (`syncIcal()` best-effort).
 
-### Como o sistema reage
+### Política: fail-**safe** na consulta pública, fail-**closed** nos pontos críticos
+
+**Consulta pública de disponibilidade** (fail-safe): usa o último estado válido, **mostra a
+data/hora da última sincronização** e **avisa quando os dados estão desatualizados**; a
+disponibilidade é apresentada como **sujeita à confirmação** (não garantida).
+
+**Pontos críticos** (aprovação · criação da preferência · confirmação pós-webhook · qualquer
+transformação em bloqueio efetivo) — **fail-closed**: exigem uma sincronização **bem-sucedida
+e recente** (dentro de `ICAL_MAX_STALENESS_MINUTES`, DEMO = 10 min). Se a sincronização
+falhar ou o último estado válido for mais antigo que o limite:
+- **não aprova / não gera pagamento / não confirma automaticamente**;
+- informa claramente o admin (`ICAL_STALE`, HTTP 423);
+- só prossegue com **ação administrativa explícita** após conferência manual no Airbnb
+  (`overrideStaleIcal: true` + justificativa), **registrada no histórico** (`origin=admin`,
+  nota "Decisão manual…");
+- **nunca oculta a falha**.
+
 | Situação | Comportamento |
 |---|---|
-| iCal indisponível | timeout (15s) + 1 retry; **mantém o último estado bom** (não apaga eventos); registra erro em `ical_sync_logs`. |
-| iCal lento | abortado por timeout; fluxo segue com o cache (fail-safe). |
+| iCal indisponível/lento | timeout (15s) + 1 retry; mantém último estado bom para a **consulta pública**; **bloqueia** aprovar/pagar/confirmar (fail-closed). |
 | Evento alterado | parser resolve por `UID`/`SEQUENCE` (o mais novo vence). |
 | Evento cancelado | excluído dos períodos ocupados (`STATUS:CANCELLED`). |
-| Nova reserva no Airbnb durante o pagamento | re-sync antes de confirmar → exclusion check detecta → webhook retorna `mismatch` "conflito após pagamento — tratar manualmente". |
-| Pagamento aprovado após a data ficar indisponível | **não confirma automaticamente**; sinaliza para análise; pagamento fica registrado para reembolso/tratamento manual. |
+| Nova reserva no Airbnb durante o pagamento | re-sync antes de confirmar → exclusion check detecta → `mismatch` (tratar manualmente). |
+| Pagamento aprovado com iCal desatualizado | **não confirma**; pagamento **registrado**, reserva permanece `awaiting_payment` (já bloqueada desde a aprovação), admin confirma via `POST /api/admin/confirm` após conferir o Airbnb. Reservas com pagamento recebido **nunca expiram** automaticamente. |
+
+Confirmação manual: `POST /api/admin/confirm` (`admin-confirm`) re-valida o pagamento na API,
+exige iCal fresco **ou** `overrideStaleIcal` + justificativa. Cobertura: `tests/failclosed.test.ts` (8+1).
 
 > Limitação: o Airbnb pode demorar horas para reimportar o `.ics` do site. Após cada
 > confirmação, o painel deve avisar o admin a bloquear a data no Airbnb imediatamente.
@@ -139,6 +157,7 @@ APP_ENV=sandbox
 SITE_URL=https://SEU-PREVIEW.netlify.app
 TIMEZONE=America/Sao_Paulo
 RESERVATION_PAYMENT_EXPIRATION_HOURS=24
+ICAL_MAX_STALENESS_MINUTES=10
 AIRBNB_ICAL_URL=<link exportar calendário do Airbnb>   (secreto)
 ICAL_EXPORT_TOKEN=<gerar: node -e "console.log(require('crypto').randomBytes(24).toString('hex'))">
 MERCADO_PAGO_ACCESS_TOKEN=<TEST-...>       (secreto)

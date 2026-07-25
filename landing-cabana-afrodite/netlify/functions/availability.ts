@@ -24,6 +24,8 @@ export default async (req: Request): Promise<Response> => {
       available: avail.available,
       bookable: avail.available && quote.issues.length === 0,
       issues: quote.issues,
+      icalLastSyncAt: avail.icalLastSyncAt,
+      icalStale: avail.icalStale,
       quote: {
         nights: quote.nights,
         nightlyGroups: quote.nightlyGroups,

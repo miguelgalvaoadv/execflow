@@ -1,5 +1,5 @@
 import { getContext } from "../../src/runtime/context.js";
-import { ValidationError, NotFoundError } from "../../src/services/reservation-service.js";
+import { ValidationError, NotFoundError, SyncStaleError } from "../../src/services/reservation-service.js";
 import { json, methodGuard, readJson, rateLimit, clientIp, str } from "./_shared.js";
 
 /** Gera o link de pagamento (Checkout Pro) para uma reserva já aprovada. */
@@ -19,6 +19,9 @@ export default async (req: Request): Promise<Response> => {
     const pref = await service.createPaymentPreference(r.id);
     return json({ initPoint: pref.initPoint });
   } catch (e) {
+    if (e instanceof SyncStaleError) {
+      return json({ error: "Estamos confirmando a disponibilidade com o calendário. Tente novamente em instantes ou fale com o anfitrião.", code: "ICAL_STALE" }, 423);
+    }
     if (e instanceof ValidationError) return json({ error: e.message }, 422);
     if (e instanceof NotFoundError) return json({ error: e.message }, 404);
     return json({ error: "Não foi possível gerar o pagamento." }, 500);

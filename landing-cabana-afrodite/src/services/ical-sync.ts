@@ -79,6 +79,32 @@ export async function ensureFreshIcal(repo: Repository, cfg: AppConfig, maxAgeMs
   return syncAirbnbIcal(repo, cfg.airbnbIcalUrl, { force: false, maxAgeMs });
 }
 
+export interface IcalFreshness {
+  /** true = seguro prosseguir (dados frescos, ou não há calendário externo). */
+  ok: boolean;
+  lastSyncAt: Date | null;
+  reason: "no-external-calendar" | "fresh" | "stale" | "never-synced";
+  staleMs?: number;
+}
+
+/**
+ * FAIL-CLOSED: exigido antes de operações que criam bloqueio efetivo da data
+ * (aprovação, preferência, confirmação). Tenta sincronizar e só retorna ok:true
+ * se a última sincronização BEM-SUCEDIDA estiver dentro de icalMaxStalenessMs.
+ * Quando não há calendário externo (mock/sem URL), retorna ok:true (nada a falhar).
+ */
+export async function requireFreshIcal(repo: Repository, cfg: AppConfig): Promise<IcalFreshness> {
+  if (cfg.mode === "mock" || !cfg.airbnbIcalUrl) {
+    return { ok: true, lastSyncAt: null, reason: "no-external-calendar" };
+  }
+  await syncAirbnbIcal(repo, cfg.airbnbIcalUrl, { force: false, maxAgeMs: cfg.icalMaxStalenessMs });
+  const last = await repo.lastIcalSyncAt();
+  if (!last) return { ok: false, lastSyncAt: null, reason: "never-synced" };
+  const staleMs = Date.now() - last.getTime();
+  if (staleMs <= cfg.icalMaxStalenessMs) return { ok: true, lastSyncAt: last, reason: "fresh", staleMs };
+  return { ok: false, lastSyncAt: last, reason: "stale", staleMs };
+}
+
 /** Reseta o throttle (apenas testes). */
 export function _resetThrottle() {
   lastAttemptMs = 0;

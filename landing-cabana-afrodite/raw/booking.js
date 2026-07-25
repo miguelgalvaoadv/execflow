@@ -144,7 +144,18 @@
     if (pay !== q.totalCents) lines += line("A pagar agora", brl(pay));
 
     sum.className = "bk-summary show";
-    sum.innerHTML = '<div class="bk-msg ok">Datas disponíveis! Revise os valores e envie sua solicitação.</div>' + lines;
+    var upd = "";
+    if (data.icalLastSyncAt) {
+      var d = new Date(data.icalLastSyncAt);
+      upd = "Disponibilidade atualizada em " + d.toLocaleString("pt-BR");
+    }
+    if (data.icalStale) {
+      upd = '<strong>Atenção:</strong> os dados de disponibilidade podem estar desatualizados. ' +
+        "A confirmação final é feita pelo anfitrião." + (upd ? "<br>" + upd : "");
+    }
+    var note = '<p class="bk-note">Disponibilidade sujeita à confirmação do anfitrião — não é garantida até a aprovação.' +
+      (upd ? "<br>" + upd : "") + "</p>";
+    sum.innerHTML = '<div class="bk-msg ' + (data.icalStale ? "err" : "ok") + '">Datas disponíveis! Revise os valores e envie sua solicitação.</div>' + lines + note;
     renderGuest();
   }
   function line(l, v) { return '<div class="bk-line"><span>' + l + "</span><b>" + v + "</b></div>"; }

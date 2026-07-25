@@ -9,6 +9,9 @@ export interface AppConfig {
   siteUrl: string;
   timezone: string;
   paymentExpirationHours: number;
+  /** Idade máxima aceitável (ms) da última sincronização iCal bem-sucedida nos
+   *  pontos críticos (fail-closed). DEMO: 10 min. Editável por ICAL_MAX_STALENESS_MINUTES. */
+  icalMaxStalenessMs: number;
   airbnbIcalUrl: string | null;
   icalExportToken: string;
   mp: { accessToken: string | null; publicKey: string | null; webhookSecret: string | null };
@@ -38,6 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     siteUrl: env.SITE_URL || "http://localhost:8888",
     timezone: env.TIMEZONE || "America/Sao_Paulo",
     paymentExpirationHours: Number(env.RESERVATION_PAYMENT_EXPIRATION_HOURS ?? 24),
+    icalMaxStalenessMs: Number(env.ICAL_MAX_STALENESS_MINUTES ?? 10) * 60_000,
     airbnbIcalUrl: env.AIRBNB_ICAL_URL || null,
     icalExportToken: env.ICAL_EXPORT_TOKEN || "dev-token",
     mp: {

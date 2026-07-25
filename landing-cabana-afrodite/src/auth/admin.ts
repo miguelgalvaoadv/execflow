@@ -37,9 +37,17 @@ export async function authenticateAdmin(req: Request, cfg: AppConfig): Promise<A
   const client = createClient(cfg.supabase.url, cfg.supabase.anonKey, { auth: { persistSession: false } });
   const { data, error } = await client.auth.getUser(token);
   if (error || !data.user?.email) return null;
-
   const email = data.user.email.toLowerCase();
+
+  // 1) fallback documentado: variável ADMIN_EMAIL (v1 com um único admin).
   const allowed = (cfg.admin.email || "").toLowerCase();
-  if (!allowed || email !== allowed) return null; // apenas o admin configurado
-  return { email };
+  if (allowed && email === allowed) return { email };
+
+  // 2) lista de administradores no banco (admin_users ativos) — permite múltiplos.
+  if (cfg.supabase.serviceRoleKey) {
+    const svc = createClient(cfg.supabase.url, cfg.supabase.serviceRoleKey, { auth: { persistSession: false } });
+    const { data: row } = await svc.from("admin_users").select("email").eq("email", email).eq("active", true).limit(1).maybeSingle();
+    if (row) return { email };
+  }
+  return null;
 }

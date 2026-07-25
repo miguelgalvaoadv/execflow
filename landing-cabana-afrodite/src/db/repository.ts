@@ -104,6 +104,8 @@ export interface Repository {
 
   // pagamentos
   upsertPaymentTx(tx: PaymentTxRecord): Promise<void>;
+  /** Último pagamento registrado para a reserva (para confirmação manual). */
+  latestPaymentForReservation(reservationId: string): Promise<PaymentTxRecord | null>;
   recordWebhookEvent(eventKey: string, signatureOk: boolean, payload: unknown): Promise<WebhookRecordResult>;
   markWebhookProcessed(eventKey: string): Promise<void>;
 

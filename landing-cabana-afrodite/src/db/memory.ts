@@ -135,6 +135,11 @@ export class InMemoryRepository implements Repository {
     else this.payments.push({ ...tx });
   }
 
+  async latestPaymentForReservation(reservationId: string): Promise<PaymentTxRecord | null> {
+    const matches = this.payments.filter((p) => p.reservationId === reservationId && p.paymentId);
+    return matches.length ? { ...matches[matches.length - 1]! } : null;
+  }
+
   async recordWebhookEvent(eventKey: string, signatureOk: boolean, payload: unknown): Promise<WebhookRecordResult> {
     const existing = this.webhooks.get(eventKey);
     if (existing) return { alreadyProcessed: existing.processed };

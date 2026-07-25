@@ -10,6 +10,7 @@ import { publicToken, externalReference, friendlyCode } from "../domain/tokens.j
 import { ConflictError, type Repository, type GuestData, type ReservationRecord } from "../db/repository.js";
 import type { PaymentProvider } from "../payments/types.js";
 import type { EmailProvider } from "../email/provider.js";
+import type { IcalFreshness } from "./ical-sync.js";
 import { renderTemplate, type TemplateData } from "../email/templates.js";
 import { randomUUID } from "node:crypto";
 
@@ -25,8 +26,8 @@ export interface ServiceDeps {
   payments: PaymentProvider;
   config: ServiceConfig;
   now?: () => Date;
-  /** Atualiza o iCal do Airbnb (com cache/throttle). Best-effort; no-op em mock. */
-  refreshIcal?: () => Promise<void>;
+  /** Sincroniza o Airbnb e informa o frescor (cache/throttle). No-op ok em mock/sem URL. */
+  ensureIcalFresh?: () => Promise<IcalFreshness>;
   email?: EmailProvider;
   emailFrom?: string;
 }
@@ -41,7 +42,7 @@ export interface RequestInput {
 
 export interface WebhookOutcome {
   handled: boolean;
-  status: "confirmed" | "already_processed" | "invalid_signature" | "rejected" | "mismatch" | "ignored" | "not_found";
+  status: "confirmed" | "already_processed" | "invalid_signature" | "rejected" | "mismatch" | "ignored" | "not_found" | "stale_needs_manual";
   detail?: string;
 }
 
@@ -50,7 +51,7 @@ export class ReservationService {
   private payments: PaymentProvider;
   private config: ServiceConfig;
   private now: () => Date;
-  private refreshIcal: () => Promise<void>;
+  private ensureIcalFresh: () => Promise<IcalFreshness>;
   private email?: EmailProvider;
   private emailFrom: string;
 
@@ -59,14 +60,26 @@ export class ReservationService {
     this.payments = deps.payments;
     this.config = deps.config;
     this.now = deps.now ?? (() => new Date());
-    this.refreshIcal = deps.refreshIcal ?? (async () => {});
+    this.ensureIcalFresh = deps.ensureIcalFresh ?? (async () => ({ ok: true, lastSyncAt: null, reason: "no-external-calendar" }));
     this.email = deps.email;
     this.emailFrom = deps.emailFrom ?? "Cabana Afrodite <reservas@exemplo.com>";
   }
 
-  /** Sincroniza o Airbnb sem quebrar o fluxo se falhar (dados em cache seguem válidos). */
-  private async syncIcal(): Promise<void> {
-    try { await this.refreshIcal(); } catch { /* mantém cache; erro já registrado no log de sync */ }
+  /** Frescor do iCal, best-effort (nunca lança — para pontos não-críticos). */
+  private async icalStatus(): Promise<IcalFreshness> {
+    try { return await this.ensureIcalFresh(); }
+    catch { return { ok: false, lastSyncAt: null, reason: "never-synced" }; }
+  }
+
+  /** FAIL-CLOSED: exige iCal fresco antes de criar bloqueio efetivo, salvo override admin. */
+  private async requireFresh(override?: boolean): Promise<IcalFreshness> {
+    const f = await this.icalStatus();
+    if (!f.ok && !override) throw new SyncStaleError(f);
+    return f;
+  }
+
+  private staleNote(f: IcalFreshness, adminUser?: string): string {
+    return `Decisão manual com iCal ${f.reason}${f.lastSyncAt ? ` (última sync ${f.lastSyncAt.toISOString()})` : ""}${adminUser ? ` por ${adminUser}` : ""}`;
   }
 
   private trackUrl(token: string): string {
@@ -93,17 +106,22 @@ export class ReservationService {
     return quote(input, cfg);
   }
 
-  async checkAvailability(checkIn: string, checkOut: string): Promise<{ available: boolean; conflicts: number }> {
-    await this.syncIcal();
+  async checkAvailability(checkIn: string, checkOut: string): Promise<{ available: boolean; conflicts: number; icalLastSyncAt: string | null; icalStale: boolean }> {
+    const fresh = await this.icalStatus(); // best-effort: consulta pública usa último estado válido
     const cfg = await this.repo.getActivePricingConfig();
     const busy = await this.repo.listBusyPeriods();
     const conflicts = findConflicts({ checkIn, checkOut }, busy, cfg.prepBufferNights);
-    return { available: conflicts.length === 0, conflicts: conflicts.length };
+    return {
+      available: conflicts.length === 0,
+      conflicts: conflicts.length,
+      icalLastSyncAt: fresh.lastSyncAt ? fresh.lastSyncAt.toISOString() : null,
+      icalStale: !fresh.ok && fresh.reason !== "no-external-calendar",
+    };
   }
 
   /** Passos 1–15 do fluxo: cria a solicitação como pending_approval. */
   async requestReservation(input: RequestInput): Promise<{ reservation: ReservationRecord; quote: Quote }> {
-    await this.syncIcal();
+    await this.icalStatus(); // best-effort: pending_approval não bloqueia; admin revalida na aprovação
     const cfg = await this.repo.getActivePricingConfig();
     const q = quote(input, cfg);
     if (!isBookable(q)) {
@@ -146,17 +164,21 @@ export class ReservationService {
   }
 
   /** Passos 16–18: admin aprova após re-checar disponibilidade. */
-  async approveReservation(id: string, adminUser: string): Promise<ReservationRecord> {
-    await this.syncIcal();
+  async approveReservation(id: string, adminUser: string, opts: { overrideStaleIcal?: boolean; overrideNote?: string } = {}): Promise<ReservationRecord> {
+    // FAIL-CLOSED: exige iCal fresco (a aprovação transforma a data em bloqueio efetivo).
+    const fresh = await this.requireFresh(opts.overrideStaleIcal);
     const cfg = await this.repo.getActivePricingConfig();
     const r = await this.repo.getReservationById(id);
     if (!r) throw new NotFoundError("Reserva não encontrada.");
     const expiresAt = new Date(this.now().getTime() + cfg.payment.expirationHours * 3600_000).toISOString();
+    const note = fresh.ok
+      ? "Aprovada; aguardando pagamento"
+      : `Aprovada MANUALMENTE apesar de falha de sincronização. ${this.staleNote(fresh, adminUser)}. ${opts.overrideNote ?? ""}`.trim();
     // transitionStatus reforça a ausência de sobreposição de forma atômica
     await this.repo.transitionStatus(
       id,
       "awaiting_payment",
-      buildStatusChange({ from: r.status, to: "awaiting_payment", origin: "admin", adminUser, technicalId: randomUUID(), note: "Aprovada; aguardando pagamento" }),
+      buildStatusChange({ from: r.status, to: "awaiting_payment", origin: "admin", adminUser, technicalId: randomUUID(), note }),
     );
     await this.repo.setReservationExpiry(id, expiresAt);
     await this.notify("request_approved", { to: r.guest.email, reservationId: id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, payUrl: this.trackUrl(r.publicToken), trackUrl: this.trackUrl(r.publicToken) } });
@@ -176,7 +198,7 @@ export class ReservationService {
 
   /** Passos 19–20: cria a preferência de pagamento (só após aprovação). */
   async createPaymentPreference(id: string): Promise<{ initPoint: string; preferenceId: string }> {
-    await this.syncIcal();
+    await this.requireFresh(false); // FAIL-CLOSED: não gera link de pagamento com iCal desatualizado
     const r = await this.repo.getReservationById(id);
     if (!r) throw new NotFoundError("Reserva não encontrada.");
     if (r.status !== "awaiting_payment") throw new ValidationError("Reserva não está aguardando pagamento.");
@@ -259,11 +281,18 @@ export class ReservationService {
       externalReference: payment.externalReference, raw: payment.raw,
     });
 
-    // Re-sincroniza o Airbnb ANTES de confirmar: se surgiu uma reserva nova no
-    // Airbnb durante o pagamento, o exclusion check abaixo detecta o conflito.
-    await this.syncIcal();
+    // FAIL-CLOSED: exige iCal fresco antes de confirmar. Se a sincronização falhar
+    // ou estiver desatualizada, NÃO confirma automaticamente. O pagamento fica
+    // registrado, a reserva permanece bloqueada (awaiting_payment, desde a aprovação)
+    // e o admin confirma manualmente após conferir o Airbnb. Nunca oculta a falha.
+    const fresh = await this.icalStatus();
+    if (!fresh.ok) {
+      await this.notify("payment_needs_manual", { reservationId: r.id });
+      await this.repo.markWebhookProcessed(params.eventKey);
+      return { handled: true, status: "stale_needs_manual", detail: `iCal ${fresh.reason} — pagamento recebido, confirmar manualmente` };
+    }
 
-    // paid -> confirmed (transitionStatus reforça anti-sobreposição).
+    // paid -> confirmed (transitionStatus reforça anti-sobreposição, agora com dados frescos).
     try {
       await this.repo.transitionStatus(r.id, "paid",
         buildStatusChange({ from: r.status, to: "paid", origin: "webhook", externalEvent: `mp:${payment.id}`, technicalId: randomUUID() }));
@@ -283,12 +312,48 @@ export class ReservationService {
     return { handled: true, status: "confirmed", detail: r.id };
   }
 
+  /**
+   * Confirmação MANUAL pelo admin de uma reserva cujo pagamento foi recebido mas a
+   * confirmação automática foi retida por falha de sincronização do iCal.
+   * Re-valida o pagamento na API, exige iCal fresco (ou override explícito) e registra
+   * a decisão manual no histórico.
+   */
+  async confirmPaymentManually(id: string, adminUser: string, opts: { overrideStaleIcal?: boolean; note?: string } = {}): Promise<ReservationRecord> {
+    const r = await this.repo.getReservationById(id);
+    if (!r) throw new NotFoundError("Reserva não encontrada.");
+    if (r.status !== "awaiting_payment" && r.status !== "payment_pending" && r.status !== "paid") {
+      throw new ValidationError(`Reserva não está em estado confirmável manualmente (${r.status}).`);
+    }
+    // Re-valida o pagamento na API do provedor.
+    const tx = await this.repo.latestPaymentForReservation(id);
+    if (!tx?.paymentId) throw new ValidationError("Nenhum pagamento registrado para esta reserva.");
+    const payment = await this.payments.getPayment(tx.paymentId);
+    if (payment.status !== "approved") throw new ValidationError(`Pagamento não aprovado (status=${payment.status}).`);
+    if (payment.currency !== r.currency || payment.amountCents !== r.payNowCents) {
+      throw new ValidationError(`Valor divergente: esperado ${r.payNowCents} ${r.currency}, pago ${payment.amountCents} ${payment.currency}.`);
+    }
+    const fresh = await this.requireFresh(opts.overrideStaleIcal);
+    const decisionNote = `Confirmação MANUAL por ${adminUser}. ${this.staleNote(fresh, adminUser)}. ${opts.note ?? ""}`.trim();
+
+    if (r.status === "awaiting_payment" || r.status === "payment_pending") {
+      await this.repo.transitionStatus(r.id, "paid",
+        buildStatusChange({ from: r.status, to: "paid", origin: "admin", adminUser, externalEvent: `mp:${payment.id}`, technicalId: randomUUID(), note: decisionNote }));
+    }
+    await this.repo.transitionStatus(r.id, "confirmed",
+      buildStatusChange({ from: "paid", to: "confirmed", origin: "admin", adminUser, externalEvent: `mp:${payment.id}`, technicalId: randomUUID(), note: decisionNote }));
+    await this.notify("reservation_confirmed", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, trackUrl: this.trackUrl(r.publicToken) } });
+    return { ...r, status: "confirmed" };
+  }
+
   /** Passo 15 (expiração): libera reservas aprovadas e não pagas no prazo. */
   async expireOverdue(): Promise<string[]> {
     const now = this.now();
     const expired: string[] = [];
     for (const r of await this.repo.listReservations()) {
       if ((r.status === "awaiting_payment" || r.status === "payment_pending") && r.paymentExpiresAt && new Date(r.paymentExpiresAt) < now) {
+        // NUNCA expira uma reserva com pagamento já recebido (aguardando confirmação manual).
+        const tx = await this.repo.latestPaymentForReservation(r.id);
+        if (tx?.status === "approved") continue;
         await this.repo.transitionStatus(r.id, "expired",
           buildStatusChange({ from: r.status, to: "expired", origin: "system", technicalId: randomUUID(), note: "Prazo de pagamento expirado" }));
         await this.notify("reservation_expired", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode } });
@@ -301,3 +366,9 @@ export class ReservationService {
 
 export class ValidationError extends Error { constructor(m: string) { super(m); this.name = "ValidationError"; } }
 export class NotFoundError extends Error { constructor(m: string) { super(m); this.name = "NotFoundError"; } }
+export class SyncStaleError extends Error {
+  constructor(public freshness: IcalFreshness) {
+    super(`Sincronização do Airbnb indisponível ou desatualizada (${freshness.reason}). Confira o Airbnb e confirme manualmente.`);
+    this.name = "SyncStaleError";
+  }
+}
