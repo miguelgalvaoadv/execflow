@@ -8,3 +8,13 @@ coverage/
 *.log
 .DS_Store
 raw/pdf-img/
+
+# --- Saídas de build geradas por raw/build.py (regeneráveis; não versionar) ---
+/index.html          # brochura offline self-contained (12MB) — gerada
+/artifact.html       # corpo p/ Artifact — gerado
+/site/netlify.toml   # redundante com o netlify.toml da raiz
+
+# --- Imagens originais em full-res (44MB) — reproduzíveis via raw/download_photos.py ---
+# (as versões comprimidas usadas pela landing ficam versionadas em site/assets/img)
+/assets/img/airbnb/
+
