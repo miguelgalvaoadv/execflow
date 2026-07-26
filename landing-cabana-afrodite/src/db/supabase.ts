@@ -202,11 +202,24 @@ export class SupabaseRepository implements Repository {
   }
 
   async upsertPaymentTx(tx: PaymentTxRecord): Promise<void> {
-    await this.db.from("payment_transactions").upsert({
-      reservation_id: tx.reservationId || null, provider: tx.provider, preference_id: tx.preferenceId ?? null,
+    // Sem reservation_id não há o que auditar (coluna é NOT NULL); ignora.
+    if (!tx.reservationId) return;
+    const row = {
+      reservation_id: tx.reservationId, provider: tx.provider, preference_id: tx.preferenceId ?? null,
       payment_id: tx.paymentId ?? null, status: tx.status ?? null, amount_cents: tx.amountCents ?? null,
       currency: tx.currency ?? "BRL", live_mode: tx.liveMode ?? null, external_reference: tx.externalReference ?? null, raw: tx.raw ?? null,
-    }, { onConflict: "payment_id" });
+    };
+    // Upsert manual (o índice único de payment_id é parcial e não serve p/ onConflict).
+    if (tx.paymentId) {
+      const { data: existing } = await this.db.from("payment_transactions").select("id").eq("payment_id", tx.paymentId).limit(1).maybeSingle();
+      if (existing) {
+        const { error } = await this.db.from("payment_transactions").update(row).eq("id", existing.id);
+        if (error) throw new Error(`upsertPaymentTx(update): ${error.message}`);
+        return;
+      }
+    }
+    const { error } = await this.db.from("payment_transactions").insert(row);
+    if (error) throw new Error(`upsertPaymentTx(insert): ${error.message}`);
   }
 
   async latestPaymentForReservation(reservationId: string): Promise<PaymentTxRecord | null> {
