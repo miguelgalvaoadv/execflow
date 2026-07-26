@@ -137,14 +137,28 @@ export class RealMercadoPago implements PaymentProvider {
   }
 }
 
+export class PaymentNotConfiguredError extends Error {
+  constructor() {
+    super("Pagamento (Mercado Pago) ainda não configurado neste ambiente.");
+    this.name = "PaymentNotConfiguredError";
+  }
+}
+
+/** Placeholder usado quando o MP ainda não foi configurado: falha só ao ser usado. */
+class NullMercadoPago implements PaymentProvider {
+  constructor(public readonly mode: "sandbox" | "production") {}
+  async createPreference(): Promise<Preference> { throw new PaymentNotConfiguredError(); }
+  async getPayment(): Promise<PaymentInfo> { throw new PaymentNotConfiguredError(); }
+}
+
 export function createPaymentProvider(opts: {
   mode: "mock" | "sandbox" | "production";
   accessToken?: string | null;
   fetchImpl?: typeof fetch;
 }): PaymentProvider {
   if (opts.mode === "mock") return new MockMercadoPago();
-  if (!opts.accessToken) {
-    throw new Error(`MERCADO_PAGO_ACCESS_TOKEN é obrigatório no modo "${opts.mode}".`);
-  }
+  // Sem token em sandbox/prod: não quebra o boot; as rotas de pagamento é que
+  // retornam erro claro (permite subir o preview com Supabase antes do MP).
+  if (!opts.accessToken) return new NullMercadoPago(opts.mode);
   return new RealMercadoPago(opts.mode, opts.accessToken, opts.fetchImpl);
 }

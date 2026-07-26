@@ -67,14 +67,17 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
   };
 
   // Em sandbox/production, exige o mínimo para não quebrar em runtime.
+  // O Mercado Pago é opcional aqui (configurado numa etapa posterior): as rotas
+  // de pagamento retornam erro claro até MERCADO_PAGO_ACCESS_TOKEN estar definido.
   if (mode === "sandbox" || mode === "production") {
-    req(env, "MERCADO_PAGO_ACCESS_TOKEN", mode);
-    req(env, "MERCADO_PAGO_WEBHOOK_SECRET", mode);
     req(env, "SUPABASE_URL", mode);
     req(env, "SUPABASE_ANON_KEY", mode); // Supabase Auth (login do painel)
     req(env, "SUPABASE_SERVICE_ROLE_KEY", mode);
     req(env, "ICAL_EXPORT_TOKEN", mode);
     req(env, "ADMIN_EMAIL", mode); // e-mail autorizado do painel
+    if (mode === "production" && !env.MERCADO_PAGO_ACCESS_TOKEN) {
+      throw new Error('MERCADO_PAGO_ACCESS_TOKEN é obrigatória em produção (pagamentos ativos).');
+    }
   }
   return cfg;
 }

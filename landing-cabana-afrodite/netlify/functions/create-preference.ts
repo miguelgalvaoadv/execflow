@@ -1,5 +1,6 @@
 import { getContext } from "../../src/runtime/context.js";
 import { ValidationError, NotFoundError, SyncStaleError } from "../../src/services/reservation-service.js";
+import { PaymentNotConfiguredError } from "../../src/payments/mercadopago.js";
 import { json, methodGuard, readJson, rateLimit, clientIp, str } from "./_shared.js";
 
 /** Gera o link de pagamento (Checkout Pro) para uma reserva já aprovada. */
@@ -19,6 +20,9 @@ export default async (req: Request): Promise<Response> => {
     const pref = await service.createPaymentPreference(r.id);
     return json({ initPoint: pref.initPoint });
   } catch (e) {
+    if (e instanceof PaymentNotConfiguredError) {
+      return json({ error: "Pagamento online ainda não disponível. Fale com o anfitrião pelo WhatsApp.", code: "PAYMENT_NOT_CONFIGURED" }, 503);
+    }
     if (e instanceof SyncStaleError) {
       return json({ error: "Estamos confirmando a disponibilidade com o calendário. Tente novamente em instantes ou fale com o anfitrião.", code: "ICAL_STALE" }, 423);
     }
