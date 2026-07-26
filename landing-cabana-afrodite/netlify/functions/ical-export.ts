@@ -7,8 +7,9 @@ export default async (req: Request): Promise<Response> => {
   if (req.method !== "GET") return new Response("Método não permitido", { status: 405 });
 
   const { cfg, repo } = getContext();
-  const file = new URL(req.url).searchParams.get("file") || "";
-  const m = /^reservations-(.+)\.ics$/.exec(file);
+  // aceita com ou sem a extensão .ics (o redirect do Netlify pode removê-la)
+  const file = (new URL(req.url).searchParams.get("file") || "").replace(/\.ics$/i, "");
+  const m = /^reservations-(.+)$/.exec(file);
   const token = m?.[1] ?? "";
 
   const expected = cfg.icalExportToken;

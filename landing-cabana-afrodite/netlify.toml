@@ -42,8 +42,8 @@
   to = "/.netlify/functions/mercadopago-webhook"
   status = 200
 [[redirects]]
-  from = "/api/calendar/:file"
-  to = "/.netlify/functions/ical-export?file=:file"
+  from = "/api/calendar/*"
+  to = "/.netlify/functions/ical-export?file=:splat"
   status = 200
 [[redirects]]
   from = "/api/admin/*"
