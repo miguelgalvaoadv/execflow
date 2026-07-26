@@ -48,4 +48,6 @@ export interface PaymentProvider {
   readonly mode: "mock" | "sandbox" | "production";
   createPreference(input: CreatePreferenceInput): Promise<Preference>;
   getPayment(paymentId: string): Promise<PaymentInfo>;
+  /** Reconciliação: busca o pagamento APROVADO mais recente por external_reference (ou null). */
+  findApprovedByExternalRef(externalReference: string): Promise<PaymentInfo | null>;
 }

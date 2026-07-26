@@ -8,7 +8,7 @@ import { findConflicts } from "../domain/availability.js";
 import { buildStatusChange, type ReservationStatus } from "../domain/reservation-state.js";
 import { publicToken, externalReference, friendlyCode } from "../domain/tokens.js";
 import { ConflictError, type Repository, type GuestData, type ReservationRecord } from "../db/repository.js";
-import type { PaymentProvider } from "../payments/types.js";
+import type { PaymentProvider, PaymentInfo } from "../payments/types.js";
 import type { EmailProvider } from "../email/provider.js";
 import type { IcalFreshness } from "./ical-sync.js";
 import { renderTemplate, type TemplateData } from "../email/templates.js";
@@ -268,48 +268,73 @@ export class ReservationService {
     const r = await this.repo.getReservationByExternalRef(payment.externalReference);
     if (!r) return { handled: true, status: "not_found", detail: payment.externalReference };
 
-    // Confere moeda e valor esperado (o que deveria ser pago agora).
+    const outcome = await this.applyApprovedPayment(r, payment, "webhook");
+    await this.repo.markWebhookProcessed(params.eventKey);
+    return { handled: true, status: outcome.status, detail: outcome.detail };
+  }
+
+  /**
+   * Aplica um pagamento APROVADO a uma reserva (usado pelo webhook e pela
+   * reconciliação). Confere valor/moeda, registra a transação, aplica fail-closed
+   * de iCal e confirma (awaiting_payment/payment_pending -> paid -> confirmed).
+   */
+  private async applyApprovedPayment(
+    r: ReservationRecord,
+    payment: PaymentInfo,
+    origin: "webhook" | "system" | "admin",
+  ): Promise<{ status: WebhookOutcome["status"]; detail?: string }> {
     if (payment.currency !== r.currency || payment.amountCents !== r.payNowCents) {
       await this.notify("payment_mismatch", { reservationId: r.id });
-      return { handled: true, status: "mismatch", detail: `esperado ${r.payNowCents} ${r.currency}, recebido ${payment.amountCents} ${payment.currency}` };
+      return { status: "mismatch", detail: `esperado ${r.payNowCents} ${r.currency}, recebido ${payment.amountCents} ${payment.currency}` };
     }
-
-    // Registra a transação de pagamento.
     await this.repo.upsertPaymentTx({
       reservationId: r.id, provider: "mercadopago", paymentId: payment.id, status: payment.status,
       amountCents: payment.amountCents, currency: payment.currency, liveMode: payment.liveMode,
       externalReference: payment.externalReference, raw: payment.raw,
     });
-
-    // FAIL-CLOSED: exige iCal fresco antes de confirmar. Se a sincronização falhar
-    // ou estiver desatualizada, NÃO confirma automaticamente. O pagamento fica
-    // registrado, a reserva permanece bloqueada (awaiting_payment, desde a aprovação)
-    // e o admin confirma manualmente após conferir o Airbnb. Nunca oculta a falha.
+    // FAIL-CLOSED: sem iCal fresco não confirma automaticamente (pagamento fica
+    // registrado, reserva segue bloqueada, admin confirma manualmente).
     const fresh = await this.icalStatus();
     if (!fresh.ok) {
       await this.notify("payment_needs_manual", { reservationId: r.id });
-      await this.repo.markWebhookProcessed(params.eventKey);
-      return { handled: true, status: "stale_needs_manual", detail: `iCal ${fresh.reason} — pagamento recebido, confirmar manualmente` };
+      return { status: "stale_needs_manual", detail: `iCal ${fresh.reason} — pagamento recebido, confirmar manualmente` };
     }
-
-    // paid -> confirmed (transitionStatus reforça anti-sobreposição, agora com dados frescos).
     try {
-      await this.repo.transitionStatus(r.id, "paid",
-        buildStatusChange({ from: r.status, to: "paid", origin: "webhook", externalEvent: `mp:${payment.id}`, technicalId: randomUUID() }));
+      if (r.status === "awaiting_payment" || r.status === "payment_pending") {
+        await this.repo.transitionStatus(r.id, "paid",
+          buildStatusChange({ from: r.status, to: "paid", origin, externalEvent: `mp:${payment.id}`, technicalId: randomUUID() }));
+      }
       await this.repo.transitionStatus(r.id, "confirmed",
-        buildStatusChange({ from: "paid", to: "confirmed", origin: "webhook", externalEvent: `mp:${payment.id}`, technicalId: randomUUID() }));
+        buildStatusChange({ from: "paid", to: "confirmed", origin, externalEvent: `mp:${payment.id}`, technicalId: randomUUID() }));
     } catch (e) {
       if (e instanceof ConflictError) {
         await this.notify("payment_after_conflict", { reservationId: r.id });
-        await this.repo.markWebhookProcessed(params.eventKey);
-        return { handled: true, status: "mismatch", detail: "conflito de disponibilidade após pagamento — tratar manualmente" };
+        return { status: "mismatch", detail: "conflito de disponibilidade após pagamento — tratar manualmente" };
       }
       throw e;
     }
-
     await this.notify("reservation_confirmed", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, trackUrl: this.trackUrl(r.publicToken) } });
-    await this.repo.markWebhookProcessed(params.eventKey);
-    return { handled: true, status: "confirmed", detail: r.id };
+    return { status: "confirmed", detail: r.id };
+  }
+
+  /**
+   * RECONCILIAÇÃO: consulta o Mercado Pago pelo external_reference e confirma a
+   * reserva se houver pagamento aprovado. Rede de segurança para quando o webhook
+   * não chega. Re-consulta a API (não confia na URL de retorno).
+   */
+  async reconcileReservation(token: string): Promise<{ status: string; reservation: ReservationRecord | null }> {
+    const r = await this.repo.getReservationByToken(token);
+    if (!r) return { status: "not_found", reservation: null };
+    if (r.status !== "awaiting_payment" && r.status !== "payment_pending") {
+      return { status: r.status, reservation: r }; // nada a reconciliar
+    }
+    let payment: PaymentInfo | null = null;
+    try { payment = await this.payments.findApprovedByExternalRef(r.externalReference); }
+    catch { return { status: r.status, reservation: r }; } // MP indisponível/não configurado
+    if (!payment) return { status: r.status, reservation: r };
+    const outcome = await this.applyApprovedPayment(r, payment, "system");
+    const updated = await this.repo.getReservationByToken(token);
+    return { status: outcome.status, reservation: updated };
   }
 
   /**

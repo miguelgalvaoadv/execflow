@@ -34,6 +34,16 @@
   to = "/.netlify/functions/create-preference"
   status = 200
 [[redirects]]
+  from = "/api/reconcile"
+  to = "/.netlify/functions/reconcile"
+  status = 200
+
+# Página de acompanhamento (retorno do pagamento) — SPA: serve o index.html
+[[redirects]]
+  from = "/reserva/*"
+  to = "/index.html"
+  status = 200
+[[redirects]]
   from = "/api/reservations/:token"
   to = "/.netlify/functions/get-reservation?token=:token"
   status = 200

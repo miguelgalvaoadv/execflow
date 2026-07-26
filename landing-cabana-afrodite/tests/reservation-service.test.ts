@@ -138,6 +138,27 @@ describe("reservation service — fluxo completo", () => {
     ).rejects.toBeInstanceOf(ValidationError);
   });
 
+  it("reconciliação confirma quando o webhook não chega (consulta a API por external_reference)", async () => {
+    const { repo, payments, svc } = makeService();
+    const { reservation } = await svc.requestReservation({ ...stay, guest });
+    await svc.approveReservation(reservation.id, "admin");
+    // pagamento aprovado existe no MP, mas o webhook NÃO chegou
+    payments.seedPayment({ id: "pay-recon", status: "approved", externalReference: reservation.externalReference, amountCents: EXPECTED_TOTAL, currency: "BRL", liveMode: false });
+    const before = await repo.getReservationById(reservation.id);
+    expect(before!.status).toBe("awaiting_payment");
+    const res = await svc.reconcileReservation(reservation.publicToken);
+    expect(res.status).toBe("confirmed");
+    expect((await repo.getReservationById(reservation.id))!.status).toBe("confirmed");
+  });
+
+  it("reconciliação não faz nada se não há pagamento aprovado", async () => {
+    const { svc } = makeService();
+    const { reservation } = await svc.requestReservation({ ...stay, guest });
+    await svc.approveReservation(reservation.id, "admin");
+    const res = await svc.reconcileReservation(reservation.publicToken);
+    expect(res.status).toBe("awaiting_payment");
+  });
+
   it("após aprovar, período fica indisponível para novas datas sobrepostas", async () => {
     const { svc } = makeService();
     const a = await svc.requestReservation({ ...stay, guest });

@@ -233,7 +233,10 @@
 
   // ---------- acompanhamento ----------
   async function renderTracking(token) {
-    mount.innerHTML = '<div class="bk-msg">Carregando sua reserva…</div>';
+    mount.innerHTML = '<div class="bk-msg">Confirmando sua reserva…</div>';
+    // Reconciliação: confirma o pagamento consultando o Mercado Pago (rede de
+    // segurança caso o webhook não tenha chegado).
+    await api("/reconcile?token=" + encodeURIComponent(token), { method: "POST" }).catch(function () {});
     var r = await api("/reservations/" + encodeURIComponent(token) + "?token=" + encodeURIComponent(token), {}).catch(function () { return { ok: false }; });
     if (!r.ok || !r.data) { mount.innerHTML = '<div class="bk-msg err">Reserva não encontrada.</div>'; return; }
     var d = r.data;

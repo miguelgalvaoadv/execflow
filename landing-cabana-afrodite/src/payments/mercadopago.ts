@@ -54,6 +54,13 @@ export class MockMercadoPago implements PaymentProvider {
     };
   }
 
+  async findApprovedByExternalRef(externalReference: string): Promise<PaymentInfo | null> {
+    for (const p of this.payments.values()) {
+      if (p.externalReference === externalReference && p.status === "approved") return p;
+    }
+    return null;
+  }
+
   /** Helper de teste: injeta um pagamento simulado com valores controlados. */
   seedPayment(p: PaymentInfo): void {
     this.payments.set(p.id, p);
@@ -124,6 +131,20 @@ export class RealMercadoPago implements PaymentProvider {
 
   async getPayment(paymentId: string): Promise<PaymentInfo> {
     const data = await this.request(`/v1/payments/${encodeURIComponent(paymentId)}`, { method: "GET" });
+    return this.map(data);
+  }
+
+  async findApprovedByExternalRef(externalReference: string): Promise<PaymentInfo | null> {
+    const data = await this.request(
+      `/v1/payments/search?sort=date_created&criteria=desc&external_reference=${encodeURIComponent(externalReference)}`,
+      { method: "GET" },
+    );
+    const results: any[] = data?.results ?? [];
+    const approved = results.find((p) => p.status === "approved") ?? null;
+    return approved ? this.map(approved) : null;
+  }
+
+  private map(data: any): PaymentInfo {
     return {
       id: String(data.id),
       status: data.status as PaymentStatus,
@@ -149,6 +170,7 @@ class NullMercadoPago implements PaymentProvider {
   constructor(public readonly mode: "sandbox" | "production") {}
   async createPreference(): Promise<Preference> { throw new PaymentNotConfiguredError(); }
   async getPayment(): Promise<PaymentInfo> { throw new PaymentNotConfiguredError(); }
+  async findApprovedByExternalRef(): Promise<PaymentInfo | null> { throw new PaymentNotConfiguredError(); }
 }
 
 export function createPaymentProvider(opts: {
