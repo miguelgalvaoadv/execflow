@@ -7,10 +7,15 @@ export default async (req: Request): Promise<Response> => {
   if (req.method !== "GET") return new Response("Método não permitido", { status: 405 });
 
   const { cfg, repo } = getContext();
-  // aceita com ou sem a extensão .ics (o redirect do Netlify pode removê-la)
-  const file = (new URL(req.url).searchParams.get("file") || "").replace(/\.ics$/i, "");
-  const m = /^reservations-(.+)$/.exec(file);
-  const token = m?.[1] ?? "";
+  // Extrai o token do parâmetro `file` OU direto do caminho da URL
+  // (/api/calendar/reservations-<token>.ics) — robusto ao redirect do Netlify.
+  const url = new URL(req.url);
+  const extract = (s: string | null): string => {
+    const c = (s || "").replace(/\.ics$/i, "");
+    const m = /reservations-([^/]+)$/.exec(c);
+    return m?.[1] ?? "";
+  };
+  const token = (url.searchParams.get("token") || "") || extract(url.searchParams.get("file")) || extract(url.pathname);
 
   const expected = cfg.icalExportToken;
   const a = Buffer.from(token), b = Buffer.from(expected);
@@ -32,7 +37,7 @@ export default async (req: Request): Promise<Response> => {
     status: 200,
     headers: {
       "content-type": "text/calendar; charset=utf-8",
-      "content-disposition": `inline; filename="${file}"`,
+      "content-disposition": `inline; filename="reservations-${token}.ics"`,
       "cache-control": "public, max-age=300",
     },
   });
