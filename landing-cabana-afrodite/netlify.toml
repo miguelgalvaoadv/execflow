@@ -37,6 +37,10 @@
   from = "/api/reconcile"
   to = "/.netlify/functions/reconcile"
   status = 200
+[[redirects]]
+  from = "/api/photos"
+  to = "/.netlify/functions/photos"
+  status = 200
 
 # Página de acompanhamento (retorno do pagamento) — SPA: serve o index.html
 [[redirects]]

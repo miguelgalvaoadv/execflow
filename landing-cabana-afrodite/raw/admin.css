@@ -129,6 +129,28 @@ tbody tr:hover{background:color-mix(in srgb,var(--ember) 6%,transparent)}
 .callegend{display:flex;flex-wrap:wrap;gap:14px;margin-top:12px;font-size:.78rem;color:var(--dim)}
 .callegend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:5px;vertical-align:-1px}
 
+/* ---------- galeria (aba Fotos) ---------- */
+.dropzone{border:2px dashed var(--line);border-radius:var(--r);padding:26px;text-align:center;
+  background:var(--pine);transition:.2s;margin-bottom:16px}
+.dropzone.over{border-color:var(--ember);background:color-mix(in srgb,var(--ember) 10%,var(--pine))}
+.dropzone p{color:var(--dim);font-size:.86rem;margin:8px 0}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:14px}
+.pcard{background:var(--pine);border:1px solid var(--line);border-radius:var(--r);overflow:hidden;
+  display:flex;flex-direction:column}
+.pcard.inactive{opacity:.45}
+.pcard .thumb{position:relative;aspect-ratio:4/3;background:var(--night)}
+.pcard .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+.pcard .badge{position:absolute;top:8px;left:8px;background:var(--ember);color:#fff;font-size:.66rem;
+  padding:3px 9px;border-radius:999px;letter-spacing:.06em;text-transform:uppercase;font-weight:600}
+.pcard .badge.off{background:var(--dim)}
+.pcard .body{padding:10px;display:grid;gap:8px}
+.pcard select,.pcard input{font-size:.8rem;padding:6px 8px}
+.pcard .acts{display:flex;gap:6px;flex-wrap:wrap}
+.pcard .acts button{flex:1;min-width:auto;padding:5px 8px;font-size:.72rem}
+.pbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.pcount{color:var(--dim);font-size:.82rem}
+progress{width:100%;height:6px;border-radius:3px;overflow:hidden}
+
 /* ---------- detalhe (modal) ---------- */
 .modal{position:fixed;inset:0;z-index:60;background:rgba(6,8,6,.6);backdrop-filter:blur(3px);
   display:none;align-items:center;justify-content:center;padding:20px}

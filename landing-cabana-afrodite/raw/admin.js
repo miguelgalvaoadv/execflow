@@ -81,6 +81,7 @@
   var TABS = [
     { id: "reservas", label: "Reservas", render: renderReservas },
     { id: "calendario", label: "Calendário", render: renderCalendario },
+    { id: "fotos", label: "Fotos", render: renderFotos },
     { id: "precos", label: "Preços", render: renderPrecos },
     { id: "pagamentos", label: "Pagamentos", render: renderPagamentos },
     { id: "sync", label: "Sincronização", render: renderSync },
@@ -355,6 +356,157 @@
         route();
       } catch (e) { toast("cmsg", "err", e.message); }
     });
+  }
+
+  // ---------- aba: fotos ----------
+  var CAT_LABEL = { externa: "Área externa", banho: "Banheira & banho", quarto: "Quarto", interior: "Interior", mais: "Mais fotos" };
+
+  /** Reduz a imagem no navegador antes de enviar (economiza storage e deixa o site rápido). */
+  function shrinkImage(file, maxSide, quality) {
+    return new Promise(function (resolve, reject) {
+      var img = new Image();
+      var url = URL.createObjectURL(file);
+      img.onload = function () {
+        URL.revokeObjectURL(url);
+        var w = img.naturalWidth, h = img.naturalHeight;
+        var scale = Math.min(1, maxSide / Math.max(w, h));
+        var cw = Math.round(w * scale), ch = Math.round(h * scale);
+        var c = document.createElement("canvas"); c.width = cw; c.height = ch;
+        c.getContext("2d").drawImage(img, 0, 0, cw, ch);
+        c.toBlob(function (b) { b ? resolve(b) : reject(new Error("Falha ao processar a imagem.")); }, "image/jpeg", quality);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error("Arquivo de imagem inválido.")); };
+      img.src = url;
+    });
+  }
+
+  async function renderFotos(main) {
+    main.innerHTML = "<h2>Fotos do site</h2><p class=\"hint\">As fotos aparecem em “Todas” e também na categoria escolhida. Arraste arquivos ou clique para enviar.</p>" +
+      '<div id="fmsg"></div>' +
+      '<div class="dropzone" id="drop"><strong>Enviar novas fotos</strong>' +
+        "<p>Arraste as imagens aqui ou clique para escolher (JPG/PNG). Elas são otimizadas automaticamente.</p>" +
+        '<input type="file" id="file" accept="image/*" multiple hidden>' +
+        '<div class="pbar" style="justify-content:center">' +
+          '<select id="upcat">' + Object.keys(CAT_LABEL).map(function (k) { return '<option value="' + k + '">' + CAT_LABEL[k] + "</option>"; }).join("") + "</select>" +
+          '<button class="btn" id="pick">Escolher fotos</button></div>' +
+        '<div id="upprog"></div></div>' +
+      '<div class="pbar"><select id="fcat"><option value="">Todas as categorias</option>' +
+        Object.keys(CAT_LABEL).map(function (k) { return '<option value="' + k + '">' + CAT_LABEL[k] + "</option>"; }).join("") + "</select>" +
+        '<label style="display:flex;align-items:center;gap:6px;font-size:.84rem;color:var(--dim)">' +
+        '<input type="checkbox" id="fhidden" style="width:auto"> mostrar ocultas</label>' +
+        '<span class="pcount" id="pcount"></span></div>' +
+      '<div class="pgrid" id="pgrid"></div>';
+
+    var all = [];
+    async function load() {
+      var d = await api("/photos");
+      all = d.photos || [];
+      draw();
+    }
+    function draw() {
+      var cat = document.getElementById("fcat").value;
+      var showHidden = document.getElementById("fhidden").checked;
+      var list = all.filter(function (p) { return (!cat || p.category === cat) && (showHidden || p.active); });
+      document.getElementById("pcount").textContent = list.length + " de " + all.length + " foto(s)";
+      var grid = document.getElementById("pgrid");
+      if (!list.length) { grid.innerHTML = '<div class="empty">Nenhuma foto nesta seleção.</div>'; return; }
+      grid.innerHTML = list.map(function (p, idx) {
+        return '<div class="pcard' + (p.active ? "" : " inactive") + '" data-id="' + esc(p.id) + '">' +
+          '<div class="thumb"><img loading="lazy" src="' + esc(p.url) + '" alt="' + esc(p.caption || "") + '">' +
+            (p.isCover ? '<span class="badge">Capa</span>' : (p.active ? "" : '<span class="badge off">Oculta</span>')) +
+          "</div><div class=\"body\">" +
+            '<select data-act="cat">' + Object.keys(CAT_LABEL).map(function (k) {
+              return '<option value="' + k + '"' + (p.category === k ? " selected" : "") + ">" + CAT_LABEL[k] + "</option>";
+            }).join("") + "</select>" +
+            '<input data-act="cap" placeholder="Legenda (opcional)" value="' + esc(p.caption || "") + '">' +
+            '<div class="acts">' +
+              '<button class="btn ghost sm" data-act="up"' + (idx === 0 ? " disabled" : "") + ' title="Mover para antes">↑</button>' +
+              '<button class="btn ghost sm" data-act="down"' + (idx === list.length - 1 ? " disabled" : "") + ' title="Mover para depois">↓</button>' +
+              '<button class="btn ghost sm" data-act="cover"' + (p.isCover ? " disabled" : "") + ">Capa</button>" +
+              '<button class="btn ghost sm" data-act="toggle">' + (p.active ? "Ocultar" : "Mostrar") + "</button>" +
+              '<button class="btn danger sm" data-act="del">Excluir</button>' +
+            "</div></div></div>";
+      }).join("");
+      wireCards(list);
+    }
+
+    function wireCards(list) {
+      Array.prototype.forEach.call(document.querySelectorAll(".pcard"), function (card) {
+        var id = card.getAttribute("data-id");
+        var photo = all.filter(function (p) { return p.id === id; })[0];
+        async function patch(body, reload) {
+          try { await api("/photos", { method: "PATCH", body: JSON.stringify(Object.assign({ id: id }, body)) }); if (reload !== false) await load(); }
+          catch (e) { toast("fmsg", "err", e.message); }
+        }
+        card.querySelector('[data-act="cat"]').addEventListener("change", function () { patch({ category: this.value }); });
+        var cap = card.querySelector('[data-act="cap"]');
+        cap.addEventListener("change", function () { patch({ caption: this.value }, false); toast("fmsg", "ok", "Legenda salva."); });
+        card.querySelector('[data-act="cover"]').addEventListener("click", function () { patch({ isCover: true }); });
+        card.querySelector('[data-act="toggle"]').addEventListener("click", function () { patch({ active: !photo.active }); });
+        card.querySelector('[data-act="del"]').addEventListener("click", async function () {
+          var builtin = photo.source === "builtin";
+          if (!confirm(builtin ? "Ocultar esta foto original do site? Ela sai da galeria (pode ser reexibida depois)."
+                               : "Excluir esta foto definitivamente? O arquivo será apagado.")) return;
+          try { await api("/photos?id=" + encodeURIComponent(id), { method: "DELETE" }); await load(); toast("fmsg", "ok", builtin ? "Foto ocultada." : "Foto excluída."); }
+          catch (e) { toast("fmsg", "err", e.message); }
+        });
+        // reordenar: troca a posição com o vizinho na lista visível
+        function swapWith(other) {
+          if (!other) return;
+          Promise.all([
+            api("/photos", { method: "PATCH", body: JSON.stringify({ id: photo.id, sortOrder: other.sortOrder }) }),
+            api("/photos", { method: "PATCH", body: JSON.stringify({ id: other.id, sortOrder: photo.sortOrder }) }),
+          ]).then(load).catch(function (e) { toast("fmsg", "err", e.message); });
+        }
+        var pos = list.indexOf(photo);
+        card.querySelector('[data-act="up"]').addEventListener("click", function () { swapWith(list[pos - 1]); });
+        card.querySelector('[data-act="down"]').addEventListener("click", function () { swapWith(list[pos + 1]); });
+      });
+    }
+
+    document.getElementById("fcat").addEventListener("change", draw);
+    document.getElementById("fhidden").addEventListener("change", draw);
+
+    // ----- upload -----
+    var input = document.getElementById("file"), drop = document.getElementById("drop");
+    document.getElementById("pick").addEventListener("click", function () { input.click(); });
+    input.addEventListener("change", function () { if (input.files.length) upload(input.files); });
+    ["dragenter", "dragover"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.add("over"); });
+    });
+    ["dragleave", "drop"].forEach(function (ev) {
+      drop.addEventListener(ev, function (e) { e.preventDefault(); drop.classList.remove("over"); });
+    });
+    drop.addEventListener("drop", function (e) {
+      var files = [].slice.call(e.dataTransfer.files).filter(function (f) { return /^image\//.test(f.type); });
+      if (files.length) upload(files);
+    });
+
+    async function upload(files) {
+      var cat = document.getElementById("upcat").value;
+      var prog = document.getElementById("upprog");
+      var total = files.length, done = 0, falhas = 0;
+      prog.innerHTML = '<progress max="' + total + '" value="0"></progress><p>Enviando 0 de ' + total + "…</p>";
+      for (var i = 0; i < files.length; i++) {
+        try {
+          var blob = await shrinkImage(files[i], 1600, 0.82);
+          var signed = await api("/photo-upload-url", { method: "POST", body: JSON.stringify({ fileName: files[i].name }) });
+          var put = await fetch(signed.signedUrl, { method: "PUT", body: blob, headers: { "content-type": "image/jpeg" } });
+          if (!put.ok) throw new Error("Falha no envio ao storage (" + put.status + ")");
+          await api("/photos", { method: "POST", body: JSON.stringify({ url: signed.publicUrl, storagePath: signed.path, category: cat }) });
+        } catch (e) {
+          falhas++; toast("fmsg", "err", "Erro em " + files[i].name + ": " + e.message);
+        }
+        done++;
+        prog.innerHTML = '<progress max="' + total + '" value="' + done + '"></progress><p>Enviando ' + done + " de " + total + "…</p>";
+      }
+      prog.innerHTML = "";
+      input.value = "";
+      if (falhas < total) toast("fmsg", "ok", (total - falhas) + " foto(s) enviada(s). Já estão no site.");
+      await load();
+    }
+
+    await load();
   }
 
   // ---------- aba: preços ----------

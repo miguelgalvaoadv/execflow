@@ -17,6 +17,8 @@ import {
   type AuditLogRecord,
   type ManualBlockRecord,
   type NotificationLogRecord,
+  type PhotoRecord,
+  type PhotoCategory,
 } from "./repository.js";
 import type { PricingConfig, SpecialPeriod } from "../domain/pricing.js";
 import type { BusyPeriod } from "../domain/availability.js";
@@ -287,6 +289,84 @@ export class SupabaseRepository implements Repository {
   async setIcalExportToken(token: string): Promise<void> {
     const { error } = await this.db.from("settings").upsert({ key: "ical_export_token", value: { token } }, { onConflict: "key" });
     if (error) throw new Error(`setIcalExportToken: ${error.message}`);
+  }
+
+  private mapPhoto(p: any): PhotoRecord {
+    return {
+      id: p.id, url: p.url, storagePath: p.storage_path, category: p.category,
+      caption: p.caption, sortOrder: p.sort_order, active: p.active,
+      isCover: p.is_cover, source: p.source,
+    };
+  }
+
+  async listPhotos(opts: { includeInactive?: boolean } = {}): Promise<PhotoRecord[]> {
+    let q = this.db.from("photos").select("*").order("sort_order", { ascending: true });
+    if (!opts.includeInactive) q = q.eq("active", true);
+    const { data, error } = await q;
+    if (error) throw new Error(`listPhotos: ${error.message}`);
+    return (data ?? []).map((p) => this.mapPhoto(p));
+  }
+
+  async createPhoto(p: { url: string; storagePath?: string | null; category: PhotoCategory; caption?: string | null; sortOrder?: number }): Promise<string> {
+    const { data, error } = await this.db.from("photos").insert({
+      url: p.url, storage_path: p.storagePath ?? null, category: p.category,
+      caption: p.caption ?? null, sort_order: p.sortOrder ?? (await this.nextPhotoSortOrder()),
+      source: p.storagePath ? "upload" : "builtin",
+    }).select("id").single();
+    if (error) throw new Error(`createPhoto: ${error.message}`);
+    return data.id;
+  }
+
+  async updatePhoto(id: string, patch: Partial<Pick<PhotoRecord, "category" | "caption" | "sortOrder" | "active" | "isCover">>): Promise<void> {
+    const row: Record<string, unknown> = {};
+    if (patch.category !== undefined) row.category = patch.category;
+    if (patch.caption !== undefined) row.caption = patch.caption;
+    if (patch.sortOrder !== undefined) row.sort_order = patch.sortOrder;
+    if (patch.active !== undefined) row.active = patch.active;
+    if (patch.isCover !== undefined) row.is_cover = patch.isCover;
+    if (!Object.keys(row).length) return;
+    const { error } = await this.db.from("photos").update(row).eq("id", id);
+    if (error) throw new Error(`updatePhoto: ${error.message}`);
+  }
+
+  async deletePhoto(id: string): Promise<{ storagePath: string | null; source: "builtin" | "upload" } | null> {
+    const { data } = await this.db.from("photos").select("storage_path,source").eq("id", id).limit(1).maybeSingle();
+    if (!data) return null;
+    if (data.source === "builtin") {
+      // arquivo estático faz parte do deploy: apenas esconde da galeria
+      const { error } = await this.db.from("photos").update({ active: false, is_cover: false }).eq("id", id);
+      if (error) throw new Error(`deletePhoto(hide): ${error.message}`);
+      return { storagePath: null, source: "builtin" };
+    }
+    const { error } = await this.db.from("photos").delete().eq("id", id);
+    if (error) throw new Error(`deletePhoto: ${error.message}`);
+    return { storagePath: data.storage_path, source: "upload" };
+  }
+
+  async setCoverPhoto(id: string): Promise<void> {
+    // o índice único parcial exige limpar antes de marcar
+    await this.db.from("photos").update({ is_cover: false }).eq("is_cover", true);
+    const { error } = await this.db.from("photos").update({ is_cover: true, active: true }).eq("id", id);
+    if (error) throw new Error(`setCoverPhoto: ${error.message}`);
+  }
+
+  async nextPhotoSortOrder(): Promise<number> {
+    const { data } = await this.db.from("photos").select("sort_order").order("sort_order", { ascending: false }).limit(1).maybeSingle();
+    return ((data as any)?.sort_order ?? -1) + 1;
+  }
+
+  /** URL assinada para upload direto do navegador (evita o limite de payload das Functions). */
+  async createPhotoUploadUrl(fileName: string): Promise<{ path: string; signedUrl: string; token: string; publicUrl: string }> {
+    const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60);
+    const path = `gallery/${Date.now()}-${safe}`;
+    const { data, error } = await this.db.storage.from("photos").createSignedUploadUrl(path);
+    if (error || !data) throw new Error(`createPhotoUploadUrl: ${error?.message ?? "sem retorno"}`);
+    const { data: pub } = this.db.storage.from("photos").getPublicUrl(path);
+    return { path, signedUrl: data.signedUrl, token: data.token, publicUrl: pub.publicUrl };
+  }
+
+  async removePhotoFile(storagePath: string): Promise<void> {
+    await this.db.storage.from("photos").remove([storagePath]);
   }
 
   async logAudit(entry: { actor?: string | null; action: string; entity?: string | null; entityId?: string | null; metadata?: Record<string, unknown> | null }): Promise<void> {

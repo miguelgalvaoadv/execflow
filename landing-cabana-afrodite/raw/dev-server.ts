@@ -34,6 +34,7 @@ function resolveApi(method: string, path: string): { file: string; query: Record
   m = path.match(/^\/api\/calendar\/(.+)$/);
   if (m) return { file: "ical-export", query: { file: decodeURIComponent(m[1]!) } };
   if (path === "/api/reconcile") return { file: "reconcile", query: q };
+  if (path === "/api/photos") return { file: "photos", query: q };
   m = path.match(/^\/api\/admin\/(.+)$/);
   if (m) return { file: `admin-${m[1]}`, query: q };
   return null;
@@ -93,5 +94,5 @@ createServer(async (req, res) => {
   if (api) return handleApi(req, res, api);
   return serveStatic(req, res);
 }).listen(PORT, () => {
-  console.log(`Cabana Afrodite (mock) em http://localhost:${PORT}`);
+  console.log(`Cabana Afrodite (${process.env.APP_ENV}) em http://localhost:${PORT}`);
 });

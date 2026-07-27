@@ -114,6 +114,22 @@ export interface NotificationLogRecord {
   createdAt: string;
 }
 
+export type PhotoCategory = "externa" | "banho" | "quarto" | "interior" | "mais";
+export const PHOTO_CATEGORIES: PhotoCategory[] = ["externa", "banho", "quarto", "interior", "mais"];
+
+/** Foto da galeria. `builtin` = arquivo estático do deploy; `upload` = Supabase Storage. */
+export interface PhotoRecord {
+  id: string;
+  url: string;
+  storagePath: string | null;
+  category: PhotoCategory;
+  caption: string | null;
+  sortOrder: number;
+  active: boolean;
+  isCover: boolean;
+  source: "builtin" | "upload";
+}
+
 export interface ManualBlockRecord {
   id: string;
   checkIn: LocalDate;
@@ -164,6 +180,17 @@ export interface Repository {
   // token do calendário .ics (regenerável pelo painel)
   getIcalExportToken(): Promise<string | null>;
   setIcalExportToken(token: string): Promise<void>;
+
+  // galeria de fotos (gerenciável pelo painel)
+  /** `includeInactive` só no painel; a galeria pública recebe apenas as ativas. */
+  listPhotos(opts?: { includeInactive?: boolean }): Promise<PhotoRecord[]>;
+  createPhoto(p: { url: string; storagePath?: string | null; category: PhotoCategory; caption?: string | null; sortOrder?: number }): Promise<string>;
+  updatePhoto(id: string, patch: Partial<Pick<PhotoRecord, "category" | "caption" | "sortOrder" | "active" | "isCover">>): Promise<void>;
+  /** Remove o registro; devolve o storagePath para apagar o arquivo (quando upload). */
+  deletePhoto(id: string): Promise<{ storagePath: string | null; source: "builtin" | "upload" } | null>;
+  /** Marca uma foto como capa e desmarca as demais (índice único exige atomicidade). */
+  setCoverPhoto(id: string): Promise<void>;
+  nextPhotoSortOrder(): Promise<number>;
 
   // log administrativo
   logAudit(entry: { actor?: string | null; action: string; entity?: string | null; entityId?: string | null; metadata?: Record<string, unknown> | null }): Promise<void>;

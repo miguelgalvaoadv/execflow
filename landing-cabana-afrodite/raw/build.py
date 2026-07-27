@@ -63,7 +63,8 @@ catmap = {x["i"]: x["cat"] for x in photos}
 TPL = open(os.path.join(BASE, "raw", "template.html"), encoding="utf-8").read()
 
 BOOKING_HEAD = '<link rel="stylesheet" href="booking/booking.css">'
-BOOKING_SCRIPT = '<script src="booking/booking.js" defer></script>'
+BOOKING_SCRIPT = ('<script src="booking/booking.js" defer></script>'
+                  '<script src="booking/gallery.js" defer></script>')
 BOOKING_SECTION = (
     '<section class="booking" id="reservar-online"><div class="wrap">'
     '<div class="bk-head rv"><p class="eyebrow">Reserva direta</p>'
@@ -129,6 +130,7 @@ for i, b in BYTES.items():
 os.makedirs(os.path.join(SITE, "booking"), exist_ok=True)
 shutil.copy(os.path.join(BASE, "raw", "booking.css"), os.path.join(SITE, "booking", "booking.css"))
 shutil.copy(os.path.join(BASE, "raw", "booking.js"), os.path.join(SITE, "booking", "booking.js"))
+shutil.copy(os.path.join(BASE, "raw", "gallery.js"), os.path.join(SITE, "booking", "gallery.js"))
 
 # painel administrativo (área protegida por login)
 os.makedirs(os.path.join(SITE, "admin"), exist_ok=True)

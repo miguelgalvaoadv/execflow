@@ -15,6 +15,8 @@ import type {
   AuditLogRecord,
   ManualBlockRecord,
   NotificationLogRecord,
+  PhotoRecord,
+  PhotoCategory,
 } from "./repository.js";
 import { BLOCKING_STATUSES, ConflictError } from "./repository.js";
 import type { PricingConfig } from "../domain/pricing.js";
@@ -36,6 +38,7 @@ export class InMemoryRepository implements Repository {
   private webhooks = new Map<string, { signatureOk: boolean; processed: boolean; payload: unknown }>();
   private notifications: NotificationLogRecord[] = [];
   private settings = new Map<string, unknown>();
+  private photos: PhotoRecord[] = [];
   private specialPeriods: SpecialPeriodRecord[] = [];
   private syncLogs: IcalSyncLogRecord[] = [];
   private auditLogs: AuditLogRecord[] = [];
@@ -182,6 +185,42 @@ export class InMemoryRepository implements Repository {
   }
   async setIcalExportToken(token: string): Promise<void> {
     this.icalToken = token;
+  }
+
+  async listPhotos(opts: { includeInactive?: boolean } = {}): Promise<PhotoRecord[]> {
+    return this.photos
+      .filter((p) => opts.includeInactive || p.active)
+      .sort((a, b) => a.sortOrder - b.sortOrder)
+      .map((p) => ({ ...p }));
+  }
+  async createPhoto(p: { url: string; storagePath?: string | null; category: PhotoCategory; caption?: string | null; sortOrder?: number }): Promise<string> {
+    if (this.photos.some((x) => x.url === p.url)) throw new Error("Foto já cadastrada (url duplicada).");
+    const id = randomUUID();
+    this.photos.push({
+      id, url: p.url, storagePath: p.storagePath ?? null, category: p.category,
+      caption: p.caption ?? null, sortOrder: p.sortOrder ?? (await this.nextPhotoSortOrder()),
+      active: true, isCover: false, source: p.storagePath ? "upload" : "builtin",
+    });
+    return id;
+  }
+  async updatePhoto(id: string, patch: Partial<Pick<PhotoRecord, "category" | "caption" | "sortOrder" | "active" | "isCover">>): Promise<void> {
+    const p = this.photos.find((x) => x.id === id);
+    if (!p) throw new Error("Foto não encontrada.");
+    Object.assign(p, patch);
+  }
+  async deletePhoto(id: string): Promise<{ storagePath: string | null; source: "builtin" | "upload" } | null> {
+    const p = this.photos.find((x) => x.id === id);
+    if (!p) return null;
+    // builtin: só esconde (o arquivo estático continua no deploy)
+    if (p.source === "builtin") { p.active = false; return { storagePath: null, source: "builtin" }; }
+    this.photos = this.photos.filter((x) => x.id !== id);
+    return { storagePath: p.storagePath, source: "upload" };
+  }
+  async setCoverPhoto(id: string): Promise<void> {
+    this.photos.forEach((p) => { p.isCover = p.id === id; });
+  }
+  async nextPhotoSortOrder(): Promise<number> {
+    return this.photos.reduce((m, p) => Math.max(m, p.sortOrder), -1) + 1;
   }
 
   async logAudit(entry: { actor?: string | null; action: string; entity?: string | null; entityId?: string | null; metadata?: Record<string, unknown> | null }): Promise<void> {
