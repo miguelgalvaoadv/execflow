@@ -151,6 +151,16 @@ describe("reservation service — fluxo completo", () => {
     expect((await repo.getReservationById(reservation.id))!.status).toBe("confirmed");
   });
 
+  it("varredura agendada reconcilia todas as pendentes pagas", async () => {
+    const { repo, payments, svc } = makeService();
+    const a = await svc.requestReservation({ ...stay, guest });
+    await svc.approveReservation(a.reservation.id, "admin");
+    payments.seedPayment({ id: "pay-sweep", status: "approved", externalReference: a.reservation.externalReference, amountCents: EXPECTED_TOTAL, currency: "BRL", liveMode: false });
+    const results = await svc.reconcileAllPending();
+    expect(results.some((x) => x.status === "confirmed")).toBe(true);
+    expect((await repo.getReservationById(a.reservation.id))!.status).toBe("confirmed");
+  });
+
   it("reconciliação não faz nada se não há pagamento aprovado", async () => {
     const { svc } = makeService();
     const { reservation } = await svc.requestReservation({ ...stay, guest });

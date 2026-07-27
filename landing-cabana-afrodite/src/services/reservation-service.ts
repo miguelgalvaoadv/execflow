@@ -338,6 +338,26 @@ export class ReservationService {
   }
 
   /**
+   * Varredura de reconciliação (função agendada): reconcilia TODAS as reservas
+   * aguardando pagamento. Fecha a brecha de "pagou e não voltou ao site" quando
+   * o webhook não chega. Best-effort por reserva.
+   */
+  async reconcileAllPending(): Promise<{ code: string; status: string }[]> {
+    const pending = [
+      ...(await this.repo.listReservations({ status: "awaiting_payment" })),
+      ...(await this.repo.listReservations({ status: "payment_pending" })),
+    ];
+    const results: { code: string; status: string }[] = [];
+    for (const r of pending) {
+      try {
+        const res = await this.reconcileReservation(r.publicToken);
+        results.push({ code: r.friendlyCode, status: res.status });
+      } catch { results.push({ code: r.friendlyCode, status: "error" }); }
+    }
+    return results;
+  }
+
+  /**
    * Confirmação MANUAL pelo admin de uma reserva cujo pagamento foi recebido mas a
    * confirmação automática foi retida por falha de sincronização do iCal.
    * Re-valida o pagamento na API, exige iCal fresco (ou override explícito) e registra
