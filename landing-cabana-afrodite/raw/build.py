@@ -10,7 +10,9 @@ BASE = r"C:\Users\Miguel Galvão\Documents\execflow\landing-cabana-afrodite"
 IMGDIR = os.path.join(BASE, "assets", "img", "airbnb")
 photos = json.load(open(os.path.join(BASE, "raw", "airbnb-photos.json"), encoding="utf-8"))
 
-BIG = {0, 1, 3, 80, 81, 82, 86}   # hero/featured -> larger + crisper
+# hero/destaques da narrativa -> maiores e mais nítidas
+# 61 = chegada de carro · 38 = noite (lareira/vinho) · 90 = amanhecer (deck/colinas)
+BIG = {0, 1, 3, 38, 61, 80, 81, 82, 86, 90}
 
 def encode(idx, longest, q):
     p = next(x for x in photos if x["i"] == idx)
@@ -90,6 +92,7 @@ def render(src, include_booking=False):
         .replace("__FEAT_TUB__", src(82)).replace("__FEAT_DECK__", src(86))
         .replace("__FEAT_VIEW__", src(81)).replace("__ROMANCE__", src(24))
         .replace("__CTA_BG__", src(80))
+        .replace("__ARRIVAL__", src(61)).replace("__NIGHT__", src(38)).replace("__DAWN__", src(90))
         .replace("<!--GALLERY-->", "\n".join(items)))
     if include_booking:
         html = (html

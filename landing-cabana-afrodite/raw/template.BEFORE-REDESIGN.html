@@ -3,61 +3,35 @@
 @font-face{font-family:'Fraunces';src:url(data:font/woff2;base64,__FR__) format('woff2');font-weight:100 900;font-display:swap;}
 @font-face{font-family:'Jost';src:url(data:font/woff2;base64,__JO__) format('woff2');font-weight:100 900;font-display:swap;}
 
-/* ============================================================
-   SISTEMA — "Do fim da tarde ao amanhecer"
-   Pigmentos extraídos das fotografias reais: madeira queimada do
-   A-frame, OSB âmbar por dentro, poltronas terracota, colinas musgo,
-   névoa da manhã. A página atravessa crepúsculo → noite → amanhecer.
-   As variáveis --night/--pine/--ink/--dim/--line/--ember/--serif/--sans/--r
-   são CONTRATO com booking.css (widget de reserva): mantidas, remapeadas.
-   ============================================================ */
+/* ============ TOKENS ============ */
 :root{
-  /* pigmentos */
-  --carvao:#14150F;      /* revestimento queimado */
-  --carvao-2:#1E201A;
-  --osb:#D9A063;         /* luz do OSB */
-  --brasa:#C2703C;       /* poltronas / brasa */
-  --vinho:#7C3242;
-  --musgo:#3B4A34;       /* colinas */
-  --neblina:#E9E4D7;     /* névoa da manhã */
-  --marfim:#F5F2EA;
-
-  /* tempo padrão da página: crepúsculo */
-  --night:#14150F; --pine:#1E201A; --pine2:#252821;
-  --ink:#F5F2EA; --dim:#A5A796; --line:rgba(245,242,234,.14);
-  --ember:#C2703C; --ember-soft:#D9884F; --rose:#C99B87; --gold:#D9A063;
-  --wa:#25d366; --scrim:rgba(10,11,8,.5);
-
+  --night:#f5f0e6; --pine:#ece5d6; --pine2:#fcf8ef;
+  --ink:#1a231d; --dim:#5f6d60; --line:rgba(26,35,29,.15);
+  --ember:#b5622a; --ember-soft:#c9793f; --rose:#a9736a; --gold:#9c7a26;
+  --wa:#1a9e50; --scrim:rgba(18,24,20,.42);
   --serif:'Fraunces',Georgia,'Times New Roman',serif;
   --sans:'Jost','Century Gothic',system-ui,sans-serif;
-  --maxw:1320px; --r:14px;
-  --gutter:clamp(20px,5vw,72px);
-
-  /* escala editorial: contraste forte entre micro-rótulo e display */
-  --t-micro:.7rem;
-  --t-lead:clamp(1.15rem,1vw + .95rem,1.5rem);
-  --t-h3:clamp(1.8rem,3.2vw,2.9rem);
-  --t-h2:clamp(2.3rem,5.2vw,4.4rem);
-  --t-display:clamp(3rem,11.5vw,9.5rem);
+  --maxw:1240px; --r:14px;
 }
-/* capítulo claro: o amanhecer (aplicado por seção, não pelo tema) */
-.chapter-dawn{
-  --night:var(--neblina); --pine:#F2EEE3; --pine2:#FAF8F2;
-  --ink:#1B1D16; --dim:#5D6152; --line:rgba(27,29,22,.16);
-  --ember:#A85A2C; --rose:#8C5F4E; --gold:#96702C;
+@media (prefers-color-scheme:dark){
+  :root{
+    --night:#0d1210; --pine:#141d18; --pine2:#1b2820;
+    --ink:#ece6d8; --dim:#a4ada0; --line:rgba(236,230,216,.14);
+    --ember:#d88a4c; --ember-soft:#e6a877; --rose:#cf9c92; --gold:#d8b25a;
+    --wa:#25d366; --scrim:rgba(8,11,9,.5);
+  }
 }
-/* o leitor ainda manda: preferência explícita de tema vence */
 :root[data-theme="light"]{
-  --night:#F5F2EA; --pine:#EDE8DC; --pine2:#FAF8F2;
-  --ink:#1B1D16; --dim:#5D6152; --line:rgba(27,29,22,.16);
-  --ember:#A85A2C; --ember-soft:#C2703C; --rose:#8C5F4E; --gold:#96702C;
-  --wa:#1a9e50; --scrim:rgba(18,20,14,.42);
+  --night:#f5f0e6; --pine:#ece5d6; --pine2:#fcf8ef;
+  --ink:#1a231d; --dim:#5f6d60; --line:rgba(26,35,29,.15);
+  --ember:#b5622a; --ember-soft:#c9793f; --rose:#a9736a; --gold:#9c7a26;
+  --wa:#1a9e50; --scrim:rgba(18,24,20,.42);
 }
 :root[data-theme="dark"]{
-  --night:#14150F; --pine:#1E201A; --pine2:#252821;
-  --ink:#F5F2EA; --dim:#A5A796; --line:rgba(245,242,234,.14);
-  --ember:#C2703C; --ember-soft:#D9884F; --rose:#C99B87; --gold:#D9A063;
-  --wa:#25d366; --scrim:rgba(10,11,8,.5);
+  --night:#0d1210; --pine:#141d18; --pine2:#1b2820;
+  --ink:#ece6d8; --dim:#a4ada0; --line:rgba(236,230,216,.14);
+  --ember:#d88a4c; --ember-soft:#e6a877; --rose:#cf9c92; --gold:#d8b25a;
+  --wa:#25d366; --scrim:rgba(8,11,9,.5);
 }
 
 /* ============ BASE ============ */
@@ -102,76 +76,34 @@ h2{font-size:clamp(2.1rem,5vw,3.5rem);}
 .tglr:hover{color:var(--ink);}
 @media(max-width:860px){.nav-links{display:none;}}
 
-/* ============================================================
-   HERO — "O primeiro olhar"
-   A fotografia não abre inteira: ela é revelada por uma máscara
-   triangular que se abre como o vão do A-frame, enquanto uma
-   faixa de luz atravessa a cena. O título entra em duas camadas.
-   ============================================================ */
-.hero{position:relative;height:100svh;min-height:620px;display:grid;
-  grid-template-rows:1fr auto;overflow:hidden;isolation:isolate;background:var(--carvao);}
-.hero-stage{position:absolute;inset:0;z-index:-2;overflow:hidden;
-  /* o vão do A-frame: abre do ápice para as laterais */
-  clip-path:polygon(50% 100%,50% 0%,50% 0%,50% 100%);
-  animation:aframe-open 1.9s cubic-bezier(.16,.84,.28,1) .15s both;}
-@keyframes aframe-open{
-  0%  {clip-path:polygon(50% 100%,50% 6%,50% 6%,50% 100%);}
-  55% {clip-path:polygon(18% 100%,50% 0%,50% 0%,82% 100%);}
-  100%{clip-path:polygon(0% 0%,100% 0%,100% 100%,0% 100%);}
-}
-.hero-img{width:100%;height:100%;object-fit:cover;
-  transform:scale(1.16);animation:hero-settle 2.6s cubic-bezier(.2,.7,.2,1) .15s both;}
-@keyframes hero-settle{to{transform:scale(1.03);}}
-/* respiração lenta depois que assenta */
-@media (prefers-reduced-motion:no-preference){
-  .hero-img{animation:hero-settle 2.6s cubic-bezier(.2,.7,.2,1) .15s both,
-                      ken 30s ease-in-out 3s infinite alternate;}
-}
-@keyframes ken{from{transform:scale(1.03)}to{transform:scale(1.11) translateY(-10px)}}
-/* faixa de luz atravessando a cena, como o sol baixando */
-.hero-light{position:absolute;inset:-20% -40%;z-index:-1;pointer-events:none;
-  background:linear-gradient(104deg,transparent 38%,rgba(217,160,99,.30) 48%,
-             rgba(240,206,160,.14) 55%,transparent 66%);
-  transform:translateX(-30%);animation:light-sweep 3.4s cubic-bezier(.3,.6,.2,1) .5s both;}
-@keyframes light-sweep{to{transform:translateX(24%);opacity:.5;}}
-.hero::after{content:"";position:absolute;inset:0;z-index:-1;pointer-events:none;
-  background:linear-gradient(180deg,rgba(10,11,8,.62) 0%,rgba(10,11,8,.10) 28%,
-             rgba(10,11,8,.30) 58%,rgba(10,11,8,.93) 100%);}
-.hero-inner{grid-row:2;padding-bottom:clamp(40px,7vh,86px);color:var(--marfim);}
-.hero-kicker{display:flex;align-items:center;gap:14px;font-family:var(--sans);
-  font-size:var(--t-micro);text-transform:uppercase;letter-spacing:.34em;color:var(--osb);
-  animation:rise .9s cubic-bezier(.2,.8,.2,1) 1.15s both;}
-.hero-kicker::before{content:"";width:clamp(28px,6vw,72px);height:1px;background:currentColor;opacity:.6;}
-/* título em duas camadas: a linha sobe por trás de uma máscara */
-.hero h1{font-size:var(--t-display);color:var(--marfim);font-weight:300;line-height:.86;
-  letter-spacing:-.035em;margin:.14em 0 0;}
-.hero h1 .ln{display:block;overflow:hidden;}
-.hero h1 .ln > span{display:block;
-  animation:rise 1.15s cubic-bezier(.16,.84,.28,1) both;}
-.hero h1 .ln:nth-child(1) > span{animation-delay:1.25s;}
-.hero h1 .ln:nth-child(2) > span{animation-delay:1.38s;}
-.hero h1 em{font-style:italic;font-weight:300;color:var(--osb);}
-@keyframes rise{from{transform:translateY(105%);opacity:0}to{transform:translateY(0);opacity:1}}
-.hero-foot{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;
-  gap:26px;margin-top:clamp(22px,4vh,40px);
-  animation:fade-up 1s cubic-bezier(.2,.8,.2,1) 1.75s both;}
-@keyframes fade-up{from{transform:translateY(18px);opacity:0}to{transform:translateY(0);opacity:1}}
-.hero-sub{font-size:var(--t-lead);color:#E6E1D3;max-width:34ch;font-weight:320;line-height:1.5;}
-/* dados reais em linha, sem caixinhas */
-.hero-facts{display:flex;flex-wrap:wrap;align-items:center;gap:clamp(14px,2.4vw,30px);
-  font-family:var(--sans);font-size:.82rem;letter-spacing:.1em;text-transform:uppercase;
-  color:#D8D3C4;}
-.hero-facts .sep{width:1px;height:14px;background:rgba(245,242,234,.28);}
-.hero-facts b{font-weight:500;color:var(--marfim);}
-.hero-facts .star{color:var(--osb);}
-.hero-actions{display:flex;flex-wrap:wrap;gap:12px;margin-top:26px;}
-.scrolldown{position:absolute;right:var(--gutter);bottom:26px;z-index:2;color:#E6E1D3;
-  display:grid;justify-items:center;gap:8px;font-size:.62rem;letter-spacing:.3em;
-  text-transform:uppercase;opacity:.75;animation:fade-up 1s ease 2.1s both;}
-.scrolldown i{display:block;width:1px;height:40px;background:currentColor;transform-origin:top;
-  animation:trace 2.4s ease-in-out infinite;}
-@keyframes trace{0%{transform:scaleY(.2);opacity:.3}50%{transform:scaleY(1);opacity:.9}100%{transform:scaleY(.2);opacity:.3}}
-@media(max-width:760px){.scrolldown{display:none;}}
+/* ============ HERO ============ */
+.hero{position:relative;height:100svh;min-height:600px;display:flex;align-items:flex-end;
+  overflow:hidden;isolation:isolate;}
+.hero-img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:-2;
+  animation:ken 26s ease-in-out infinite alternate;}
+@keyframes ken{from{transform:scale(1.02) translateY(0)}to{transform:scale(1.14) translateY(-12px)}}
+.hero::after{content:"";position:absolute;inset:0;z-index:-1;
+  background:linear-gradient(180deg,rgba(6,9,7,.5) 0%,rgba(6,9,7,.05) 30%,rgba(6,9,7,.25) 62%,rgba(6,9,7,.9) 100%);}
+.hero-inner{padding-bottom:clamp(46px,8vh,96px);color:#f3efe6;max-width:920px;}
+.hero .eyebrow{color:#e9b48f;}
+.hero h1{font-size:clamp(3rem,10.5vw,7.4rem);color:#fff;font-weight:330;margin:.18em 0 .3em;
+  line-height:.94;letter-spacing:-.02em;text-shadow:0 2px 40px rgba(0,0,0,.35);}
+.hero h1 em{font-style:italic;font-weight:340;
+  background:linear-gradient(100deg,#f3d9c2,#e8a877 55%,#d98f66);-webkit-background-clip:text;
+  background-clip:text;color:transparent;}
+.hero-sub{font-size:clamp(1.05rem,2.1vw,1.4rem);color:#e7e0d4;max-width:44ch;font-weight:330;
+  line-height:1.55;}
+.hero-meta{display:flex;flex-wrap:wrap;gap:12px;margin-top:30px;}
+.chip{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:100px;
+  background:rgba(20,26,22,.4);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.18);
+  font-size:.85rem;letter-spacing:.04em;color:#f1ece1;}
+.chip svg{width:15px;height:15px;flex:none;}
+.chip.star svg{color:var(--gold);} .chip b{font-weight:500;}
+.hero-actions{display:flex;flex-wrap:wrap;gap:14px;margin-top:30px;}
+.scrolldown{position:absolute;left:50%;bottom:22px;translate:-50% 0;z-index:2;
+  color:#f3efe6;opacity:.7;display:grid;place-items:center;gap:6px;font-size:.66rem;
+  letter-spacing:.28em;text-transform:uppercase;animation:bob 2.4s ease-in-out infinite;}
+@keyframes bob{0%,100%{transform:translateY(0)}50%{transform:translateY(7px)}}
 
 /* ============ BUTTONS ============ */
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;
@@ -190,45 +122,17 @@ h2{font-size:clamp(2.1rem,5vw,3.5rem);}
 .btn-line{background:transparent;color:var(--ink);border-color:var(--line);}
 .btn-line:hover{border-color:var(--ember);color:var(--ember);}
 
-/* ============================================================
-   A CHEGADA — a estrada sobe, a imagem se abre.
-   A foto entra estreita e se expande conforme o scroll (scroll-driven
-   nativo, fora da main thread). Os dados reais vêm em coluna editorial,
-   não em quatro caixas iguais.
-   ============================================================ */
-.arrival{padding-block:clamp(72px,11vw,140px);background:var(--night);}
-.arrival-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);
-  gap:clamp(28px,5vw,72px);align-items:center;}
-@media(max-width:900px){.arrival-grid{grid-template-columns:1fr;}}
-.arrival-copy h2{font-size:var(--t-h2);font-weight:300;letter-spacing:-.025em;line-height:1;}
-.arrival-copy h2 em{font-style:italic;color:var(--osb);}
-.arrival-copy p{color:var(--dim);font-size:var(--t-lead);max-width:46ch;margin-top:22px;line-height:1.6;}
-/* dados reais: linha tipográfica, não cards */
-.facts{margin-top:clamp(30px,4vw,46px);display:grid;gap:0;border-top:1px solid var(--line);}
-.facts div{display:flex;align-items:baseline;justify-content:space-between;gap:18px;
-  padding:15px 0;border-bottom:1px solid var(--line);}
-.facts dt{font-family:var(--sans);font-size:var(--t-micro);text-transform:uppercase;
-  letter-spacing:.22em;color:var(--dim);}
-.facts dd{font-family:var(--serif);font-size:clamp(1.15rem,1.8vw,1.5rem);color:var(--ink);
-  font-weight:340;text-align:right;}
-.facts dd small{font-family:var(--sans);font-size:.72rem;letter-spacing:.14em;
-  text-transform:uppercase;color:var(--dim);margin-left:8px;}
-/* a imagem que se abre */
-.arrival-media{position:relative;overflow:hidden;border-radius:2px;}
-.arrival-media img{width:100%;height:clamp(340px,52vh,620px);object-fit:cover;display:block;}
-@supports (animation-timeline: view()){
-  @media (prefers-reduced-motion:no-preference){
-    .arrival-media{animation:open-road linear both;
-      animation-timeline:view();animation-range:entry 8% cover 46%;}
-    @keyframes open-road{
-      from{clip-path:inset(0 22% 0 22%);}
-      to  {clip-path:inset(0 0 0 0);}
-    }
-    .arrival-media img{animation:drift linear both;
-      animation-timeline:view();animation-range:entry 0% exit 100%;}
-    @keyframes drift{from{transform:scale(1.14)}to{transform:scale(1)}}
-  }
-}
+/* ============ STATS ============ */
+.stats{border-block:1px solid var(--line);}
+.stats .wrap{display:grid;grid-template-columns:repeat(4,1fr);}
+.stat{padding:34px 10px;text-align:center;border-left:1px solid var(--line);}
+.stat:first-child{border-left:none;}
+.stat .n{font-family:var(--serif);font-size:clamp(1.9rem,4vw,2.9rem);line-height:1;color:var(--ink);
+  display:flex;align-items:baseline;justify-content:center;gap:.14em;}
+.stat .n small{font-size:.5em;color:var(--gold);}
+.stat .l{margin-top:10px;font-size:.72rem;text-transform:uppercase;letter-spacing:.18em;color:var(--dim);}
+@media(max-width:640px){.stats .wrap{grid-template-columns:repeat(2,1fr);}
+  .stat:nth-child(-n+2){border-bottom:1px solid var(--line);}.stat:nth-child(odd){border-left:none;}}
 
 /* ============ SECTION SHELL ============ */
 section{position:relative;}
@@ -419,56 +323,34 @@ footer{background:var(--pine);border-top:1px solid var(--line);}
 
 <!-- ============ HERO ============ -->
 <header class="hero" id="top">
-  <div class="hero-stage">
-    <img class="hero-img" src="__HERO__" alt="Cabana Afrodite — chalé A-frame na encosta da Serra do Rio, com banheira no deck ao entardecer">
-  </div>
-  <div class="hero-light" aria-hidden="true"></div>
+  <img class="hero-img" src="__HERO__" alt="Cabana Afrodite — chalé A-frame na encosta da Serra do Rio, com banheira no deck ao entardecer">
   <div class="wrap hero-inner">
-    <p class="hero-kicker">Serra do Rio de Janeiro · Refúgio A-frame</p>
-    <h1>
-      <span class="ln"><span>Cabana</span></span>
-      <span class="ln"><span><em>Afrodite</em></span></span>
-    </h1>
-    <div class="hero-foot">
-      <p class="hero-sub">Madeira, lareira e uma banheira de frente para o vale. O fim da tarde começa aqui.</p>
-      <div>
-        <p class="hero-facts">
-          <span class="star">★</span> <b>4,94</b>
-          <span class="sep"></span> 132 avaliações
-          <span class="sep"></span> Superhost
-          <span class="sep"></span> <b>4</b> hóspedes
-        </p>
-        <div class="hero-actions">
-          <a class="btn btn-air" href="#reservar-online">Consultar datas</a>
-          <a class="btn btn-ghost" href="https://www.airbnb.com.br/rooms/1309401960357292675" target="_blank" rel="noopener">Ver no Airbnb</a>
-        </div>
-      </div>
+    <p class="eyebrow">Refúgio A-frame · Serra do Rio de Janeiro</p>
+    <h1>Cabana <em>Afrodite</em></h1>
+    <p class="hero-sub">Um chalé desenhado para o amor: madeira, lareira, banheira de hidromassagem e um céu de estrelas só de vocês.</p>
+    <div class="hero-meta">
+      <span class="chip star"><svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 2 2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77 5.82 21l1.18-6.88-5-4.87 7.1-1.01L12 2Z"/></svg><b>4,94</b> · 132 avaliações</span>
+      <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>Superhost</span>
+      <span class="chip"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>Até 4 hóspedes</span>
+    </div>
+    <div class="hero-actions">
+      <a class="btn btn-wa" href="https://wa.me/5521972887766?text=Ol%C3%A1!%20Tenho%20interesse%20na%20Cabana%20Afrodite." target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor"><path d="M.06 24l1.68-6.13A11.86 11.86 0 0 1 .16 11.9C.16 5.34 5.5.02 12.06.02a11.8 11.8 0 0 1 8.4 3.49 11.76 11.76 0 0 1 3.48 8.4c0 6.55-5.34 11.88-11.9 11.88a11.9 11.9 0 0 1-5.68-1.45L.06 24Zm6.6-3.8c1.68.99 3.28 1.58 5.4 1.58 5.44 0 9.88-4.43 9.88-9.87 0-5.55-4.4-9.86-9.87-9.86-5.45 0-9.87 4.42-9.87 9.87 0 2.23.65 3.9 1.75 5.65l-1 3.63 3.72-.98Zm11.35-5.29c-.07-.12-.27-.2-.56-.34-.3-.15-1.76-.87-2.03-.97-.27-.1-.47-.15-.67.15-.2.3-.77.97-.94 1.16-.17.2-.35.22-.64.07-.3-.15-1.25-.46-2.38-1.47-.88-.78-1.47-1.75-1.64-2.05-.17-.3-.02-.46.13-.6.13-.14.3-.35.44-.53.15-.17.2-.3.3-.5.1-.2.05-.37-.02-.52-.08-.15-.67-1.62-.92-2.22-.24-.58-.49-.5-.67-.51l-.57-.01c-.2 0-.52.07-.8.37-.27.3-1.04 1.02-1.04 2.48 0 1.46 1.07 2.88 1.22 3.08.15.2 2.1 3.2 5.08 4.49.71.3 1.26.49 1.69.63.71.22 1.36.19 1.87.12.57-.09 1.76-.72 2-1.42.25-.7.25-1.28.18-1.42Z"/></svg>
+        Falar no WhatsApp
+      </a>
+      <a class="btn btn-ghost" href="https://www.airbnb.com.br/rooms/1309401960357292675" target="_blank" rel="noopener">Ver no Airbnb</a>
     </div>
   </div>
-  <a class="scrolldown" href="#chegada" aria-label="Rolar para a próxima seção"><i></i>Entrar</a>
+  <a class="scrolldown" href="#experiencia" aria-label="Rolar para baixo">Descubra<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M12 5v14M6 13l6 6 6-6" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
 </header>
 
-<!-- ============ A CHEGADA ============ -->
-<section class="arrival" id="chegada">
-  <div class="wrap arrival-grid">
-    <div class="arrival-copy">
-      <p class="eyebrow">Capítulo um · A chegada</p>
-      <h2>A estrada sobe<br>até o <em>vale</em></h2>
-      <p>Depois do centrinho de Vale das Videiras, a estrada de terra ganha altura.
-         No alto, dentro do condomínio Alto do Vale, um triângulo escuro aparece
-         recortado contra o verde. É ali que o dia desacelera.</p>
-      <dl class="facts">
-        <div><dt>Avaliação</dt><dd>4,94 <small>132 avaliações</small></dd></div>
-        <div><dt>Arquitetura</dt><dd>A-frame <small>espaço inteiro</small></dd></div>
-        <div><dt>Acomoda</dt><dd>4 <small>1 quarto · 2 camas</small></dd></div>
-        <div><dt>Onde</dt><dd>Paty do Alferes <small>Serra do Rio</small></dd></div>
-      </dl>
-    </div>
-    <figure class="arrival-media">
-      <img loading="lazy" decoding="async" src="__ARRIVAL__" alt="Estrada de terra subindo até a Cabana Afrodite, com o chalé A-frame recortado no alto da colina">
-    </figure>
-  </div>
-</section>
+<!-- ============ STATS ============ -->
+<section class="stats"><div class="wrap">
+  <div class="stat"><div class="n">4,94<small>★</small></div><div class="l">Nota geral</div></div>
+  <div class="stat"><div class="n">132</div><div class="l">Avaliações</div></div>
+  <div class="stat"><div class="n">100<small>%</small></div><div class="l">Preferido dos hóspedes</div></div>
+  <div class="stat"><div class="n">A-frame</div><div class="l">Design autoral</div></div>
+</div></section>
 
 <!-- ============ EXPERIÊNCIA ============ -->
 <section class="pad" id="experiencia"><div class="wrap split">
