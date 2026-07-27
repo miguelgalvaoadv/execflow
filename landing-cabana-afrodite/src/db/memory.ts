@@ -14,6 +14,7 @@ import type {
   IcalSyncLogRecord,
   AuditLogRecord,
   ManualBlockRecord,
+  NotificationLogRecord,
 } from "./repository.js";
 import { BLOCKING_STATUSES, ConflictError } from "./repository.js";
 import type { PricingConfig } from "../domain/pricing.js";
@@ -33,7 +34,8 @@ export class InMemoryRepository implements Repository {
   private icalEvents: BusyPeriod[] = [];
   private payments: (PaymentTxRecord & { createdAt: string })[] = [];
   private webhooks = new Map<string, { signatureOk: boolean; processed: boolean; payload: unknown }>();
-  private notifications: unknown[] = [];
+  private notifications: NotificationLogRecord[] = [];
+  private settings = new Map<string, unknown>();
   private specialPeriods: SpecialPeriodRecord[] = [];
   private syncLogs: IcalSyncLogRecord[] = [];
   private auditLogs: AuditLogRecord[] = [];
@@ -107,6 +109,10 @@ export class InMemoryRepository implements Repository {
 
   async listStatusHistory(reservationId: string): Promise<StatusChange[]> {
     return this.statusHistory.filter((h) => h.reservationId === reservationId).map(({ reservationId: _id, ...rest }) => rest);
+  }
+
+  async appendStatusHistory(reservationId: string, change: StatusChange): Promise<void> {
+    this.statusHistory.push({ ...change, reservationId });
   }
 
   async setReservationExpiry(id: string, expiresAtIso: string): Promise<void> {
@@ -227,8 +233,24 @@ export class InMemoryRepository implements Repository {
     if (e) e.processed = true;
   }
 
-  async logNotification(n: unknown): Promise<void> {
-    this.notifications.push(n);
+  async logNotification(n: { reservationId?: string | null; template: string; recipient?: string | null; status?: string }): Promise<void> {
+    this.notifications.push({
+      reservationId: n.reservationId ?? null, template: n.template,
+      recipient: n.recipient ?? null, status: n.status ?? "queued", createdAt: new Date().toISOString(),
+    });
+  }
+  async hasNotification(reservationId: string, template: string): Promise<boolean> {
+    return this.notifications.some((n) => n.reservationId === reservationId && n.template === template);
+  }
+  async listNotifications(limit = 100): Promise<NotificationLogRecord[]> {
+    return this.notifications.slice(-limit).reverse().map((n) => ({ ...n }));
+  }
+
+  async getSetting<T = unknown>(key: string): Promise<T | null> {
+    return (this.settings.has(key) ? (this.settings.get(key) as T) : null);
+  }
+  async setSetting(key: string, value: unknown): Promise<void> {
+    this.settings.set(key, value);
   }
 
   // helpers de teste

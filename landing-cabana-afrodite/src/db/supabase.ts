@@ -16,6 +16,7 @@ import {
   type IcalSyncLogRecord,
   type AuditLogRecord,
   type ManualBlockRecord,
+  type NotificationLogRecord,
 } from "./repository.js";
 import type { PricingConfig, SpecialPeriod } from "../domain/pricing.js";
 import type { BusyPeriod } from "../domain/availability.js";
@@ -175,6 +176,15 @@ export class SupabaseRepository implements Repository {
       out = out.filter((r) => r.guest.fullName.toLowerCase().includes(s) || r.guest.email.toLowerCase().includes(s) || r.friendlyCode.toLowerCase().includes(s));
     }
     return out;
+  }
+
+  async appendStatusHistory(reservationId: string, change: StatusChange): Promise<void> {
+    const { error } = await this.db.from("reservation_status_history").insert({
+      reservation_id: reservationId, from_status: change.fromStatus, to_status: change.toStatus,
+      origin: change.origin, admin_user: change.adminUser, external_event: change.externalEvent,
+      note: change.note, technical_id: change.technicalId,
+    });
+    if (error) throw new Error(`appendStatusHistory: ${error.message}`);
   }
 
   async listStatusHistory(reservationId: string): Promise<StatusChange[]> {
@@ -361,5 +371,27 @@ export class SupabaseRepository implements Repository {
     await this.db.from("notification_logs").insert({
       reservation_id: n.reservationId ?? null, template: n.template, recipient: n.recipient ?? null, status: n.status ?? "queued",
     });
+  }
+  async hasNotification(reservationId: string, template: string): Promise<boolean> {
+    const { data } = await this.db.from("notification_logs").select("id")
+      .eq("reservation_id", reservationId).eq("template", template).limit(1).maybeSingle();
+    return Boolean(data);
+  }
+  async listNotifications(limit = 100): Promise<NotificationLogRecord[]> {
+    const { data } = await this.db.from("notification_logs").select("*")
+      .order("created_at", { ascending: false }).limit(limit);
+    return (data ?? []).map((n: any) => ({
+      reservationId: n.reservation_id, template: n.template, recipient: n.recipient,
+      status: n.status, createdAt: n.created_at,
+    }));
+  }
+
+  async getSetting<T = unknown>(key: string): Promise<T | null> {
+    const { data } = await this.db.from("settings").select("value").eq("key", key).limit(1).maybeSingle();
+    return (data as any)?.value ?? null;
+  }
+  async setSetting(key: string, value: unknown): Promise<void> {
+    const { error } = await this.db.from("settings").upsert({ key, value }, { onConflict: "key" });
+    if (error) throw new Error(`setSetting(${key}): ${error.message}`);
   }
 }

@@ -84,6 +84,7 @@
     { id: "precos", label: "Preços", render: renderPrecos },
     { id: "pagamentos", label: "Pagamentos", render: renderPagamentos },
     { id: "sync", label: "Sincronização", render: renderSync },
+    { id: "notificacoes", label: "Notificações", render: renderNotificacoes },
     { id: "logs", label: "Logs", render: renderLogs },
   ];
 
@@ -95,7 +96,7 @@
         '<div style="display:flex;align-items:center;gap:12px"><span class="who">' + esc(state.email) + '</span>' +
         '<button class="btn ghost sm" id="out">Sair</button></div>' +
       "</header>" +
-      '<nav class="tabs" id="tabs"></nav><main id="main"></main></div>'
+      '<nav class="tabs" id="tabs"></nav><div id="airbnbAlert"></div><main id="main"></main></div>'
     ));
     document.getElementById("out").addEventListener("click", logout);
     var nav = document.getElementById("tabs");
@@ -106,6 +107,36 @@
     });
     window.addEventListener("hashchange", route);
     route();
+    refreshAirbnbAlert();
+  }
+
+  /**
+   * Faixa fixa: reservas confirmadas cujas datas ainda precisam ser bloqueadas
+   * manualmente no Airbnb. Fica visível em todas as abas até o admin confirmar,
+   * porque é a janela em que uma dupla reserva pode acontecer.
+   */
+  async function refreshAirbnbAlert() {
+    var box = document.getElementById("airbnbAlert");
+    if (!box) return;
+    try {
+      var d = await api("/airbnb-pending");
+      var list = d.pending || [];
+      if (!list.length) { box.innerHTML = ""; return; }
+      box.innerHTML =
+        '<div class="airbnb-alert"><h4>⚠️ Bloqueie estas datas no Airbnb</h4>' +
+        "<p>Reservas confirmadas no site. O Airbnb pode demorar horas para reimportar o calendário — bloqueie manualmente agora para evitar dupla reserva.</p><ul>" +
+        list.map(function (p) {
+          return "<li><span><b>" + esc(p.code) + "</b> · " + d10(p.checkIn) + " → " + d10(p.checkOut) + "</span>" +
+            '<button class="btn sm" data-ack="' + esc(p.code) + '">Já bloqueei</button></li>';
+        }).join("") + "</ul></div>";
+      Array.prototype.forEach.call(box.querySelectorAll("[data-ack]"), function (b) {
+        b.addEventListener("click", async function () {
+          b.disabled = true; b.innerHTML = '<span class="spin"></span>';
+          try { await api("/airbnb-pending", { method: "POST", body: JSON.stringify({ code: b.getAttribute("data-ack") }) }); refreshAirbnbAlert(); }
+          catch (e) { b.disabled = false; b.textContent = "Já bloqueei"; }
+        });
+      });
+    } catch (e) { box.innerHTML = ""; }
   }
 
   function route() {
@@ -206,7 +237,7 @@
       var b = h('<button class="btn ' + cls + ' sm">' + label + "</button>");
       b.addEventListener("click", async function () {
         b.disabled = true; var old = b.textContent; b.innerHTML = '<span class="spin"></span>';
-        try { await fn(); modal.remove(); route(); }
+        try { await fn(); modal.remove(); route(); refreshAirbnbAlert(); }
         catch (e) { toast("dmsg", "err", e.message); b.disabled = false; b.textContent = old; }
       });
       acts.appendChild(b);
@@ -478,6 +509,24 @@
       try { var r = await api("/ical-token", { method: "POST" }); document.getElementById("icalurl").textContent = r.url; toast("smsg", "ok", "Token regenerado. Reimporte o link no Airbnb."); }
       catch (e) { toast("smsg", "err", e.message); }
     });
+  }
+
+  // ---------- aba: notificações ----------
+  async function renderNotificacoes(main) {
+    var d = await api("/notifications");
+    var LABEL = {
+      sent: "enviado", failed: "falhou", queued: "na fila",
+      template_missing: "sem template", no_admin_email: "ADMIN_EMAIL não configurado", no_recipient: "sem destinatário",
+    };
+    main.innerHTML = "<h2>Notificações</h2><p class=\"hint\">Mensagens disparadas pelo sistema. Use para conferir o que chegou ao hóspede e ao anfitrião.</p>" +
+      (!d.notifications.length ? '<div class="empty">Nenhuma notificação registrada ainda.</div>' :
+        '<div class="tablewrap"><table><thead><tr><th>Quando</th><th>Mensagem</th><th>Destinatário</th><th>Status</th></tr></thead><tbody>' +
+        d.notifications.map(function (n) {
+          var bad = n.status !== "sent" && n.status !== "queued";
+          return "<tr><td class=\"num\">" + dt(n.createdAt) + '</td><td class="mono">' + esc(n.template) + "</td>" +
+            "<td>" + esc(n.recipient || "—") + "</td>" +
+            '<td' + (bad ? ' style="color:var(--danger)"' : "") + ">" + esc(LABEL[n.status] || n.status) + "</td></tr>";
+        }).join("") + "</tbody></table></div>");
   }
 
   // ---------- aba: logs ----------

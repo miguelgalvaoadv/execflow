@@ -7,11 +7,12 @@ import { quote, isBookable, type Quote } from "../domain/pricing.js";
 import { findConflicts } from "../domain/availability.js";
 import { buildStatusChange, type ReservationStatus } from "../domain/reservation-state.js";
 import { publicToken, externalReference, friendlyCode } from "../domain/tokens.js";
+import { addDays, todayLocal } from "../domain/dates.js";
 import { ConflictError, type Repository, type GuestData, type ReservationRecord } from "../db/repository.js";
 import type { PaymentProvider, PaymentInfo } from "../payments/types.js";
 import type { EmailProvider } from "../email/provider.js";
 import type { IcalFreshness } from "./ical-sync.js";
-import { renderTemplate, type TemplateData } from "../email/templates.js";
+import { renderTemplate, ADMIN_TEMPLATES, type TemplateData } from "../email/templates.js";
 import { randomUUID } from "node:crypto";
 
 export interface ServiceConfig {
@@ -30,6 +31,8 @@ export interface ServiceDeps {
   ensureIcalFresh?: () => Promise<IcalFreshness>;
   email?: EmailProvider;
   emailFrom?: string;
+  /** Destino dos alertas operacionais (ADMIN_EMAIL). */
+  adminEmail?: string | null;
 }
 
 export interface RequestInput {
@@ -38,6 +41,16 @@ export interface RequestInput {
   adults: number;
   children?: number;
   guest: GuestData;
+}
+
+/** Chave em `settings` com as reservas confirmadas ainda não bloqueadas no Airbnb. */
+export const PENDING_AIRBNB_KEY = "pending_airbnb_blocks";
+
+export interface PendingAirbnbBlock {
+  code: string;
+  checkIn: string;
+  checkOut: string;
+  confirmedAt: string;
 }
 
 export interface WebhookOutcome {
@@ -54,6 +67,7 @@ export class ReservationService {
   private ensureIcalFresh: () => Promise<IcalFreshness>;
   private email?: EmailProvider;
   private emailFrom: string;
+  private adminEmail: string | null;
 
   constructor(deps: ServiceDeps) {
     this.repo = deps.repo;
@@ -63,6 +77,7 @@ export class ReservationService {
     this.ensureIcalFresh = deps.ensureIcalFresh ?? (async () => ({ ok: true, lastSyncAt: null, reason: "no-external-calendar" }));
     this.email = deps.email;
     this.emailFrom = deps.emailFrom ?? "Cabana Afrodite <reservas@exemplo.com>";
+    this.adminEmail = deps.adminEmail ?? null;
   }
 
   /** Frescor do iCal, best-effort (nunca lança — para pontos não-críticos). */
@@ -86,19 +101,37 @@ export class ReservationService {
     return `${this.config.siteUrl}/?reserva=${encodeURIComponent(token)}`;
   }
 
-  /** Registra a notificação e envia e-mail (best-effort — nunca quebra o fluxo). */
-  private async notify(template: string, opts: { to?: string | null; reservationId?: string | null; data?: TemplateData }): Promise<void> {
+  private adminUrl(): string {
+    return `${this.config.siteUrl}/admin`;
+  }
+
+  /**
+   * Registra a notificação e envia e-mail (best-effort — nunca quebra o fluxo).
+   * `audience: "admin"` envia ao anfitrião (ADMIN_EMAIL), ignorando `to`; assim
+   * um alerta operacional nunca vaza para o hóspede (e vice-versa).
+   */
+  private async notify(
+    template: string,
+    opts: { to?: string | null; reservationId?: string | null; data?: TemplateData; audience?: "guest" | "admin" },
+  ): Promise<void> {
+    const isAdmin = opts.audience === "admin" || ADMIN_TEMPLATES.has(template);
+    const recipient = isAdmin ? this.adminEmail : opts.to ?? null;
+    const data: TemplateData = isAdmin ? { adminUrl: this.adminUrl(), ...(opts.data ?? {}) } : (opts.data ?? {});
+
     let status = "queued";
-    if (this.email && opts.to) {
+    const rendered = renderTemplate(template, data);
+    if (!rendered) {
+      // Antes isso sumia em silêncio: o alerta era "registrado" mas nunca enviado.
+      status = "template_missing";
+    } else if (!recipient) {
+      status = isAdmin ? "no_admin_email" : "no_recipient";
+    } else if (this.email) {
       try {
-        const rendered = renderTemplate(template, opts.data ?? {});
-        if (rendered) {
-          const r = await this.email.send({ to: opts.to, subject: rendered.subject, text: rendered.text }, this.emailFrom);
-          status = r.ok ? "sent" : "failed";
-        }
+        const r = await this.email.send({ to: recipient, subject: rendered.subject, text: rendered.text }, this.emailFrom);
+        status = r.ok ? "sent" : "failed";
       } catch { status = "failed"; }
     }
-    await this.repo.logNotification({ reservationId: opts.reservationId ?? null, template, recipient: opts.to ?? null, status });
+    await this.repo.logNotification({ reservationId: opts.reservationId ?? null, template, recipient, status });
   }
 
   async priceQuote(input: { checkIn: string; checkOut: string; adults: number; children?: number }): Promise<Quote> {
@@ -159,7 +192,13 @@ export class ReservationService {
       guest: g,
     };
     await this.repo.createReservation(rec);
+    // Estado inicial no histórico (spec §8: registrar TODAS as mudanças de status).
+    await this.repo.appendStatusHistory(id, buildStatusChange({
+      from: null, to: "pending_approval", origin: "guest", technicalId: randomUUID(), note: "Solicitação enviada pelo site",
+    }));
     await this.notify("request_received", { to: g.email, reservationId: id, data: { code: rec.friendlyCode, checkIn: rec.checkIn, checkOut: rec.checkOut, trackUrl: this.trackUrl(rec.publicToken), firstName: g.fullName.split(" ")[0] } });
+    // Spec §7 passo 15: o administrador recebe uma notificação.
+    await this.notify("admin_new_request", { reservationId: id, audience: "admin", data: { code: rec.friendlyCode, checkIn: rec.checkIn, checkOut: rec.checkOut, guestName: g.fullName } });
     return { reservation: rec, quote: q };
   }
 
@@ -314,7 +353,65 @@ export class ReservationService {
       throw e;
     }
     await this.notify("reservation_confirmed", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, trackUrl: this.trackUrl(r.publicToken) } });
+    // Spec §7 passo 31: avisar o admin para bloquear a data no Airbnb IMEDIATAMENTE
+    // (o Airbnb pode demorar horas para reimportar o .ics — janela de dupla reserva).
+    await this.addPendingAirbnbBlock(r);
+    await this.notify("airbnb_block_needed", { reservationId: r.id, audience: "admin", data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut } });
     return { status: "confirmed", detail: r.id };
+  }
+
+  /** Pendências de bloqueio manual no Airbnb (exibidas em destaque no painel). */
+  private async addPendingAirbnbBlock(r: ReservationRecord): Promise<void> {
+    try {
+      const list = (await this.repo.getSetting<PendingAirbnbBlock[]>(PENDING_AIRBNB_KEY)) ?? [];
+      if (list.some((p) => p.code === r.friendlyCode)) return;
+      list.push({ code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, confirmedAt: this.now().toISOString() });
+      await this.repo.setSetting(PENDING_AIRBNB_KEY, list);
+    } catch { /* aviso é best-effort: nunca impede a confirmação */ }
+  }
+
+  async listPendingAirbnbBlocks(): Promise<PendingAirbnbBlock[]> {
+    return (await this.repo.getSetting<PendingAirbnbBlock[]>(PENDING_AIRBNB_KEY)) ?? [];
+  }
+
+  /** Admin marcou "já bloqueei no Airbnb". */
+  async clearPendingAirbnbBlock(code: string, adminUser: string): Promise<PendingAirbnbBlock[]> {
+    const list = (await this.repo.getSetting<PendingAirbnbBlock[]>(PENDING_AIRBNB_KEY)) ?? [];
+    const next = list.filter((p) => p.code !== code);
+    await this.repo.setSetting(PENDING_AIRBNB_KEY, next);
+    await this.repo.logAudit({ actor: adminUser, action: "airbnb_block.acknowledge", entity: "settings", entityId: code });
+    return next;
+  }
+
+  /**
+   * Lembretes automáticos (rodam na função agendada):
+   *  - pagamento a vencer (reservas awaiting_payment perto do prazo);
+   *  - check-in próximo (reservas confirmadas).
+   * Idempotente: cada lembrete sai uma única vez por reserva.
+   */
+  async sendDueReminders(opts: { paymentWindowHours?: number; checkinWindowDays?: number } = {}): Promise<{ payment: number; checkin: number }> {
+    const paymentWindowMs = (opts.paymentWindowHours ?? 6) * 3600_000;
+    const checkinWindowDays = opts.checkinWindowDays ?? 2;
+    const now = this.now();
+    let payment = 0, checkin = 0;
+
+    for (const r of await this.repo.listReservations({ status: "awaiting_payment" })) {
+      if (!r.paymentExpiresAt) continue;
+      const left = new Date(r.paymentExpiresAt).getTime() - now.getTime();
+      if (left <= 0 || left > paymentWindowMs) continue;
+      if (await this.repo.hasNotification(r.id, "payment_reminder")) continue;
+      await this.notify("payment_reminder", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, firstName: r.guest.fullName.split(" ")[0], trackUrl: this.trackUrl(r.publicToken) } });
+      payment++;
+    }
+
+    const limit = addDays(todayLocal(now), checkinWindowDays);
+    for (const r of await this.repo.listReservations({ status: "confirmed" })) {
+      if (r.checkIn > limit || r.checkIn < todayLocal(now)) continue;
+      if (await this.repo.hasNotification(r.id, "checkin_reminder")) continue;
+      await this.notify("checkin_reminder", { to: r.guest.email, reservationId: r.id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut, firstName: r.guest.fullName.split(" ")[0] } });
+      checkin++;
+    }
+    return { payment, checkin };
   }
 
   /**

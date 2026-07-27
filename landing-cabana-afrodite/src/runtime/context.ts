@@ -39,6 +39,7 @@ export function getContext(env: NodeJS.ProcessEnv = process.env) {
     ensureIcalFresh: () => requireFreshIcal(repo, cfg),
     email,
     emailFrom: cfg.email.from,
+    adminEmail: cfg.admin.email,
   });
 
   cached = { cfg, repo, service };

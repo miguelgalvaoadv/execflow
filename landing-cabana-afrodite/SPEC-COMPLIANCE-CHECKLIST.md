@@ -62,6 +62,24 @@ cancelar (com histórico e audit log), editar preços (persistidos e refletidos 
 pública), criar período especial, bloquear datas (data fica indisponível na API pública),
 todas as 6 abas carregando. **111 testes verdes**, typecheck exit 0.
 
+## ✅ Operação contínua (§7 p.15/31, §8, §15, §20) — concluído em 27/07
+
+Auditoria posterior ao painel encontrou seis lacunas que só apareceriam com o sistema
+rodando. Todas fechadas (commit desta leva):
+
+| Lacuna | Correção |
+|---|---|
+| **`expireOverdue()` nunca era chamado** — reserva aprovada e não paga bloquearia as datas para sempre | `expire-scheduled.ts` (cron `0 * * * *`) executa expiração + lembretes. Reserva com pagamento aprovado nunca expira. |
+| **Alertas críticos ao admin sumiam** — `payment_needs_manual`/`payment_mismatch`/`payment_after_conflict` não tinham template → `renderTemplate` devolvia `null` e nada era enviado | Templates criados; `notify()` ganhou `audience: guest \| admin` (usa `ADMIN_EMAIL`); template ausente agora registra `template_missing` em vez de sumir. |
+| **Admin nunca era notificado** (§7 p.15) | `admin_new_request` a cada solicitação. |
+| **Faltava o aviso "bloqueie no Airbnb"** (§3 e §7 p.31) | Na confirmação: e-mail `airbnb_block_needed` + pendência em `settings.pending_airbnb_blocks` + **faixa fixa no painel** com "Já bloqueei" (`admin-airbnb-pending.ts`). |
+| **Criação da reserva não entrava no histórico** (§8) | `appendStatusHistory` grava `null → pending_approval` (origem `guest`) na solicitação. |
+| **Templates da §20 faltando** | `payment_reminder`, `payment_pending`, `refund_registered`, `checkin_reminder`, `checkin_instructions` + `sendDueReminders()` idempotente (via `hasNotification`) e aba **Notificações** no painel. |
+
+**Verificado ao vivo:** histórico inicial aparece no modal; alerta `admin_new_request`
+enviado ao `ADMIN_EMAIL` (status `sent`); faixa do Airbnb renderiza com "Já bloqueei";
+aba Notificações lista destinatário e status. **120 testes verdes**, typecheck exit 0.
+
 ## ⚠️ Parcial (por decisão, documentado)
 
 | Seção | Item | Situação |

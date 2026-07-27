@@ -105,6 +105,15 @@ export interface AuditLogRecord {
   createdAt: string;
 }
 
+/** Notificação registrada (enviada, falhada ou sem template). */
+export interface NotificationLogRecord {
+  reservationId: string | null;
+  template: string;
+  recipient: string | null;
+  status: string;
+  createdAt: string;
+}
+
 export interface ManualBlockRecord {
   id: string;
   checkIn: LocalDate;
@@ -134,6 +143,8 @@ export interface Repository {
   listReservations(filter?: { status?: ReservationStatus; search?: string }): Promise<ReservationRecord[]>;
   /** Histórico de mudanças de status de uma reserva (mais antigo primeiro). */
   listStatusHistory(reservationId: string): Promise<StatusChange[]>;
+  /** Grava uma entrada de histórico sem transicionar (ex.: estado inicial). */
+  appendStatusHistory(reservationId: string, change: StatusChange): Promise<void>;
 
   // bloqueios manuais
   addManualBlock(b: { checkIn: LocalDate; checkOut: LocalDate; reason?: string; createdBy?: string }): Promise<string>;
@@ -173,4 +184,11 @@ export interface Repository {
 
   // notificações
   logNotification(n: { reservationId?: string | null; template: string; recipient?: string | null; status?: string }): Promise<void>;
+  /** Já existe notificação deste template para esta reserva? (idempotência de lembretes) */
+  hasNotification(reservationId: string, template: string): Promise<boolean>;
+  listNotifications(limit?: number): Promise<NotificationLogRecord[]>;
+
+  // configurações genéricas (chave/valor em `settings`)
+  getSetting<T = unknown>(key: string): Promise<T | null>;
+  setSetting(key: string, value: unknown): Promise<void>;
 }
