@@ -61,6 +61,32 @@ describe("netlify functions (mock)", () => {
     expect(res.status).toBe(400);
   });
 
+  it("todas as rotas admin exigem autenticação (401)", async () => {
+    const mods = await Promise.all([
+      import("../netlify/functions/admin-cancel.js"),
+      import("../netlify/functions/admin-complete.js"),
+      import("../netlify/functions/admin-history.js"),
+      import("../netlify/functions/admin-pricing.js"),
+      import("../netlify/functions/admin-special-periods.js"),
+      import("../netlify/functions/admin-payments.js"),
+      import("../netlify/functions/admin-sync-status.js"),
+      import("../netlify/functions/admin-ical-token.js"),
+      import("../netlify/functions/admin-audit-logs.js"),
+      import("../netlify/functions/admin-blocks.js"),
+      import("../netlify/functions/admin-resend-payment-link.js"),
+    ]);
+    const posts = new Set([0, 1, 10]); // cancel, complete, resend usam POST
+    for (let i = 0; i < mods.length; i++) {
+      const method = posts.has(i) ? "POST" : "GET";
+      const req = new Request("http://x/api/admin/x", {
+        method,
+        ...(method === "POST" ? { body: JSON.stringify({ token: "t" }), headers: { "content-type": "application/json" } } : {}),
+      });
+      const res = await mods[i]!.default(req);
+      expect(res.status, `função #${i}`).toBe(401);
+    }
+  });
+
   it("ical-export exige token correto", async () => {
     const bad = await icalExport(new Request("http://x/api/calendar/reservations-ERRADO.ics?file=reservations-ERRADO.ics"));
     expect(bad.status).toBe(404);

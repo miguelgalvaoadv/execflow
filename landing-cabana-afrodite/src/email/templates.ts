@@ -29,6 +29,10 @@ const T: Record<string, (d: TemplateData) => { subject: string; text: string }> 
     subject: `Reserva confirmada! 🎉 Cabana Afrodite (${d.code})`,
     text: `Sua reserva ${d.code} está confirmada para ${d.checkIn} a ${d.checkOut}. Até breve na Cabana Afrodite! Detalhes: ${d.trackUrl ?? ""}`,
   }),
+  reservation_cancelled: (d) => ({
+    subject: `Reserva cancelada — Cabana Afrodite (${d.code})`,
+    text: `Sua reserva ${d.code} (${d.checkIn} a ${d.checkOut}) foi cancelada. Se houver valor a reembolsar, entraremos em contato com as orientações.`,
+  }),
   reservation_expired: (d) => ({
     subject: `Prazo de pagamento expirado — ${d.code}`,
     text: `O prazo de pagamento da solicitação ${d.code} expirou e as datas foram liberadas. Se ainda tiver interesse, faça uma nova solicitação.`,

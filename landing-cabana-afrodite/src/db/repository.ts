@@ -73,6 +73,46 @@ export interface WebhookRecordResult {
   alreadyProcessed: boolean;
 }
 
+/** Período especial / feriado com tarifa própria (editável pelo painel). */
+export interface SpecialPeriodRecord {
+  id: string;
+  name: string;
+  startDate: LocalDate;
+  endDate: LocalDate;
+  nightlyCents: Cents | null;
+  minNights: number | null;
+  discountPercent: number | null;
+}
+
+/** Log de uma tentativa de sincronização do iCal do Airbnb. */
+export interface IcalSyncLogRecord {
+  startedAt: string;
+  finishedAt: string | null;
+  success: boolean | null;
+  eventsFound: number | null;
+  periodsImported: number | null;
+  durationMs: number | null;
+  errorMessage: string | null;
+}
+
+/** Entrada do log administrativo (quem fez o quê). */
+export interface AuditLogRecord {
+  actor: string | null;
+  action: string;
+  entity: string | null;
+  entityId: string | null;
+  metadata: Record<string, unknown> | null;
+  createdAt: string;
+}
+
+export interface ManualBlockRecord {
+  id: string;
+  checkIn: LocalDate;
+  checkOut: LocalDate;
+  reason: string | null;
+  active: boolean;
+}
+
 export interface Repository {
   // preços / configuração
   getActivePricingConfig(): Promise<PricingConfig>;
@@ -90,11 +130,33 @@ export interface Repository {
   transitionStatus(id: string, to: ReservationStatus, change: StatusChange): Promise<void>;
   /** Persiste o prazo de pagamento (definido na aprovação). */
   setReservationExpiry(id: string, expiresAtIso: string): Promise<void>;
-  listReservations(filter?: { status?: ReservationStatus }): Promise<ReservationRecord[]>;
+  /** `search` filtra por nome ou e-mail do hóspede (case-insensitive). */
+  listReservations(filter?: { status?: ReservationStatus; search?: string }): Promise<ReservationRecord[]>;
+  /** Histórico de mudanças de status de uma reserva (mais antigo primeiro). */
+  listStatusHistory(reservationId: string): Promise<StatusChange[]>;
 
   // bloqueios manuais
   addManualBlock(b: { checkIn: LocalDate; checkOut: LocalDate; reason?: string; createdBy?: string }): Promise<string>;
   removeManualBlock(id: string): Promise<void>;
+  listManualBlocks(): Promise<ManualBlockRecord[]>;
+
+  // preços e períodos especiais (editáveis pelo painel)
+  updatePricingConfig(patch: Partial<PricingConfig>): Promise<void>;
+  listSpecialPeriods(): Promise<SpecialPeriodRecord[]>;
+  createSpecialPeriod(p: Omit<SpecialPeriodRecord, "id">): Promise<string>;
+  deleteSpecialPeriod(id: string): Promise<void>;
+
+  // consultas administrativas
+  listPaymentTransactions(limit?: number): Promise<(PaymentTxRecord & { createdAt: string })[]>;
+  listIcalSyncLogs(limit?: number): Promise<IcalSyncLogRecord[]>;
+
+  // token do calendário .ics (regenerável pelo painel)
+  getIcalExportToken(): Promise<string | null>;
+  setIcalExportToken(token: string): Promise<void>;
+
+  // log administrativo
+  logAudit(entry: { actor?: string | null; action: string; entity?: string | null; entityId?: string | null; metadata?: Record<string, unknown> | null }): Promise<void>;
+  listAuditLogs(limit?: number): Promise<AuditLogRecord[]>;
 
   // iCal
   replaceIcalEvents(events: BusyPeriod[], sourceUrl: string | null): Promise<void>;

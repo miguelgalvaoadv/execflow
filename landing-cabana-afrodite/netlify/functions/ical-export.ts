@@ -17,7 +17,9 @@ export default async (req: Request): Promise<Response> => {
   };
   const token = (url.searchParams.get("token") || "") || extract(url.searchParams.get("file")) || extract(url.pathname);
 
-  const expected = cfg.icalExportToken;
+  // Token ativo vem do banco (regenerável pelo painel); env var é o fallback.
+  const stored = await repo.getIcalExportToken().catch(() => null);
+  const expected = stored ?? cfg.icalExportToken;
   const a = Buffer.from(token), b = Buffer.from(expected);
   if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return new Response("Não encontrado", { status: 404 });

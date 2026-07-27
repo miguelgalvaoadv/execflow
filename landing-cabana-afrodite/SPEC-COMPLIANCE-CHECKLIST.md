@@ -31,29 +31,43 @@
 | 24 | 100 testes cobrindo praticamente toda a lista da seção 24 | `tests/*.test.ts` |
 | 25 | Lint/typecheck/testes/build rodados a cada marco | histórico de commits |
 
-## ⚠️ Parcial
+## ✅ Painel administrativo (seção 17) — concluído em 27/07
 
-| Seção | Item | Gap |
+UI em `site/admin/` (fonte em `raw/admin.{css,js}` + `raw/admin-index.html`), vanilla JS com
+a identidade visual da landing. Login por Supabase Auth (sandbox/prod) ou sessão HMAC (mock),
+token em `sessionStorage`, 401 devolve ao login. Abas: Reservas · Calendário · Preços ·
+Pagamentos · Sincronização · Logs.
+
+| Item da spec | Onde |
+|---|---|
+| Área protegida por autenticação | `site/admin/` + `src/auth/admin.ts` |
+| Calendário mensal com ocupação/bloqueios | aba Calendário (`admin-blocks.ts`) |
+| Listar/pesquisar por hóspede/filtrar por status/abrir detalhes | aba Reservas (`admin-reservations.ts`, filtro `search`) |
+| Aprovar · recusar | `admin-approve.ts`, `admin-reject.ts` |
+| **Cancelar** · **marcar concluída** | `admin-cancel.ts`, `admin-complete.ts` + `cancelReservation`/`completeReservation` |
+| **Consultar histórico** | `admin-history.ts` + `listStatusHistory` |
+| Bloquear/remover datas manualmente | `admin-block.ts` + `listManualBlocks` |
+| **Configurar preços/taxas/hóspedes/mín. noites/descontos/caução/sinal/prazo/parcelamento** | `admin-pricing.ts` + `updatePricingConfig` |
+| **Configurar datas especiais** | `admin-special-periods.ts` |
+| **Consultar pagamentos** | `admin-payments.ts` |
+| Copiar link do `.ics` · **regenerar token** | `admin-ical-token.ts` (token em `settings`, fallback env) |
+| Forçar sync do Airbnb · **ver última sync e erros** | `admin-ical-sync.ts`, `admin-sync-status.ts` |
+| **Reenviar link de pagamento** | `admin-resend-payment-link.ts` |
+| Exportar CSV | `admin-export-csv.ts` |
+| **Consultar logs administrativos** | `admin-audit-logs.ts` + `logAudit` (grava em cancel/complete/pricing/períodos/token/reenvio) |
+| Nunca alterar silenciosamente para `paid` | confirmação manual exige nota e registra origem `admin` no histórico |
+
+**Verificado ao vivo** (dev-server em modo mock, navegador): login, listagem, aprovar,
+cancelar (com histórico e audit log), editar preços (persistidos e refletidos na cotação
+pública), criar período especial, bloquear datas (data fica indisponível na API pública),
+todas as 6 abas carregando. **111 testes verdes**, typecheck exit 0.
+
+## ⚠️ Parcial (por decisão, documentado)
+
+| Seção | Item | Situação |
 |---|---|---|
-| 11 | Regenerar token do `.ics` pelo admin | Token existe e funciona, mas **não há função para trocá-lo** |
-| 16 | Reembolso | Schema pronto, mas **sem função admin para registrar/iniciar** (mesmo que só o mock) |
-| 17 | Painel administrativo | **Todas as ações existem como API, nenhuma tem interface visual** — ver pendências |
+| 16 | Reembolso | Cancelar uma reserva paga registra valor/observação de reembolso no histórico e sinaliza `requiresManualRefund`. O **estorno real continua manual** no painel do Mercado Pago — a spec exige confirmação administrativa explícita e proíbe estorno automático em teste. |
 
-## ❌ Pendente (achado na auditoria de 27/07)
-
-| Seção | Item | Por quê importa |
-|---|---|---|
-| 17 | **UI do painel** (login, lista, calendário, detalhes) | Hoje só eu opero via script — cliente não consegue usar sozinho |
-| 17 | Cancelar reserva (admin) | Estado `cancelled` existe na máquina, mas nenhuma function aciona |
-| 17 | Marcar como concluída (`completed`) | Idem |
-| 17 | Consultar histórico de status de uma reserva | `reservation_status_history` é gravado mas nada lê de volta |
-| 17 | Configurar preços/taxas/descontos/caução/sinal/parcelamento pelo painel | `pricing_rules` só existe via seed SQL — sem endpoint de update |
-| 17 | Configurar períodos especiais/feriados pelo painel | `special_periods` idem — só SQL manual |
-| 17 | Consultar pagamentos | Sem endpoint que liste `payment_transactions` |
-| 17 | Ver última sincronização do iCal + erros | `ical_sync_logs` gravado mas não exposto |
-| 17 | Reenviar link de pagamento | Existe `/api/pay` mas não uma ação admin dedicada com notificação |
-| 17 | Consultar logs administrativos (`audit_logs`) | Tabela existe na migration, **nada grava nem lê nela ainda** |
-
-**Conclusão:** o **núcleo/motor** (regras de negócio, segurança, banco, pagamento, e-mail,
-iCal) está **completo e testado conforme a spec**. O que falta é majoritariamente a
-**camada de operação do admin** — que é exatamente o que vamos construir agora.
+**Conclusão:** núcleo e painel administrativo agora **completos conforme a spec**. Resta
+apenas o que depende do cliente (link iCal do Airbnb, importar o `.ics` no Airbnb,
+credenciais de produção do Mercado Pago + domínio).

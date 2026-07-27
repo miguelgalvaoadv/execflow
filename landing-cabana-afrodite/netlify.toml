@@ -43,6 +43,16 @@
   from = "/reserva/*"
   to = "/index.html"
   status = 200
+
+# Painel administrativo (área protegida por login)
+[[redirects]]
+  from = "/admin"
+  to = "/admin/index.html"
+  status = 200
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin/index.html"
+  status = 200
 [[redirects]]
   from = "/api/reservations/:token"
   to = "/.netlify/functions/get-reservation?token=:token"

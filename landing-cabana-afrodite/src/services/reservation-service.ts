@@ -390,6 +390,50 @@ export class ReservationService {
     return { ...r, status: "confirmed" };
   }
 
+  /**
+   * Cancelamento administrativo. Libera as datas (cancelled não bloqueia).
+   * Se a reserva já estava paga/confirmada, registra a informação de reembolso
+   * no histórico — o reembolso REAL é feito manualmente pelo admin no Mercado
+   * Pago (a spec exige confirmação explícita; não automatizamos estorno).
+   */
+  async cancelReservation(
+    id: string,
+    adminUser: string,
+    opts: { reason?: string; refundCents?: number; refundNote?: string } = {},
+  ): Promise<{ status: ReservationStatus; requiresManualRefund: boolean }> {
+    const r = await this.repo.getReservationById(id);
+    if (!r) throw new NotFoundError("Reserva não encontrada.");
+    const wasPaid = r.status === "paid" || r.status === "confirmed";
+    const parts = [opts.reason?.trim() || "Cancelada pelo administrador"];
+    if (wasPaid) {
+      parts.push(
+        `Pagamento já recebido (${(r.payNowCents / 100).toFixed(2)} ${r.currency}).`,
+        opts.refundCents !== undefined ? `Reembolso previsto: ${(opts.refundCents / 100).toFixed(2)} ${r.currency}.` : "Reembolso a definir.",
+        "Estorno deve ser feito manualmente no painel do Mercado Pago.",
+      );
+      if (opts.refundNote) parts.push(opts.refundNote);
+    }
+    const note = parts.join(" ");
+    await this.repo.transitionStatus(id, "cancelled",
+      buildStatusChange({ from: r.status, to: "cancelled", origin: "admin", adminUser, technicalId: randomUUID(), note }));
+    await this.repo.logAudit({
+      actor: adminUser, action: "reservation.cancel", entity: "reservations", entityId: id,
+      metadata: { previousStatus: r.status, wasPaid, refundCents: opts.refundCents ?? null },
+    });
+    await this.notify("reservation_cancelled", { to: r.guest.email, reservationId: id, data: { code: r.friendlyCode, checkIn: r.checkIn, checkOut: r.checkOut } });
+    return { status: "cancelled", requiresManualRefund: wasPaid };
+  }
+
+  /** Marca uma reserva confirmada como concluída (após a estadia). */
+  async completeReservation(id: string, adminUser: string, note?: string): Promise<{ status: ReservationStatus }> {
+    const r = await this.repo.getReservationById(id);
+    if (!r) throw new NotFoundError("Reserva não encontrada.");
+    await this.repo.transitionStatus(id, "completed",
+      buildStatusChange({ from: r.status, to: "completed", origin: "admin", adminUser, technicalId: randomUUID(), note: note ?? "Estadia concluída" }));
+    await this.repo.logAudit({ actor: adminUser, action: "reservation.complete", entity: "reservations", entityId: id, metadata: { previousStatus: r.status } });
+    return { status: "completed" };
+  }
+
   /** Passo 15 (expiração): libera reservas aprovadas e não pagas no prazo. */
   async expireOverdue(): Promise<string[]> {
     const now = this.now();

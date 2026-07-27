@@ -33,6 +33,7 @@ function resolveApi(method: string, path: string): { file: string; query: Record
   if (m) return { file: "get-reservation", query: { token: decodeURIComponent(m[1]!) } };
   m = path.match(/^\/api\/calendar\/(.+)$/);
   if (m) return { file: "ical-export", query: { file: decodeURIComponent(m[1]!) } };
+  if (path === "/api/reconcile") return { file: "reconcile", query: q };
   m = path.match(/^\/api\/admin\/(.+)$/);
   if (m) return { file: `admin-${m[1]}`, query: q };
   return null;

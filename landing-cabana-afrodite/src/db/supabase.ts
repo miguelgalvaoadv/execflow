@@ -12,6 +12,10 @@ import {
   type ReservationRecord,
   type PaymentTxRecord,
   type WebhookRecordResult,
+  type SpecialPeriodRecord,
+  type IcalSyncLogRecord,
+  type AuditLogRecord,
+  type ManualBlockRecord,
 } from "./repository.js";
 import type { PricingConfig, SpecialPeriod } from "../domain/pricing.js";
 import type { BusyPeriod } from "../domain/availability.js";
@@ -160,13 +164,26 @@ export class SupabaseRepository implements Repository {
     await this.db.from("reservations").update({ payment_expires_at: expiresAtIso }).eq("id", id);
   }
 
-  async listReservations(filter?: { status?: ReservationStatus }): Promise<ReservationRecord[]> {
+  async listReservations(filter?: { status?: ReservationStatus; search?: string }): Promise<ReservationRecord[]> {
     let q = this.db.from("reservations").select("*").order("created_at", { ascending: false });
     if (filter?.status) q = q.eq("status", filter.status);
     const { data } = await q;
-    const out: ReservationRecord[] = [];
+    let out: ReservationRecord[] = [];
     for (const row of data ?? []) { const r = await this.hydrate(row); if (r) out.push(r); }
+    if (filter?.search) {
+      const s = filter.search.toLowerCase();
+      out = out.filter((r) => r.guest.fullName.toLowerCase().includes(s) || r.guest.email.toLowerCase().includes(s) || r.friendlyCode.toLowerCase().includes(s));
+    }
     return out;
+  }
+
+  async listStatusHistory(reservationId: string): Promise<StatusChange[]> {
+    const { data } = await this.db.from("reservation_status_history")
+      .select("*").eq("reservation_id", reservationId).order("created_at", { ascending: true });
+    return (data ?? []).map((h: any) => ({
+      fromStatus: h.from_status, toStatus: h.to_status, at: h.created_at, origin: h.origin,
+      adminUser: h.admin_user, externalEvent: h.external_event, note: h.note, technicalId: h.technical_id,
+    }));
   }
 
   async addManualBlock(b: { checkIn: LocalDate; checkOut: LocalDate; reason?: string; createdBy?: string }): Promise<string> {
@@ -178,6 +195,102 @@ export class SupabaseRepository implements Repository {
   }
   async removeManualBlock(id: string): Promise<void> {
     await this.db.from("manual_blocks").update({ active: false }).eq("id", id);
+  }
+  async listManualBlocks(): Promise<ManualBlockRecord[]> {
+    const { data } = await this.db.from("manual_blocks").select("id,check_in,check_out,reason,active")
+      .eq("active", true).order("check_in", { ascending: true });
+    return (data ?? []).map((b: any) => ({ id: b.id, checkIn: b.check_in, checkOut: b.check_out, reason: b.reason, active: b.active }));
+  }
+
+  /** Atualiza a linha ativa de pricing_rules (campos do PricingConfig → colunas). */
+  async updatePricingConfig(patch: Partial<PricingConfig>): Promise<void> {
+    const row: Record<string, unknown> = {};
+    if (patch.defaultNightlyCents !== undefined) row.default_nightly_cents = patch.defaultNightlyCents;
+    if (patch.weekdayNightlyCents !== undefined) row.weekday_nightly_cents = patch.weekdayNightlyCents;
+    if (patch.cleaningFeeCents !== undefined) row.cleaning_fee_cents = patch.cleaningFeeCents;
+    if (patch.includedGuests !== undefined) row.included_guests = patch.includedGuests;
+    if (patch.extraGuestFeeCents !== undefined) row.extra_guest_fee_cents = patch.extraGuestFeeCents;
+    if (patch.extraGuestPer !== undefined) row.extra_guest_per = patch.extraGuestPer;
+    if (patch.maxGuests !== undefined) row.max_guests = patch.maxGuests;
+    if (patch.minNights !== undefined) row.min_nights = patch.minNights;
+    if (patch.maxNights !== undefined) row.max_nights = patch.maxNights;
+    if (patch.minReservationCents !== undefined) row.min_reservation_cents = patch.minReservationCents;
+    if (patch.flatDiscountPercent !== undefined) row.flat_discount_percent = patch.flatDiscountPercent;
+    if (patch.lengthOfStayDiscounts !== undefined) row.length_of_stay_discounts = patch.lengthOfStayDiscounts;
+    if (patch.securityDepositCents !== undefined) row.security_deposit_cents = patch.securityDepositCents;
+    if (patch.chargeDepositUpfront !== undefined) row.charge_deposit_upfront = patch.chargeDepositUpfront;
+    if (patch.prepBufferNights !== undefined) row.prep_buffer_nights = patch.prepBufferNights;
+    if (patch.payment?.mode !== undefined) row.payment_mode = patch.payment.mode;
+    if (patch.payment?.signalPercent !== undefined) row.signal_percent = patch.payment.signalPercent;
+    if (patch.payment?.expirationHours !== undefined) row.payment_expiration_hours = patch.payment.expirationHours;
+    if (patch.payment?.maxInstallments !== undefined) row.max_installments = patch.payment.maxInstallments;
+    if (Object.keys(row).length === 0) return;
+    const { error } = await this.db.from("pricing_rules").update(row).eq("is_active", true);
+    if (error) throw new Error(`updatePricingConfig: ${error.message}`);
+  }
+
+  async listSpecialPeriods(): Promise<SpecialPeriodRecord[]> {
+    const { data } = await this.db.from("special_periods").select("*").order("start_date", { ascending: true });
+    return (data ?? []).map((p: any) => ({
+      id: p.id, name: p.name, startDate: p.start_date, endDate: p.end_date,
+      nightlyCents: p.nightly_cents, minNights: p.min_nights, discountPercent: p.discount_percent,
+    }));
+  }
+  async createSpecialPeriod(p: Omit<SpecialPeriodRecord, "id">): Promise<string> {
+    const { data, error } = await this.db.from("special_periods").insert({
+      name: p.name, start_date: p.startDate, end_date: p.endDate,
+      nightly_cents: p.nightlyCents, min_nights: p.minNights, discount_percent: p.discountPercent,
+    }).select("id").single();
+    if (error) throw new Error(`createSpecialPeriod: ${error.message}`);
+    return data.id;
+  }
+  async deleteSpecialPeriod(id: string): Promise<void> {
+    const { error } = await this.db.from("special_periods").delete().eq("id", id);
+    if (error) throw new Error(`deleteSpecialPeriod: ${error.message}`);
+  }
+
+  async listPaymentTransactions(limit = 50): Promise<(PaymentTxRecord & { createdAt: string })[]> {
+    const { data } = await this.db.from("payment_transactions").select("*")
+      .order("created_at", { ascending: false }).limit(limit);
+    return (data ?? []).map((t: any) => ({
+      reservationId: t.reservation_id, provider: t.provider, preferenceId: t.preference_id,
+      paymentId: t.payment_id, status: t.status, amountCents: t.amount_cents, currency: t.currency,
+      liveMode: t.live_mode, externalReference: t.external_reference, createdAt: t.created_at,
+    }));
+  }
+
+  async listIcalSyncLogs(limit = 20): Promise<IcalSyncLogRecord[]> {
+    const { data } = await this.db.from("ical_sync_logs").select("*")
+      .order("started_at", { ascending: false }).limit(limit);
+    return (data ?? []).map((l: any) => ({
+      startedAt: l.started_at, finishedAt: l.finished_at, success: l.success,
+      eventsFound: l.events_found, periodsImported: l.periods_imported,
+      durationMs: l.duration_ms, errorMessage: l.error_message,
+    }));
+  }
+
+  async getIcalExportToken(): Promise<string | null> {
+    const { data } = await this.db.from("settings").select("value").eq("key", "ical_export_token").limit(1).maybeSingle();
+    const v = (data as any)?.value;
+    return typeof v === "string" ? v : (v?.token ?? null);
+  }
+  async setIcalExportToken(token: string): Promise<void> {
+    const { error } = await this.db.from("settings").upsert({ key: "ical_export_token", value: { token } }, { onConflict: "key" });
+    if (error) throw new Error(`setIcalExportToken: ${error.message}`);
+  }
+
+  async logAudit(entry: { actor?: string | null; action: string; entity?: string | null; entityId?: string | null; metadata?: Record<string, unknown> | null }): Promise<void> {
+    await this.db.from("audit_logs").insert({
+      actor: entry.actor ?? null, action: entry.action, entity: entry.entity ?? null,
+      entity_id: entry.entityId ?? null, metadata: entry.metadata ?? null,
+    });
+  }
+  async listAuditLogs(limit = 100): Promise<AuditLogRecord[]> {
+    const { data } = await this.db.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(limit);
+    return (data ?? []).map((a: any) => ({
+      actor: a.actor, action: a.action, entity: a.entity, entityId: a.entity_id,
+      metadata: a.metadata, createdAt: a.created_at,
+    }));
   }
 
   async replaceIcalEvents(events: BusyPeriod[], sourceUrl: string | null): Promise<void> {

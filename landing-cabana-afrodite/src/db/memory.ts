@@ -10,6 +10,10 @@ import type {
   ReservationRecord,
   PaymentTxRecord,
   WebhookRecordResult,
+  SpecialPeriodRecord,
+  IcalSyncLogRecord,
+  AuditLogRecord,
+  ManualBlockRecord,
 } from "./repository.js";
 import { BLOCKING_STATUSES, ConflictError } from "./repository.js";
 import type { PricingConfig } from "../domain/pricing.js";
@@ -24,12 +28,16 @@ interface ManualBlock { id: string; checkIn: LocalDate; checkOut: LocalDate; rea
 
 export class InMemoryRepository implements Repository {
   private reservations = new Map<string, ReservationRecord>();
-  private statusHistory: StatusChange[] = [];
+  private statusHistory: (StatusChange & { reservationId: string })[] = [];
   private manualBlocks: ManualBlock[] = [];
   private icalEvents: BusyPeriod[] = [];
-  private payments: PaymentTxRecord[] = [];
+  private payments: (PaymentTxRecord & { createdAt: string })[] = [];
   private webhooks = new Map<string, { signatureOk: boolean; processed: boolean; payload: unknown }>();
   private notifications: unknown[] = [];
+  private specialPeriods: SpecialPeriodRecord[] = [];
+  private syncLogs: IcalSyncLogRecord[] = [];
+  private auditLogs: AuditLogRecord[] = [];
+  private icalToken: string | null = null;
   private pricing: PricingConfig;
 
   constructor(pricing: PricingConfig = DEMO_PRICING) {
@@ -94,7 +102,11 @@ export class InMemoryRepository implements Repository {
       }
     }
     r.status = to;
-    this.statusHistory.push(change);
+    this.statusHistory.push({ ...change, reservationId: id });
+  }
+
+  async listStatusHistory(reservationId: string): Promise<StatusChange[]> {
+    return this.statusHistory.filter((h) => h.reservationId === reservationId).map(({ reservationId: _id, ...rest }) => rest);
   }
 
   async setReservationExpiry(id: string, expiresAtIso: string): Promise<void> {
@@ -102,9 +114,13 @@ export class InMemoryRepository implements Repository {
     if (r) r.paymentExpiresAt = expiresAtIso;
   }
 
-  async listReservations(filter?: { status?: ReservationStatus }): Promise<ReservationRecord[]> {
+  async listReservations(filter?: { status?: ReservationStatus; search?: string }): Promise<ReservationRecord[]> {
     let all = [...this.reservations.values()];
     if (filter?.status) all = all.filter((r) => r.status === filter.status);
+    if (filter?.search) {
+      const q = filter.search.toLowerCase();
+      all = all.filter((r) => r.guest.fullName.toLowerCase().includes(q) || r.guest.email.toLowerCase().includes(q) || r.friendlyCode.toLowerCase().includes(q));
+    }
     return all.map((r) => structuredClone(r));
   }
 
@@ -117,13 +133,73 @@ export class InMemoryRepository implements Repository {
     const b = this.manualBlocks.find((x) => x.id === id);
     if (b) b.active = false;
   }
+  async listManualBlocks(): Promise<ManualBlockRecord[]> {
+    return this.manualBlocks
+      .filter((b) => b.active)
+      .map((b) => ({ id: b.id, checkIn: b.checkIn, checkOut: b.checkOut, reason: b.reason ?? null, active: b.active }));
+  }
+
+  async updatePricingConfig(patch: Partial<PricingConfig>): Promise<void> {
+    this.pricing = { ...this.pricing, ...patch, payment: { ...this.pricing.payment, ...(patch.payment ?? {}) } };
+  }
+
+  async listSpecialPeriods(): Promise<SpecialPeriodRecord[]> {
+    return this.specialPeriods.map((p) => ({ ...p }));
+  }
+  async createSpecialPeriod(p: Omit<SpecialPeriodRecord, "id">): Promise<string> {
+    const id = randomUUID();
+    this.specialPeriods.push({ id, ...p });
+    // reflete imediatamente no motor de preços
+    this.pricing = {
+      ...this.pricing,
+      specialPeriods: [
+        ...this.pricing.specialPeriods,
+        { id, name: p.name, start: p.startDate, end: p.endDate, nightlyCents: p.nightlyCents ?? this.pricing.defaultNightlyCents, minNights: p.minNights ?? undefined, discountPercent: p.discountPercent ?? undefined },
+      ],
+    };
+    return id;
+  }
+  async deleteSpecialPeriod(id: string): Promise<void> {
+    this.specialPeriods = this.specialPeriods.filter((p) => p.id !== id);
+    this.pricing = { ...this.pricing, specialPeriods: this.pricing.specialPeriods.filter((p) => p.id !== id) };
+  }
+
+  async listPaymentTransactions(limit = 50): Promise<(PaymentTxRecord & { createdAt: string })[]> {
+    return this.payments.slice(-limit).reverse().map((p) => ({ ...p }));
+  }
+  async listIcalSyncLogs(limit = 20): Promise<IcalSyncLogRecord[]> {
+    return this.syncLogs.slice(-limit).reverse().map((l) => ({ ...l }));
+  }
+
+  async getIcalExportToken(): Promise<string | null> {
+    return this.icalToken;
+  }
+  async setIcalExportToken(token: string): Promise<void> {
+    this.icalToken = token;
+  }
+
+  async logAudit(entry: { actor?: string | null; action: string; entity?: string | null; entityId?: string | null; metadata?: Record<string, unknown> | null }): Promise<void> {
+    this.auditLogs.push({
+      actor: entry.actor ?? null, action: entry.action, entity: entry.entity ?? null,
+      entityId: entry.entityId ?? null, metadata: entry.metadata ?? null, createdAt: new Date().toISOString(),
+    });
+  }
+  async listAuditLogs(limit = 100): Promise<AuditLogRecord[]> {
+    return this.auditLogs.slice(-limit).reverse().map((a) => ({ ...a }));
+  }
 
   private lastSync: Date | null = null;
   async replaceIcalEvents(events: BusyPeriod[], _sourceUrl: string | null): Promise<void> {
     this.icalEvents = events.map((e) => ({ ...e }));
   }
-  async logIcalSync(log: { success: boolean }): Promise<void> {
+  async logIcalSync(log: { success: boolean; eventsFound?: number; periodsImported?: number; durationMs?: number; error?: string | null }): Promise<void> {
     if (log.success) this.lastSync = new Date();
+    const now = new Date().toISOString();
+    this.syncLogs.push({
+      startedAt: now, finishedAt: now, success: log.success,
+      eventsFound: log.eventsFound ?? null, periodsImported: log.periodsImported ?? null,
+      durationMs: log.durationMs ?? null, errorMessage: log.error ?? null,
+    });
   }
   async lastIcalSyncAt(): Promise<Date | null> {
     return this.lastSync;
@@ -132,7 +208,7 @@ export class InMemoryRepository implements Repository {
   async upsertPaymentTx(tx: PaymentTxRecord): Promise<void> {
     const existing = tx.paymentId ? this.payments.find((p) => p.paymentId === tx.paymentId) : undefined;
     if (existing) Object.assign(existing, tx);
-    else this.payments.push({ ...tx });
+    else this.payments.push({ ...tx, createdAt: new Date().toISOString() });
   }
 
   async latestPaymentForReservation(reservationId: string): Promise<PaymentTxRecord | null> {

@@ -129,6 +129,12 @@ for i, b in BYTES.items():
 os.makedirs(os.path.join(SITE, "booking"), exist_ok=True)
 shutil.copy(os.path.join(BASE, "raw", "booking.css"), os.path.join(SITE, "booking", "booking.css"))
 shutil.copy(os.path.join(BASE, "raw", "booking.js"), os.path.join(SITE, "booking", "booking.js"))
+
+# painel administrativo (área protegida por login)
+os.makedirs(os.path.join(SITE, "admin"), exist_ok=True)
+shutil.copy(os.path.join(BASE, "raw", "admin.css"), os.path.join(SITE, "admin", "admin.css"))
+shutil.copy(os.path.join(BASE, "raw", "admin.js"), os.path.join(SITE, "admin", "admin.js"))
+shutil.copy(os.path.join(BASE, "raw", "admin-index.html"), os.path.join(SITE, "admin", "index.html"))
 open(os.path.join(SITE, "index.html"), "w", encoding="utf-8").write(wrap(render(filepath, include_booking=True)))
 # tiny netlify config (SPA-safe, long cache for images)
 open(os.path.join(SITE, "netlify.toml"), "w", encoding="utf-8").write(
