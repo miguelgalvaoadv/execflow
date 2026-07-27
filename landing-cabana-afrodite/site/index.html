@@ -364,19 +364,52 @@ section{position:relative;}
   color:var(--dim);cursor:pointer;transition:.22s;}
 .filters button:hover{color:var(--ink);border-color:var(--ember);}
 .filters button.on{background:var(--ember);color:#fff;border-color:var(--ember);}
-.masonry{column-count:4;column-gap:14px;}
-@media(max-width:1080px){.masonry{column-count:3;}}
-@media(max-width:720px){.masonry{column-count:2;column-gap:10px;}}
-.g-item{position:relative;break-inside:avoid;margin-bottom:14px;border-radius:10px;overflow:hidden;
-  cursor:zoom-in;background:var(--pine);display:block;}
-@media(max-width:720px){.g-item{margin-bottom:10px;}}
-.g-item img{width:100%;height:auto;transition:transform .6s cubic-bezier(.2,.7,.2,1),filter .4s;}
-.g-item::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,transparent 60%,rgba(6,9,7,.5));
-  opacity:0;transition:opacity .35s;}
-.g-item:hover img{transform:scale(1.06);}
+/* ============================================================
+   GALERIA — seleção editorial primeiro, acervo completo depois.
+   Usa :nth-child para funcionar tanto com a galeria embutida no HTML
+   quanto com a versão dinâmica que o painel entrega (gallery.js).
+   ============================================================ */
+.masonry{display:grid;grid-template-columns:repeat(6,1fr);gap:clamp(8px,1vw,16px);
+  grid-auto-flow:dense;}
+/* composição editorial: proporções variadas, respiro, momentos de tela cheia */
+.masonry .g-item{grid-column:span 2;aspect-ratio:4/5;margin:0;}
+.masonry .g-item:nth-child(1){grid-column:span 4;aspect-ratio:16/10;}
+.masonry .g-item:nth-child(4){grid-column:span 3;aspect-ratio:3/2;}
+.masonry .g-item:nth-child(5){grid-column:span 3;aspect-ratio:3/2;}
+.masonry .g-item:nth-child(8){grid-column:span 6;aspect-ratio:21/9;}
+.masonry .g-item:nth-child(11){grid-column:span 3;aspect-ratio:5/4;}
+.masonry .g-item:nth-child(12){grid-column:span 3;aspect-ratio:5/4;}
+.masonry .g-item:nth-child(15){grid-column:span 4;aspect-ratio:16/10;}
+/* o acervo fica guardado até o visitante pedir */
+.masonry:not(.show-all) .g-item:nth-child(n+16){display:none;}
+/* modo acervo: volta à parede densa, todas as proporções naturais */
+.masonry.show-all{grid-template-columns:repeat(auto-fill,minmax(190px,1fr));}
+.masonry.show-all .g-item{grid-column:span 1;aspect-ratio:3/4;}
+@media(max-width:900px){
+  .masonry{grid-template-columns:repeat(4,1fr);}
+  .masonry .g-item{grid-column:span 2;}
+  .masonry .g-item:nth-child(1),.masonry .g-item:nth-child(8),.masonry .g-item:nth-child(15){grid-column:span 4;aspect-ratio:16/10;}
+  .masonry .g-item:nth-child(4),.masonry .g-item:nth-child(5),
+  .masonry .g-item:nth-child(11),.masonry .g-item:nth-child(12){grid-column:span 2;aspect-ratio:4/5;}
+  .masonry.show-all{grid-template-columns:repeat(2,1fr);}
+}
+.g-item{position:relative;overflow:hidden;border-radius:2px;cursor:zoom-in;background:var(--pine);display:block;}
+.g-item img{width:100%;height:100%;object-fit:cover;
+  transition:transform .9s cubic-bezier(.16,.84,.28,1),filter .5s;}
+.g-item::after{content:"";position:absolute;inset:0;
+  background:linear-gradient(180deg,transparent 62%,rgba(10,11,8,.42));opacity:0;transition:opacity .4s;}
+.g-item:hover img{transform:scale(1.05);}
 .g-item:hover::after{opacity:1;}
 .g-item:focus-visible{outline:2px solid var(--ember);outline-offset:3px;}
 .g-item.hide{display:none;}
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion:no-preference){
+    .g-item{animation:photo-in linear both;animation-timeline:view();animation-range:entry 0% cover 26%;}
+    @keyframes photo-in{from{opacity:0;clip-path:inset(12% 0 0 0)}to{opacity:1;clip-path:inset(0)}}
+  }
+}
+.gall-more{margin-top:clamp(26px,4vw,42px);display:flex;flex-wrap:wrap;gap:14px;
+  align-items:center;justify-content:center;}
 .gcount{margin-top:28px;text-align:center;font-size:.82rem;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);}
 
 /* ============ LIGHTBOX ============ */
@@ -661,9 +694,10 @@ footer{background:var(--pine);border-top:1px solid var(--line);}
 <!-- ============ GALERIA ============ -->
 <section class="pad" id="galeria"><div class="wrap">
   <div class="sec-head rv">
-    <p class="eyebrow">Galeria completa</p>
-    <h2>Cada ângulo de um sonho</h2>
-    <p class="lead">Todas as fotos reais da cabana, direto do anúncio. Clique em qualquer imagem para ampliar.</p>
+    <p class="ch-label">O acervo</p>
+    <h2 class="ch-title">Uma seleção,<br>e depois <em>tudo</em></h2>
+    <p class="ch-text">Começa pelas imagens que contam a cabana. O acervo inteiro fica
+       a um clique — e qualquer foto abre em tela cheia.</p>
   </div>
   <div class="filters rv" id="filters">
     <button class="on" data-f="all">Todas</button>
@@ -777,7 +811,12 @@ footer{background:var(--pine);border-top:1px solid var(--line);}
 <figure class="g-item" data-f="mais" tabindex="0" role="button" aria-label="Ampliar: Mais fotos"><img loading="lazy" decoding="async" src="assets/img/100.jpg" alt="Cabana Afrodite — Mais fotos"></figure>
 <figure class="g-item" data-f="mais" tabindex="0" role="button" aria-label="Ampliar: Mais fotos"><img loading="lazy" decoding="async" src="assets/img/101.jpg" alt="Cabana Afrodite — Mais fotos"></figure>
   </div>
-  <p class="gcount"><span id="gc">102</span> fotos</p>
+  <div class="gall-more">
+    <button class="btn btn-line" id="gallToggle" aria-expanded="false" aria-controls="masonry">
+      Ver o acervo completo
+    </button>
+    <p class="gcount">mostrando <span id="gc">15</span> de <span id="gtotal">102</span> fotos</p>
+  </div>
 </div></section>
 
 <!-- ============ DEPOIMENTOS ============ -->
@@ -926,13 +965,36 @@ footer{background:var(--pine);border-top:1px solid var(--line);}
   var masonry=document.getElementById('masonry');
   function items(){return [].slice.call(masonry.querySelectorAll('.g-item'));}
   var gc=document.getElementById('gc');
+  var gtotal=document.getElementById('gtotal');
+  var toggle=document.getElementById('gallToggle');
+  var EDITORIAL=15;
+  /* Filtrar por categoria implica ver o acervo daquela categoria:
+     seria estranho filtrar "Quarto" e ainda esconder fotos de quarto. */
   function applyFilter(f){
-    var n=0;
-    items().forEach(function(it){
+    var n=0, all=items();
+    var expand = f!=='all' || masonry.classList.contains('show-all');
+    masonry.classList.toggle('show-all', expand);
+    all.forEach(function(it){
       var show=f==='all'||it.dataset.f===f;
       it.classList.toggle('hide',!show);if(show)n++;
     });
-    if(gc)gc.textContent=n;
+    if(gtotal)gtotal.textContent=n;
+    var visiveis = expand ? n : Math.min(EDITORIAL,n);
+    if(gc)gc.textContent=visiveis;
+    if(toggle){
+      toggle.hidden = (n<=EDITORIAL);
+      toggle.setAttribute('aria-expanded', String(expand));
+      toggle.textContent = expand ? 'Mostrar menos' : 'Ver o acervo completo';
+    }
+  }
+  if(toggle){
+    toggle.addEventListener('click',function(){
+      var open=!masonry.classList.contains('show-all');
+      masonry.classList.toggle('show-all',open);
+      var on=document.querySelector('#filters button.on');
+      applyFilter(on?on.dataset.f:'all');
+      if(!open) document.getElementById('galeria').scrollIntoView({behavior:'smooth',block:'start'});
+    });
   }
   document.getElementById('filters').addEventListener('click',function(e){
     var b=e.target.closest('button');if(!b)return;
@@ -941,6 +1003,8 @@ footer{background:var(--pine);border-top:1px solid var(--line);}
     applyFilter(b.dataset.f);
   });
   /* a galeria pode ser substituída pelo painel: reaplica o filtro ativo */
+  /* estado inicial: contadores reais e visibilidade correta do botão */
+  applyFilter('all');
   document.addEventListener('gallery:updated',function(){
     var on=document.querySelector('#filters button.on');
     applyFilter(on?on.dataset.f:'all');
