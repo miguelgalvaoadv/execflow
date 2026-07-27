@@ -230,6 +230,89 @@ h2{font-size:clamp(2.1rem,5vw,3.5rem);}
   }
 }
 
+/* ============================================================
+   CAPÍTULOS — a página atravessa o tempo.
+   ============================================================ */
+.chapter{padding-block:clamp(76px,11vw,150px);background:var(--night);color:var(--ink);
+  transition:background 1.2s ease;}
+.chapter-night{--night:#0B0C08;--pine:#16180F;background:#0B0C08;}
+.chapter-dawn{background:var(--neblina);}
+.ch-label{display:flex;align-items:center;gap:14px;font-family:var(--sans);font-size:var(--t-micro);
+  text-transform:uppercase;letter-spacing:.34em;color:var(--ember);margin-bottom:20px;}
+.ch-label::before{content:"";width:clamp(24px,5vw,60px);height:1px;background:currentColor;opacity:.55;}
+.ch-title{font-family:var(--serif);font-size:var(--t-h2);font-weight:300;line-height:1;
+  letter-spacing:-.028em;text-wrap:balance;}
+.ch-title em{font-style:italic;color:var(--ember);}
+.ch-text{color:var(--dim);font-size:var(--t-lead);line-height:1.62;max-width:44ch;margin-top:20px;}
+
+/* --- A NOITE: imagem fixa, o texto passa por cima --- */
+.night-stage{display:grid;grid-template-columns:1fr 1fr;gap:clamp(24px,4vw,64px);align-items:start;}
+@media(max-width:900px){.night-stage{grid-template-columns:1fr;}}
+.night-sticky{position:sticky;top:12vh;height:min(76vh,660px);overflow:hidden;border-radius:2px;}
+@media(max-width:900px){.night-sticky{position:relative;top:0;height:56vh;}}
+.night-sticky img{width:100%;height:100%;object-fit:cover;}
+.night-beats{display:grid;gap:clamp(48px,12vh,120px);padding-block:clamp(20px,6vh,80px);}
+.beat h3{font-family:var(--serif);font-size:var(--t-h3);font-weight:300;line-height:1.05;
+  letter-spacing:-.02em;}
+.beat h3 em{font-style:italic;color:var(--osb);}
+.beat p{color:var(--dim);font-size:var(--t-lead);line-height:1.6;margin-top:14px;max-width:40ch;}
+.beat .n{font-family:var(--sans);font-size:var(--t-micro);letter-spacing:.3em;color:var(--ember);
+  display:block;margin-bottom:12px;}
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion:no-preference){
+    .beat{animation:beat-in linear both;animation-timeline:view();animation-range:entry 5% cover 34%;}
+    @keyframes beat-in{from{opacity:.15;transform:translateY(26px)}to{opacity:1;transform:none}}
+  }
+}
+
+/* --- COMODIDADES: composição em torno do triângulo --- */
+.amen-stage{display:grid;grid-template-columns:1fr auto 1fr;gap:clamp(18px,3vw,48px);
+  align-items:center;margin-top:clamp(34px,5vw,60px);}
+@media(max-width:900px){.amen-stage{grid-template-columns:1fr;}}
+.amen-col{display:grid;gap:2px;}
+.amen-col.right{text-align:right;}
+.amen-item{padding:14px 0;border-bottom:1px solid var(--line);cursor:default;
+  transition:color .3s,padding .3s;}
+.amen-item:hover,.amen-item:focus-visible{color:var(--ember);padding-inline:6px;}
+.amen-item b{font-family:var(--serif);font-weight:340;font-size:clamp(1.05rem,1.5vw,1.35rem);
+  display:block;letter-spacing:-.01em;}
+.amen-item span{font-family:var(--sans);font-size:.8rem;color:var(--dim);letter-spacing:.04em;}
+/* o triângulo A-frame desenhado, não decorativo: é o eixo da composição */
+.aframe{width:clamp(120px,20vw,260px);aspect-ratio:1/1.15;position:relative;}
+@media(max-width:900px){.aframe{display:none;}}
+.aframe svg{width:100%;height:100%;overflow:visible;}
+.aframe path{fill:none;stroke:var(--ember);stroke-width:1;opacity:.55;}
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion:no-preference){
+    .aframe path{stroke-dasharray:1;stroke-dashoffset:1;pathLength:1;
+      animation:draw linear both;animation-timeline:view();animation-range:entry 10% cover 45%;}
+    @keyframes draw{to{stroke-dashoffset:0}}
+  }
+}
+.amen-note{margin-top:clamp(26px,4vw,44px);font-size:.86rem;color:var(--dim);
+  display:flex;gap:10px;align-items:flex-start;max-width:62ch;}
+.amen-note b{color:var(--ink);font-weight:500;}
+
+/* --- O AMANHECER: fecha a narrativa em luz --- */
+.dawn-grid{display:grid;grid-template-columns:1.1fr .9fr;gap:clamp(28px,5vw,72px);align-items:center;}
+@media(max-width:900px){.dawn-grid{grid-template-columns:1fr;}}
+.dawn-media{overflow:hidden;border-radius:2px;}
+.dawn-media img{width:100%;height:clamp(340px,58vh,660px);object-fit:cover;display:block;}
+@supports (animation-timeline: view()){
+  @media (prefers-reduced-motion:no-preference){
+    .dawn-media img{animation:dawn-rise linear both;animation-timeline:view();
+      animation-range:entry 0% exit 100%;}
+    @keyframes dawn-rise{from{transform:scale(1.12) translateY(2%)}to{transform:scale(1)}}
+  }
+}
+/* --- prova social editorial: uma voz em destaque --- */
+.voice{max-width:26ch;}
+.voice q{font-family:var(--serif);font-style:italic;font-weight:300;
+  font-size:clamp(1.5rem,3.4vw,2.6rem);line-height:1.22;letter-spacing:-.015em;
+  color:var(--ink);quotes:"“" "”";display:block;}
+.voice .by{margin-top:20px;font-family:var(--sans);font-size:var(--t-micro);
+  letter-spacing:.24em;text-transform:uppercase;color:var(--dim);}
+
 /* ============ SECTION SHELL ============ */
 section{position:relative;}
 .pad{padding-block:clamp(72px,11vw,128px);}
@@ -470,69 +553,108 @@ footer{background:var(--pine);border-top:1px solid var(--line);}
   </div>
 </section>
 
-<!-- ============ EXPERIÊNCIA ============ -->
-<section class="pad" id="experiencia"><div class="wrap split">
-  <div class="rv">
-    <p class="eyebrow">A experiência</p>
-    <h2>Onde a natureza encontra o romance</h2>
-    <p class="lead">Escondida no coração da Serra do Rio, a Cabana Afrodite é um triângulo de madeira e vidro suspenso sobre o verde. Aqui o tempo desacelera: a lareira crepita, o vinho respira e a vista se estende até onde a vista alcança.</p>
-    <ul class="notes">
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2s7 6 7 11a7 7 0 0 1-14 0c0-5 7-11 7-11Z"/></svg><span><b>Feita para dois.</b> Ideal para casais — acomoda até 4 com o sofá-cama da sala.</span></li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2" stroke-linecap="round"/></svg><span><b>Privacidade total.</b> Espaço inteiro, self check-in por cofre de chaves.</span></li>
-      <li><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="m12 2 2.9 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77"/></svg><span><b>Superhost 4,94.</b> Cuidado nos mínimos detalhes, do enxoval às taças.</span></li>
-    </ul>
-    <div class="hero-actions" style="margin-top:30px">
-      <a class="btn btn-air" href="#reservar">Quero reservar</a>
-      <a class="btn btn-line" href="#galeria">Ver a galeria</a>
+<!-- ============ A NOITE (o interior acende) ============ -->
+<section class="chapter chapter-night" id="experiencia">
+  <div class="wrap">
+    <p class="ch-label">Capítulo dois · A noite</p>
+    <h2 class="ch-title">Quando a luz<br>vira <em>brasa</em></h2>
+  </div>
+  <div class="wrap night-stage" style="margin-top:clamp(34px,5vw,64px)">
+    <figure class="night-sticky">
+      <img loading="lazy" decoding="async" src="assets/img/038.jpg" alt="Interior da Cabana Afrodite à noite: lareira acesa, taça de vinho, poltronas e paredes de madeira">
+    </figure>
+    <div class="night-beats">
+      <article class="beat">
+        <span class="n">01</span>
+        <h3>A lareira <em>acende</em></h3>
+        <p>Duas poltronas, uma mesa de madeira maciça e o carrinho bar ao lado.
+           O fogo faz o resto — é aqui que a noite começa a demorar.</p>
+      </article>
+      <article class="beat">
+        <span class="n">02</span>
+        <h3>O A-frame por <em>dentro</em></h3>
+        <p>As vigas pretas sobem até o ápice e o OSB devolve uma luz cor de mel.
+           Sala de estar com sofá-cama, TV, Netflix e sistema Alexa.</p>
+      </article>
+      <article class="beat">
+        <span class="n">03</span>
+        <h3>Um mergulho sob as <em>estrelas</em></h3>
+        <p>Banheira de hidromassagem no deck — um dos poucos lugares da região
+           com essa comodidade. Água quente, montanhas ao redor e o céu aberto.</p>
+      </article>
+      <article class="beat">
+        <span class="n">04</span>
+        <h3>Cinema, telescópio e <em>fondue</em></h3>
+        <p>Telão com projetor para a noite de filme, telescópio para o céu da serra
+           e aparelho de fondue para quando a temperatura cair.</p>
+      </article>
+      <div class="hero-actions">
+        <a class="btn btn-air" href="#reservar-online">Consultar datas</a>
+        <a class="btn btn-line" href="#galeria">Ver a galeria</a>
+      </div>
     </div>
-  </div>
-  <div class="media rv">
-    <img src="assets/img/001.jpg" alt="Interior da Cabana Afrodite à noite — estrutura A-frame em madeira, lustre e sala aconchegante">
-    <svg class="apex" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M12 3 3 20h18L12 3Z"/></svg>
-  </div>
-</div></section>
-
-<!-- ============ FEATURE BAND 1 — banheira ============ -->
-<section class="band">
-  <img class="band-img" src="assets/img/082.jpg" alt="Casal na banheira do deck da Cabana Afrodite com vista para a serra">
-  <div class="wrap cap rv">
-    <p class="eyebrow">Banheira de hidromassagem</p>
-    <h3>Um mergulho sob as estrelas</h3>
-    <p>Um dos poucos lugares da região com hidromassagem privativa no deck. Água quente, montanhas ao redor e o pôr do sol pintando o céu — a cena que fecha o dia perfeito.</p>
   </div>
 </section>
 
-<!-- ============ COMODIDADES ============ -->
-<section class="pad" id="comodidades"><div class="wrap">
-  <div class="sec-head rv">
-    <p class="eyebrow">Tudo o que espera por vocês</p>
-    <h2>Conforto de cabana, alma de refúgio</h2>
-    <p class="lead">37 comodidades pensadas para que a única preocupação seja aproveitar. Da cozinha completa ao telescópio para observar o céu.</p>
-  </div>
-  <div class="amen-grid rv">
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 12h16v3a4 4 0 0 1-4 4H8a4 4 0 0 1-4-4v-3Z"/><path d="M7 12V7a2 2 0 0 1 4 0" stroke-linecap="round"/><path d="M20 19l1 2M4 19l-1 2" stroke-linecap="round"/></svg><div><h4>Banheira de hidromassagem</h4><p>No deck, com vista aberta</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 3s5 4 5 9a5 5 0 0 1-10 0c0-1.5.6-3 1.5-4 .2 1 .8 1.7 1.5 2 0-2 .5-5 2-7Z"/></svg><div><h4>Lareira</h4><p>Sala aconchegante e quentinha</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M3 20 10 8l4 6 3-4 4 10z"/></svg><div><h4>Deck com vista</h4><p>Cadeiras para o pôr do sol</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="12" rx="1.5"/><path d="M8 20h8M12 16v4" stroke-linecap="round"/></svg><div><h4>Telão com projetor</h4><p>Cinema com Netflix</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="m3 17 6-6M9 11l4-8 3 3-8 4M13 6l5 5" stroke-linecap="round" stroke-linejoin="round"/><path d="m14 14 4 4" stroke-linecap="round"/></svg><div><h4>Telescópio</h4><p>Para o céu estrelado da serra</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 2v7M6 2v4a2 2 0 0 0 4 0V2M8 9v13" stroke-linecap="round"/><path d="M17 2c-1.5 1-2 3-2 6s.5 4 2 4 2-1 2-4-0-5-2-6ZM17 12v10" stroke-linecap="round"/></svg><div><h4>Cozinha completa</h4><p>Indução, air fryer, microondas</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8.8a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0" stroke-linecap="round"/><circle cx="12" cy="19.5" r="1.1" fill="currentColor" stroke="none"/></svg><div><h4>Wi-Fi</h4><p>+ espaço de trabalho</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M12 3v18M12 7 8.5 4.5M12 7l3.5-2.5M12 12l-4-2.5M12 12l4-2.5M12 17l-3.5 2.5M12 17l3.5 2.5"/></svg><div><h4>Ar-condicionado</h4><p>Climatização o ano todo</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 8h9a3 3 0 0 1 0 6H8l-2 6H4l2-6V8Z"/><circle cx="17" cy="6" r="1.4"/></svg><div><h4>Churrasqueira & fondue</h4><p>Para noites especiais</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M8 3h8l-1 7a3 3 0 0 1-6 0L8 3ZM12 13v6M9 21h6" stroke-linecap="round" stroke-linejoin="round"/></svg><div><h4>Adega & carrinho bar</h4><p>Para brindar a dois</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="11" width="18" height="8" rx="2"/><path d="M7 11V8a5 5 0 0 1 10 0v3" stroke-linecap="round"/><path d="M12 15v1" stroke-linecap="round"/></svg><div><h4>Self check-in</h4><p>Cofre de chaves + câmeras externas</p></div></div>
-    <div class="amen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M5 11h14l-1.5 9h-11L5 11ZM12 11V4a2 2 0 1 1 4 0" stroke-linecap="round" stroke-linejoin="round"/></svg><div><h4>Estacionamento grátis</h4><p>No local, dentro do condomínio</p></div></div>
-  </div>
-  <p class="amen-note"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01" stroke-linecap="round"/></svg>Transparência: a cabana <b style="color:var(--ink);font-weight:500">não possui forno</b> e não tem detector de fumaça/monóxido de carbono.</p>
-</div></section>
+<!-- ============ COMODIDADES (composição A-frame) ============ -->
+<section class="chapter" id="comodidades">
+  <div class="wrap">
+    <p class="ch-label">O que espera por vocês</p>
+    <h2 class="ch-title">Trinta e sete motivos<br>para <em>ficar</em></h2>
+    <p class="ch-text">Da cozinha americana completa ao telescópio. Tudo o que a cabana
+       oferece, organizado em torno da forma que a define.</p>
 
-<!-- ============ FEATURE BAND 2 — deck/vista ============ -->
-<section class="band">
-  <img class="band-img" src="assets/img/086.jpg" alt="Deck de madeira da Cabana Afrodite com casal e vista panorâmica da serra">
-  <div class="wrap cap rv">
-    <p class="eyebrow">Deck & vista infinita</p>
-    <h3>A serra inteira aos seus pés</h3>
-    <p>Do deck de madeira, a vista abraça os vales verdes de Vale das Videiras. Café da manhã ao sol, taça de vinho ao entardecer, silêncio e natureza em estado puro.</p>
+    <div class="amen-stage">
+      <div class="amen-col">
+        <div class="amen-item"><b>Banheira de hidromassagem</b><span>No deck, com vista aberta</span></div>
+        <div class="amen-item"><b>Lareira</b><span>Sala aquecida a noite inteira</span></div>
+        <div class="amen-item"><b>Deck com vista</b><span>Cadeiras para o pôr do sol</span></div>
+        <div class="amen-item"><b>Telão com projetor</b><span>Cinema com Netflix</span></div>
+        <div class="amen-item"><b>Telescópio</b><span>Para o céu da serra</span></div>
+        <div class="amen-item"><b>Churrasqueira &amp; fondue</b><span>Noites especiais</span></div>
+      </div>
+
+      <div class="aframe" aria-hidden="true">
+        <svg viewBox="0 0 100 115" role="img">
+          <path d="M50 4 L96 111 L4 111 Z"/>
+          <path d="M50 4 L50 111"/>
+          <path d="M27 58 L73 58"/>
+        </svg>
+      </div>
+
+      <div class="amen-col right">
+        <div class="amen-item"><b>Cozinha completa</b><span>Indução, air fryer, microondas</span></div>
+        <div class="amen-item"><b>Adega &amp; carrinho bar</b><span>Para brindar a dois</span></div>
+        <div class="amen-item"><b>Wi-Fi &amp; espaço de trabalho</b><span>Se precisar trabalhar</span></div>
+        <div class="amen-item"><b>Ar-condicionado</b><span>Climatização o ano todo</span></div>
+        <div class="amen-item"><b>Self check-in</b><span>Cofre de chaves</span></div>
+        <div class="amen-item"><b>Estacionamento grátis</b><span>Dentro do condomínio</span></div>
+      </div>
+    </div>
+
+    <p class="amen-note">
+      <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.7" style="flex:none;margin-top:3px;color:var(--ember)"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01" stroke-linecap="round"/></svg>
+      <span>Transparência, porque importa: a cabana <b>não possui forno</b> e não tem detector de fumaça nem de monóxido de carbono.</span>
+    </p>
+  </div>
+</section>
+
+<!-- ============ O AMANHECER + a voz de quem esteve ============ -->
+<section class="chapter chapter-dawn">
+  <div class="wrap dawn-grid">
+    <figure class="dawn-media">
+      <img loading="lazy" decoding="async" src="assets/img/090.jpg" alt="Hóspede enrolada em manta no deck da Cabana Afrodite, contemplando as colinas verdes ao amanhecer">
+    </figure>
+    <div>
+      <p class="ch-label">Capítulo três · O amanhecer</p>
+      <h2 class="ch-title">A serra acorda<br>antes de <em>vocês</em></h2>
+      <p class="ch-text">A neblina desce pelo vale, o café fica pronto e o deck é só de vocês.
+         Do outro lado, quilômetros de colinas verdes — e nenhum compromisso.</p>
+      <blockquote class="voice" style="margin-top:clamp(30px,4vw,48px)">
+        <q>O céu à noite foi um dos mais lindos que já vi.</q>
+        <p class="by">Gabriela · hóspede em maio de 2026</p>
+      </blockquote>
+    </div>
   </div>
 </section>
 
